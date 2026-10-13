@@ -199,7 +199,7 @@ export interface ListOutletContext {
   closeThread(): void;
 }
 
-export default function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
+function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const { scope } = params;
   const folder = params.folder as Folder;
 
@@ -675,6 +675,10 @@ export default function ThreadList({ loaderData: routeData, params }: Route.Comp
     </div>
   );
 }
+
+// Keep this export apart from the declaration. The route chunk split fails on an
+// inline default export that uses the list cache and has a renamed prop.
+export default ThreadList;
 
 const LIST_WIDTH_KEY = "list-width";
 const LIST_MIN_WIDTH = 300;
