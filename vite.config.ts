@@ -2,7 +2,7 @@ import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { defineConfig } from "vite";
 
-export default defineConfig({
+export default defineConfig(({ command }) => ({
   plugins: [tailwindcss(), reactRouter()],
   // The OAuth redirect URIs use this port, so do not fall back to another one.
   server: { port: 5180, strictPort: true },
@@ -11,7 +11,9 @@ export default defineConfig({
   },
   // Bundle all server dependencies. sanitize-html uses require() to load
   // htmlparser2, which is ES module only, and Vercel's runtime rejects that.
-  ssr: { noExternal: true },
+  // Do this only for the build. The dev module runner cannot run CommonJS
+  // packages such as react when it inlines them.
+  ssr: command === "build" ? { noExternal: true } : {},
   optimizeDeps: {
     include: [
       "lucide-react",
@@ -28,4 +30,4 @@ export default defineConfig({
     // dependency scan bundles them for the browser and reloads the page.
     exclude: ["imapflow", "mailparser", "nodemailer", "sanitize-html"],
   },
-});
+}));
