@@ -26,7 +26,8 @@
     "react-router": "^8.4.0",
     "react-virtuoso": "^4.18.16",
     "sanitize-html": "^2.18.0",
-    "sonner": "^2.0.8"
+    "sonner": "^2.0.8",
+    "tldts": "^7.4.18"
   },
   "devDependencies": {
     "@react-router/dev": "^8.4.0",
@@ -40,5 +41,6 @@
     "tailwindcss": "^4.2.2",
     "typescript": "^5.9.3",
     "vite": "^8.0.3"
-  }
+  },
+  "packageManager": "pnpm@12.8.1"
 }

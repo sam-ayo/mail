@@ -9,7 +9,7 @@ A keyboard-first email client with one inbox for all your accounts.
 ![The light theme](docs/screenshots/light.jpg)
 
 ```sh
-npm install
+pnpm install
 cp .env.example .env
-npm run dev
+pnpm dev
 ```
