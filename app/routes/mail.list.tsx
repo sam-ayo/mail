@@ -45,7 +45,7 @@ import type { MenuEntry } from "~/components/menu";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
-import { Avatar, Hint, IconButton, cx } from "~/components/ui";
+import { Avatar, Hint, IconButton, ProviderIcon, cx } from "~/components/ui";
 import type { AccountSummary, Folder, ThreadAction, ThreadSummary } from "~/lib/mail";
 import {
   displayName,
@@ -646,14 +646,21 @@ function isRemoval(action: ThreadAction, folder: Folder) {
 /** Shows which account (or accounts) has the conversation, in the list that shows all accounts. */
 function AccountLabel({ accounts }: { accounts: AccountSummary[] }) {
   const [first, ...rest] = accounts;
+  const at = first.email.lastIndexOf("@");
+  const local = first.email.slice(0, at);
+  const domain = first.email.slice(at + 1);
   return (
     <span
-      className="flex max-w-[45%] shrink-0 items-center gap-1 rounded-full bg-zinc-100 py-0.5 pr-2 pl-1.5 text-[11px] text-zinc-600 dark:bg-zinc-800/80 dark:text-zinc-300"
+      className="flex max-w-[50%] min-w-0 shrink-0 items-center gap-1 text-[11px] text-zinc-400"
       title={accounts.map((a) => a.email).join("\n")}
     >
-      <span className="size-2 shrink-0 rounded-full" style={{ background: first.color }} />
-      <span className="truncate">{first.email}</span>
-      {rest.length > 0 && <span className="shrink-0 text-zinc-400">+{rest.length}</span>}
+      <ProviderIcon provider={first.provider} className="size-3 shrink-0" />
+      {/* A long address shortens the name part only, so the domain always shows. */}
+      <span className="flex min-w-0">
+        <span className="truncate">{local}</span>
+        <span className="shrink-0">@{domain}</span>
+      </span>
+      {rest.length > 0 && <span className="shrink-0">+{rest.length}</span>}
     </span>
   );
 }
@@ -714,7 +721,13 @@ function ThreadRow({
         >
           <div className="min-w-0 flex-1">
             <div className="flex items-center gap-2">
-              {thread.unread && <span className="size-2 shrink-0 rounded-full bg-accent-500" aria-label="Unread" />}
+              {thread.unread && (
+                <span
+                  className={cx("size-2 shrink-0 rounded-full", accounts.length === 0 && "bg-accent-500")}
+                  style={accounts.length > 0 ? { background: accounts[0].color } : undefined}
+                  aria-label="Unread"
+                />
+              )}
               <span
                 dir="auto"
                 className={cx(
@@ -759,7 +772,7 @@ function ThreadRow({
               <bdi>{thread.subject}</bdi>
             </p>
             {/* Keep the line when there is no preview, so every row has the same height. */}
-            <div className="mt-0.5 flex items-center gap-2">
+            <div className="mt-0.5 flex items-center gap-3">
               <p dir="auto" className="min-w-0 flex-1 truncate text-xs text-zinc-500">
                 {thread.snippet.replace(/\s+/g, " ") || "\u00a0"}
               </p>
@@ -767,14 +780,6 @@ function ThreadRow({
             </div>
           </div>
         </Link>
-
-        {accounts.length > 0 && (
-          <span className="pointer-events-none absolute inset-y-0 left-0 flex w-[3px] flex-col">
-            {accounts.map((a) => (
-              <span key={a.id} className="flex-1" style={{ background: a.color }} title={a.email} />
-            ))}
-          </span>
-        )}
 
         <button
           type="button"
