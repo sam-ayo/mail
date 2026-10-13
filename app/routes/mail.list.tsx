@@ -43,6 +43,7 @@ import type { ThreadRef } from "~/components/mail-context";
 import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
 import type { MenuEntry } from "~/components/menu";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
+import { setListCollapsed } from "~/components/list-panel";
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
 import { AccountIcon, Avatar, Hint, IconButton, cx } from "~/components/ui";
@@ -534,17 +535,19 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const refreshing = revalidator.state === "loading";
 
   return (
-    <div className="flex min-w-0 flex-1">
+    // The list slides out past the left edge of this pane, which clips it.
+    <div className="relative flex min-w-0 flex-1 overflow-hidden">
       <section
         ref={listRef}
+        data-list
         className={cx(
           "relative flex min-w-0 flex-col border-r border-zinc-200 dark:border-zinc-800",
           // The resize handle sets --list-width. Without it, the default width applies.
           "w-full lg:w-[var(--list-width,420px)] lg:shrink-0 xl:w-[var(--list-width,460px)]",
-          openKey && "hidden lg:flex",
+          openKey && "hidden lg:flex lg:in-[.list-collapsed]:hidden",
         )}
       >
-        <ListResizeHandle list={listRef} />
+        <ListResizeHandle list={listRef} collapsible={Boolean(openKey)} />
         {/* With the sidebar collapsed, the header moves away from the sidebar
             button, on the spring of the sidebar. */}
         <header className="flex flex-col gap-3 border-b border-zinc-200 px-4 pt-4 pb-3 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:in-[.sidebar-collapsed]:pl-14">
@@ -669,7 +672,8 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
         )}
       </section>
 
-      <div className={cx("min-w-0 flex-1", openKey ? "flex" : "hidden lg:flex")}>
+      {openKey && <ListExpandHandle />}
+      <div data-list-thread className={cx("min-w-0 flex-1", openKey ? "flex" : "hidden lg:flex")}>
         <Outlet context={context} />
       </div>
     </div>
@@ -685,6 +689,9 @@ const LIST_MIN_WIDTH = 300;
 const LIST_MAX_WIDTH = 720;
 /** The thread view keeps at least this width. */
 const THREAD_MIN_WIDTH = 360;
+/** A drag this far past the minimum closes the list, and a drag this far out
+    from a closed list opens it again. */
+const LIST_COLLAPSE_DISTANCE = 64;
 
 /** CSS variables inherit. A change on the root element recalculates the style
     of every element on the page, on each pointer move. Thus a drag changes
@@ -703,8 +710,15 @@ function setListWidth(list: HTMLElement | null, width: number | null, save: bool
 }
 
 /** The handle is on the line between the list and the thread view. It shows
-    only when the two panes are side by side. */
-function ListResizeHandle({ list }: { list: React.RefObject<HTMLElement | null> }) {
+    only when the two panes are side by side. With a thread open, a drag far
+    past the minimum closes the list, as with the sidebar. */
+function ListResizeHandle({
+  list,
+  collapsible,
+}: {
+  list: React.RefObject<HTMLElement | null>;
+  collapsible: boolean;
+}) {
   return (
     <ResizeHandle
       edge="right"
@@ -719,7 +733,33 @@ function ListResizeHandle({ list }: { list: React.RefObject<HTMLElement | null> 
       size={() => list.current?.getBoundingClientRect().width ?? LIST_MIN_WIDTH}
       onResize={(width, done) => setListWidth(list.current, width, done)}
       onReset={() => setListWidth(list.current, null, true)}
+      onOvershoot={
+        collapsible ? { distance: LIST_COLLAPSE_DISTANCE, run: () => setListCollapsed(true) } : undefined
+      }
     />
+  );
+}
+
+/** With the list closed, this handle is on the left edge of the thread view.
+    A drag out from the edge, an arrow key, or a double click opens the list.
+    The sidebar handle is on the other side of the line, so this handle stays
+    fully inside the thread view. */
+function ListExpandHandle() {
+  const open = () => setListCollapsed(false);
+  return (
+    <div className="relative hidden shrink-0 lg:in-[.list-collapsed]:block">
+      <ResizeHandle
+        edge="right"
+        label="Show message list"
+        min={0}
+        max={0}
+        className="translate-x-2"
+        size={() => 0}
+        onResize={() => {}}
+        onReset={open}
+        onExtend={{ distance: LIST_COLLAPSE_DISTANCE, run: open }}
+      />
+    </div>
   );
 }
 

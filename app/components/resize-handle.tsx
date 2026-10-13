@@ -23,6 +23,7 @@ export function ResizeHandle({
   onResize,
   onReset,
   onOvershoot,
+  onExtend,
   straddle = false,
   className,
 }: {
@@ -37,6 +38,9 @@ export function ResizeHandle({
   onReset(): void;
   /** Called when a drag goes this far past the minimum. The drag stops. */
   onOvershoot?: { distance: number; run(): void };
+  /** Called when a drag goes this far past the maximum, or when an arrow key
+      moves the edge past the maximum. The drag stops. */
+  onExtend?: { distance: number; run(): void };
   /** Puts the handle across the edge, half inside the panel and half outside.
       Use it for an edge that is a thin line between two panes. */
   straddle?: boolean;
@@ -47,9 +51,12 @@ export function ResizeHandle({
   // The size gets larger when the edge moves away from the panel.
   const sign = edge === "right" || edge === "bottom" ? 1 : -1;
 
+  function upper() {
+    return Math.max(min, typeof max === "function" ? max() : max);
+  }
+
   function clamp(value: number) {
-    const upper = Math.max(min, typeof max === "function" ? max() : max);
-    return Math.round(Math.min(upper, Math.max(min, value)));
+    return Math.round(Math.min(upper(), Math.max(min, value)));
   }
 
   function endDrag() {
@@ -100,6 +107,11 @@ export function ResizeHandle({
           onOvershoot.run();
           return;
         }
+        if (onExtend && value > upper() + onExtend.distance) {
+          endDrag();
+          onExtend.run();
+          return;
+        }
         onResize(clamp(value), false);
       }}
       onPointerUp={endDrag}
@@ -111,7 +123,9 @@ export function ResizeHandle({
         const direction = e.key === keys[0] ? -1 : e.key === keys[1] ? 1 : 0;
         if (!direction) return;
         e.preventDefault();
-        onResize(clamp(size() + sign * direction * step), true);
+        const value = size() + sign * direction * step;
+        if (onExtend && value > upper()) onExtend.run();
+        else onResize(clamp(value), true);
       }}
     />
   );

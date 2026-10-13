@@ -29,18 +29,25 @@ export const meta: Route.MetaFunction = () => [{ title: "mail" }];
 // Set the theme before the first paint, so the page does not flash.
 const themeScript = `(() => {
   try {
-    const stored = localStorage.getItem("theme");
-    const dark = stored ? stored === "dark" : matchMedia("(prefers-color-scheme: dark)").matches;
-    document.documentElement.classList.toggle("dark", dark);
-    document.querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", dark ? "${THEME_COLORS.dark}" : "${THEME_COLORS.light}");
-    document.querySelector('link[rel="icon"]')
-      ?.setAttribute("href", dark ? "${FAVICONS.dark}" : "${FAVICONS.light}");
+    // No stored mode means the system mode, which follows the system setting.
+    const media = matchMedia("(prefers-color-scheme: dark)");
+    const applyTheme = () => {
+      const stored = localStorage.getItem("theme");
+      const dark = stored === "dark" || (stored !== "light" && media.matches);
+      document.documentElement.classList.toggle("dark", dark);
+      document.querySelector('meta[name="theme-color"]')
+        ?.setAttribute("content", dark ? "${THEME_COLORS.dark}" : "${THEME_COLORS.light}");
+      document.querySelector('link[rel="icon"]')
+        ?.setAttribute("href", dark ? "${FAVICONS.dark}" : "${FAVICONS.light}");
+    };
+    applyTheme();
+    media.addEventListener("change", applyTheme);
     const width = Number(localStorage.getItem("sidebar-width"));
     if (width >= 180 && width <= 360) document.documentElement.style.setProperty("--sidebar-width", width + "px");
     const listWidth = Number(localStorage.getItem("list-width"));
     if (listWidth >= 300 && listWidth <= 720) document.documentElement.style.setProperty("--list-width", listWidth + "px");
     if (localStorage.getItem("sidebar-collapsed") === "1") document.documentElement.classList.add("sidebar-collapsed");
+    if (localStorage.getItem("list-collapsed") === "1") document.documentElement.classList.add("list-collapsed");
     const palettes = ${JSON.stringify(PALETTES.map(({ id, font }) => ({ id, font })))};
     const palette = palettes.find((p) => p.id === localStorage.getItem("palette"))
       || palettes.find((p) => p.id === "${DEFAULT_PALETTE}");

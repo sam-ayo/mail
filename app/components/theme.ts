@@ -4,8 +4,53 @@ export const THEME_COLORS = { light: "#f8faff", dark: "#0d0f18" };
 // Change the version when the icons change, so browsers do not show a cached icon.
 export const FAVICONS = { light: "/favicon.svg?v=2", dark: "/favicon-dark.svg?v=2" };
 
-// The theme is the "dark" class on <html>. The inline script in root.tsx sets
-// it before the first paint, so read the class and do not copy it into state.
+// The mode is "light", "dark", or "system". It is in storage, and no value
+// there means "system". The inline script in root.tsx sets the "dark" class on
+// <html> before the first paint. It also follows the system setting when it
+// changes, so the system mode needs no code here.
+export type ThemeMode = "light" | "dark" | "system";
+
+const MODE_KEY = "theme";
+const MODE_EVENT = "theme:mode";
+
+function readMode(): ThemeMode {
+  const stored = localStorage.getItem(MODE_KEY);
+  return stored === "light" || stored === "dark" ? stored : "system";
+}
+
+function systemDark() {
+  return matchMedia("(prefers-color-scheme: dark)").matches;
+}
+
+function applyDark(dark: boolean) {
+  document.documentElement.classList.toggle("dark", dark);
+  // The status bar on phones takes its colour from theme-color.
+  document
+    .querySelector('meta[name="theme-color"]')
+    ?.setAttribute("content", dark ? THEME_COLORS.dark : THEME_COLORS.light);
+  // The light mark is dark, so it disappears on a dark tab bar.
+  document.querySelector('link[rel="icon"]')?.setAttribute("href", dark ? FAVICONS.dark : FAVICONS.light);
+}
+
+export function setThemeMode(mode: ThemeMode) {
+  if (mode === "system") localStorage.removeItem(MODE_KEY);
+  else localStorage.setItem(MODE_KEY, mode);
+  applyDark(mode === "system" ? systemDark() : mode === "dark");
+  window.dispatchEvent(new Event(MODE_EVENT));
+}
+
+function subscribeMode(onChange: () => void) {
+  window.addEventListener(MODE_EVENT, onChange);
+  return () => window.removeEventListener(MODE_EVENT, onChange);
+}
+
+export function useThemeMode() {
+  const mode = useSyncExternalStore(subscribeMode, readMode, () => "system" as const);
+  return { mode, setMode: setThemeMode };
+}
+
+// Read the class and do not copy it into state, because the inline script
+// can change it.
 function subscribe(onChange: () => void) {
   const observer = new MutationObserver(onChange);
   observer.observe(document.documentElement, { attributes: true, attributeFilter: ["class"] });
@@ -18,16 +63,9 @@ export function useTheme() {
     () => document.documentElement.classList.contains("dark"),
     () => false,
   );
+  // A toggle sets a fixed mode, also from the system mode.
   const toggle = useCallback(() => {
-    const next = !document.documentElement.classList.contains("dark");
-    document.documentElement.classList.toggle("dark", next);
-    // The status bar on phones takes its colour from theme-color.
-    document
-      .querySelector('meta[name="theme-color"]')
-      ?.setAttribute("content", next ? THEME_COLORS.dark : THEME_COLORS.light);
-    // The light mark is dark, so it disappears on a dark tab bar.
-    document.querySelector('link[rel="icon"]')?.setAttribute("href", next ? FAVICONS.dark : FAVICONS.light);
-    localStorage.setItem("theme", next ? "dark" : "light");
+    setThemeMode(document.documentElement.classList.contains("dark") ? "light" : "dark");
   }, []);
   return { dark, toggle };
 }

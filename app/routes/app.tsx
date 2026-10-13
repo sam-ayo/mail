@@ -1,4 +1,5 @@
 import {
+  Desktop,
   Gear,
   Keyboard,
   Moon,
@@ -27,7 +28,7 @@ import {
   toggleSidebar,
   useSidebarCollapsed,
 } from "~/components/sidebar";
-import { useTheme } from "~/components/theme";
+import { useTheme, useThemeMode } from "~/components/theme";
 import { cx } from "~/components/ui";
 import { FOLDER_LABELS, FOLDERS, isFolder } from "~/lib/mail";
 import { listAccounts, toSummary } from "~/server/accounts.server";
@@ -93,6 +94,7 @@ function Shell() {
   const submit = useSubmit();
   const { accounts, openCompose, undoLast } = useMail();
   const { dark, toggle: toggleTheme } = useTheme();
+  const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
   const [navOpen, setNavOpen] = useState(false);
@@ -184,6 +186,9 @@ function Shell() {
         run: toggleSidebar,
       },
       { id: "theme", label: dark ? "Use light theme" : "Use dark theme", group: "View", icon: Moon, run: toggleTheme },
+      ...(themeMode === "system"
+        ? []
+        : [{ id: "theme-system", label: "Use system theme", group: "View", icon: Desktop, run: () => setThemeMode("system") }]),
       { id: "shortcuts", label: "Keyboard shortcuts", group: "Help", hint: "?", icon: Keyboard, run: () => setShortcutsOpen(true) },
       {
         id: "logout",
@@ -194,7 +199,7 @@ function Shell() {
       },
     );
     return list;
-  }, [accounts, dark, navigate, openCompose, sidebarCollapsed, submit, toggleTheme]);
+  }, [accounts, dark, navigate, openCompose, setThemeMode, sidebarCollapsed, submit, themeMode, toggleTheme]);
 
   return (
     <div className="flex h-dvh overflow-hidden">

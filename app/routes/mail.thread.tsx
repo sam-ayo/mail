@@ -3,7 +3,6 @@ import {
   ArrowBendDoubleUpLeft,
   ArrowBendUpLeft,
   ArrowBendUpRight,
-  ArrowLeft,
   ArrowsInLineVertical,
   BellSlash,
   CaretDown,
@@ -15,6 +14,7 @@ import {
   FileText,
   Info,
   ShieldWarning,
+  SidebarSimple,
   Star,
   Trash,
   Tray,
@@ -24,6 +24,7 @@ import { useEffect, useMemo, useState } from "react";
 import { data, isRouteErrorResponse, useOutletContext, useRouteError } from "react-router";
 import { Composer, formatSize } from "~/components/composer";
 import { EmailFrame } from "~/components/email-frame";
+import { setListCollapsed } from "~/components/list-panel";
 import { LocalDate } from "~/components/local-date";
 import { UnsubscribeDialog, isUnsubscribed } from "~/components/unsubscribe-dialog";
 import { useHotkeys } from "~/components/hotkeys";
@@ -261,13 +262,18 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
 
   return (
     <article className="flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
-      {/* Below lg, the thread fills the main area. With the sidebar collapsed,
-          the header then moves away from the sidebar button. */}
-      <header className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:max-lg:in-[.sidebar-collapsed]:pl-14">
-        <IconButton label="Back to the list" shortcut="Esc" onClick={list.closeThread}>
-          <ArrowLeft className="size-4" />
+      {/* Below lg, or with the list collapsed, the thread fills the main area.
+          With the sidebar collapsed, the header then moves away from the
+          sidebar button. */}
+      <header className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:max-lg:in-[.sidebar-collapsed]:pl-14 lg:in-[.list-collapsed]:in-[.sidebar-collapsed]:pl-14">
+        <IconButton
+          label="Show message list"
+          className="max-lg:hidden [:root:not(.list-collapsed)_&]:hidden"
+          onClick={() => setListCollapsed(false)}
+        >
+          <SidebarSimple className="size-4" />
         </IconButton>
-        <div className="mx-1 h-5 w-px bg-zinc-200 dark:bg-zinc-800" />
+        <div className="mx-1 h-5 w-px bg-zinc-200 max-lg:hidden dark:bg-zinc-800 [:root:not(.list-collapsed)_&]:hidden" />
         {removalActions ? (
           <IconButton label="Move to Inbox" onClick={() => list.actOnOpenThread("inbox")}>
             <Tray className="size-4" />

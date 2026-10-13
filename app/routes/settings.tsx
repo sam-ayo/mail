@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
-import { loadPaletteFont, PALETTES, usePalette, useTheme } from "~/components/theme";
+import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
 import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
 import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
@@ -210,7 +210,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
 
 function Appearance() {
   const { palette, setPalette } = usePalette();
-  const { dark, toggle } = useTheme();
+  const { mode, setMode } = useThemeMode();
   // The previews show each theme in its own font, so load all of them here.
   useEffect(() => PALETTES.forEach((p) => loadPaletteFont(p.id)), []);
 
@@ -222,19 +222,22 @@ function Appearance() {
           <p className="text-sm text-zinc-500">The theme and the mode apply to this browser only.</p>
         </div>
         <div role="radiogroup" aria-label="Mode" className="flex shrink-0 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
-          {[
-            { value: false, label: "Light", Icon: Sun },
-            { value: true, label: "Dark", Icon: Moon },
-          ].map(({ value, label, Icon }) => (
+          {(
+            [
+              { value: "light", label: "Light", Icon: Sun },
+              { value: "dark", label: "Dark", Icon: Moon },
+              { value: "system", label: "System", Icon: Desktop },
+            ] satisfies { value: ThemeMode; label: string; Icon: typeof Sun }[]
+          ).map(({ value, label, Icon }) => (
             <button
-              key={label}
+              key={value}
               type="button"
               role="radio"
-              aria-checked={dark === value}
-              onClick={() => dark !== value && toggle()}
+              aria-checked={mode === value}
+              onClick={() => setMode(value)}
               className={cx(
                 "press inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm",
-                dark === value
+                mode === value
                   ? "bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-zinc-100"
                   : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
               )}

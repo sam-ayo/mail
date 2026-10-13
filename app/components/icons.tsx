@@ -11,6 +11,7 @@ import {
   ArrowUp01Icon,
   Attachment01Icon,
   Cancel01Icon,
+  ComputerIcon,
   CheckmarkSquare02Icon,
   Copy01Icon,
   Delete02Icon,
@@ -86,6 +87,7 @@ export const CaretUp = icon(ArrowUp01Icon);
 export const CheckSquare = icon(CheckmarkSquare02Icon);
 export const CircleNotch = icon(Loading03Icon);
 export const Copy = icon(Copy01Icon);
+export const Desktop = icon(ComputerIcon);
 export const DotsThree = icon(MoreHorizontalIcon);
 export const DownloadSimple = icon(Download04Icon);
 export const EnvelopeSimple = icon(Mail01Icon);
