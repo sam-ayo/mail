@@ -19,6 +19,7 @@ const QUOTE_MARKERS = /class="[^"]*(gmail_quote|yahoo_quoted)|type="cite"|id="(d
 // so they show with their true colours. The parent sets the "dark" class.
 const BASE_STYLES = `
 html,body{margin:0;padding:0;background:#fff;color:#18181b}
+html body,html:root{height:auto !important;min-height:0 !important}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;overflow-wrap:anywhere;padding:4px 2px}
 img{max-width:100%;height:auto}
 table{max-width:100%}

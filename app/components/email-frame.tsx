@@ -50,7 +50,9 @@ export function EmailFrame({
     function measure() {
       const doc = frame?.contentDocument;
       if (!doc?.body) return;
-      const next = Math.ceil(doc.documentElement.scrollHeight) + 2;
+      // Measure the body, not the document. The document is never shorter
+      // than the frame, so the frame could only grow and never shrink.
+      const next = Math.ceil(doc.body.scrollHeight) + 2;
       frame!.style.height = `${next}px`;
       rememberHeight(html, next);
     }
