@@ -119,8 +119,14 @@ export function createGmailProvider(account: Account): MailProvider {
       throw new ProviderAuthError();
     }
     if ((response.status === 429 || response.status >= 500) && attempt < 3) {
-      await new Promise((resolve) => setTimeout(resolve, 2 ** attempt * 500));
+      // Gmail counts quota per user per minute, so a 429 needs a longer pause.
+      const retryAfter = Number(response.headers.get("Retry-After")) * 1000;
+      const delay = response.status === 429 ? Math.min(retryAfter || 2 ** attempt * 2000, 8000) : 2 ** attempt * 500;
+      await new Promise((resolve) => setTimeout(resolve, delay));
       return request(path, init, attempt + 1);
+    }
+    if (response.status === 429) {
+      throw new ProviderError("Gmail limits how many requests the app can send each minute. Try again in a minute.", 429);
     }
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
@@ -234,7 +240,9 @@ export function createGmailProvider(account: Account): MailProvider {
       }>(`/threads?${params}`);
 
       const threads = await mapLimit(list.threads ?? [], 10, async ({ id, historyId }) => {
-        const key = `${account.id}:${id}:${historyId}:${folder}`;
+        // Only Sent and Drafts show a different summary, so other folders share one entry.
+        const people = folder === "sent" || folder === "drafts" ? "to" : "from";
+        const key = `${account.id}:${id}:${historyId}:${people}`;
         const cached = summaryCache.get(key);
         if (cached) return cached;
         const metadata = new URLSearchParams({ format: "metadata" });
