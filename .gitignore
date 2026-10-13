@@ -1,0 +1,12 @@
+.DS_Store
+/node_modules/
+/.react-router/
+/build/
+.env
+/.data/
+
+.env.production
+.vercel
+.env*
+*.bak
+!.env.example

@@ -1,0 +1,134 @@
+@import "tailwindcss";
+
+@custom-variant dark (&:where(.dark, .dark *));
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
+    "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
+  --color-accent-50: #eef2ff;
+  --color-accent-100: #e0e7ff;
+  --color-accent-400: #818cf8;
+  --color-accent-500: #6366f1;
+  --color-accent-600: #4f46e5;
+  --color-accent-700: #4338ca;
+
+  /* The neutrals have a small tint of the accent hue, as the sidebar does.
+     Pure white and near-black look flat. These replace white and zinc. */
+  --color-white: oklch(98.5% 0.008 277);
+  --color-zinc-50: oklch(97.6% 0.01 277);
+  --color-zinc-100: oklch(95.8% 0.012 277);
+  --color-zinc-200: oklch(91.5% 0.016 277);
+  --color-zinc-300: oklch(86.5% 0.02 277);
+  --color-zinc-400: oklch(70.5% 0.026 277);
+  --color-zinc-500: oklch(55.5% 0.028 277);
+  --color-zinc-600: oklch(44.5% 0.028 277);
+  --color-zinc-700: oklch(37% 0.026 277);
+  --color-zinc-800: oklch(28% 0.024 277);
+  --color-zinc-900: oklch(22% 0.022 277);
+  --color-zinc-950: oklch(17% 0.02 277);
+
+  /* Strong curves. The built-in CSS easings are too weak for UI motion.
+     Tailwind's ease-out and ease-in-out utilities use these values. */
+  --ease-out: cubic-bezier(0.23, 1, 0.32, 1);
+  --ease-in-out: cubic-bezier(0.77, 0, 0.175, 1);
+  --ease-drawer: cubic-bezier(0.32, 0.72, 0, 1);
+  /* The sidebar spring. It is critically damped, so it has no bounce. The
+     curve of a critically damped spring has the same shape at all
+     stiffnesses. Only the time changes, so --sidebar-duration sets it. */
+  --ease-spring: linear(0, 0.0507 4.2%, 0.1616 8.3%, 0.2918 12.5%, 0.4196 16.7%, 0.5347 20.8%, 0.6331 25%,
+    0.7144 29.2%, 0.78 33.3%, 0.832 37.5%, 0.8727 41.7%, 0.9041 45.8%, 0.9281 50%, 0.9463 54.2%, 0.9601 58.3%,
+    0.9705 62.5%, 0.9782 66.7%, 0.984 70.8%, 0.9882 75%, 0.9914 79.2%, 0.9937 83.3%, 0.9954 87.5%,
+    0.9967 91.7%, 0.9976 95.8%, 1);
+}
+
+/* Press feedback for anything a person can press. "scale" is separate from
+   "transform", so it does not fight other transforms on the element. */
+@utility press {
+  transition-property: scale, color, background-color, border-color, box-shadow, opacity;
+  transition-duration: 160ms;
+  transition-timing-function: var(--ease-out);
+  &:active:not(:disabled, [data-disabled]) {
+    scale: 0.97;
+  }
+}
+
+html,
+body {
+  @apply h-full bg-white text-zinc-900 antialiased dark:bg-zinc-950 dark:text-zinc-100;
+  font-feature-settings: "cv11", "ss01";
+}
+
+html.dark {
+  color-scheme: dark;
+}
+
+/* The sidebar fills, as in Colima GUI: each fill has a small tint of the
+   accent hue, so the panel does not look flat. */
+:root {
+  /* The width of the sidebar panel. The resize handle changes it. */
+  --sidebar-width: 240px;
+  /* The time of the sidebar spring: stiffness 800, mass 1. */
+  --sidebar-duration: 300ms;
+  --sidebar: hsl(239 27% 93.5%);
+  --sidebar-border: hsl(239 20% 88%);
+  --sidebar-selection: hsl(239 25% 87%);
+  --sidebar-hover: hsl(239 25% 87% / 0.5);
+}
+html.dark {
+  --sidebar: hsl(239 15% 17.5%);
+  --sidebar-border: hsl(239 15% 24%);
+  --sidebar-selection: hsl(239 17% 25%);
+  --sidebar-hover: hsl(239 17% 25% / 0.5);
+}
+
+/* Feel like an app on a phone, not like a web page. */
+html {
+  -webkit-tap-highlight-color: transparent;
+  -webkit-text-size-adjust: 100%;
+  overscroll-behavior: none;
+}
+
+/* One focus ring for every control. It shows for keyboard focus only. */
+:where(button, a, [role="button"], [tabindex]):focus-visible {
+  outline: 2px solid var(--color-accent-500);
+  outline-offset: 2px;
+}
+
+button,
+[role="button"],
+.tappable {
+  touch-action: manipulation;
+  -webkit-user-select: none;
+  user-select: none;
+  -webkit-touch-callout: none;
+}
+
+/* iOS zooms into inputs with text smaller than 16px. */
+@media (pointer: coarse) {
+  input,
+  textarea,
+  select {
+    font-size: 16px !important;
+  }
+}
+
+/* Reduced motion: keep fades, remove movement and scale. Popups and drawers
+   in this app do not use translate to center, so this is safe. */
+@media (prefers-reduced-motion: reduce) {
+  .press:active,
+  [data-starting-style],
+  [data-ending-style] {
+    scale: none !important;
+    translate: none !important;
+    transform: none !important;
+  }
+}
+
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgb(161 161 170 / 0.35) transparent;
+}
+
+kbd {
+  @apply inline-flex min-w-5 items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1 font-sans text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400;
+}
