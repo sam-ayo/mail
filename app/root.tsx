@@ -29,14 +29,22 @@ export const meta: Route.MetaFunction = () => [{ title: "mail" }];
 // Set the theme before the first paint, so the page does not flash.
 const themeScript = `(() => {
   try {
+    // The script makes these tags, and React does not render them. React
+    // matches head tags by their attributes when it hydrates. A tag that this
+    // script changed has no match, so React adds a copy with the old value.
+    const themeColor = document.createElement("meta");
+    themeColor.name = "theme-color";
+    const icon = document.createElement("link");
+    icon.rel = "icon";
+    icon.type = "image/svg+xml";
+    document.head.append(themeColor, icon);
     // No stored mode means the system mode, which follows the system setting.
     const media = matchMedia("(prefers-color-scheme: dark)");
     const applyTheme = () => {
       const stored = localStorage.getItem("theme");
       const dark = stored === "dark" || (stored !== "light" && media.matches);
       document.documentElement.classList.toggle("dark", dark);
-      document.querySelector('meta[name="theme-color"]')
-        ?.setAttribute("content", dark ? "${THEME_COLORS.dark}" : "${THEME_COLORS.light}");
+      themeColor.content = dark ? "${THEME_COLORS.dark}" : "${THEME_COLORS.light}";
     };
     applyTheme();
     media.addEventListener("change", applyTheme);
@@ -50,7 +58,7 @@ const themeScript = `(() => {
     const palette = palettes.find((p) => p.id === localStorage.getItem("palette"))
       || palettes.find((p) => p.id === "${DEFAULT_PALETTE}");
     document.documentElement.setAttribute("data-palette", palette.id);
-    document.querySelector('link[rel="icon"]')?.setAttribute("href", palette.icon);
+    icon.href = palette.icon;
     if (palette.font) {
       const link = document.createElement("link");
       link.id = "font-" + palette.id;
@@ -70,9 +78,6 @@ export function Layout({ children }: { children: React.ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
         />
-        <meta name="theme-color" content={THEME_COLORS.light} suppressHydrationWarning />
-        {/* The icon is here and not in links(), so the theme script can find it. */}
-        <link rel="icon" type="image/svg+xml" href={paletteFavicon(DEFAULT_PALETTE)} suppressHydrationWarning />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
