@@ -99,6 +99,8 @@ const listCache = new Map<string, ListCacheEntry>();
 const LIST_CACHE_LIMIT = 30;
 /** Cached data newer than this shows with no reload in the background. */
 const LIST_FRESH_MS = 10_000;
+/** A hover prefetch skips cached data newer than this. Each Gmail list load uses quota. */
+const PREFETCH_FRESH_MS = 60_000;
 /** The list on the screen. A reload of it always asks the server. */
 let shownListKey: string | null = null;
 
@@ -141,7 +143,7 @@ export async function clientLoader({ params, request, serverLoader }: Route.Clie
 
   if (entry?.data && key !== shownListKey) {
     const refresh =
-      Date.now() - entry.at > LIST_FRESH_MS
+      Date.now() - entry.at > (prefetch ? PREFETCH_FRESH_MS : LIST_FRESH_MS)
         ? (entry.pending ?? fetchList(key, serverLoader)).then(
             (data) => ({ ...data, loadedAt: Date.now() }),
             () => null,
