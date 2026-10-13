@@ -1,5 +1,5 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
-import { useRevalidator } from "react-router";
+import { useParams, useRevalidator } from "react-router";
 import type { ComposeDraft } from "~/lib/compose";
 import { buildOutgoing, newDraftId } from "~/lib/compose";
 import type { AccountSummary, Folder, ThreadAction } from "~/lib/mail";
@@ -124,8 +124,13 @@ export function MailProvider({
   const sends = useRef(new Map<string, PendingSend>());
   const lastUndo = useRef<(() => void) | null>(null);
 
-  const defaultAccountId = accounts.find((a) => a.status === "active")?.id ?? accounts[0]?.id;
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
+  // A new message comes from the account that is open in the sidebar.
+  const { scope } = useParams();
+  const defaultAccountId =
+    (scope && accountMap.has(scope) ? scope : undefined) ??
+    accounts.find((a) => a.status === "active")?.id ??
+    accounts[0]?.id;
   const account = useCallback((id: string) => accountMap.get(id), [accountMap]);
 
   const refreshCounts = useCallback(() => {

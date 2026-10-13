@@ -1,4 +1,3 @@
-import { useId } from "react";
 import { Tooltip } from "@base-ui/react/tooltip";
 import { clsx } from "clsx";
 import { HardDrives, Sparkle } from "@phosphor-icons/react";
@@ -6,35 +5,15 @@ import type { ProviderKind } from "~/lib/mail";
 
 export const cx = clsx;
 
-// The mark is a postage stamp with a lowercase "m" on it. The mask punches
-// the perforation holes along each edge, so the background shows through.
-// Keep public/favicon.svg the same.
-const PERFORATIONS = [5.6, 10.8, 16, 21.2, 26.4].flatMap((p) => [
-  [p, 3],
-  [p, 29],
-  [3, p],
-  [29, p],
-]);
-
+// The mark is an envelope on a rounded square. Keep public/favicon.svg the same.
 export function LogoMark({ className }: { className?: string }) {
-  const maskId = useId();
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <mask id={maskId}>
-        <rect width="32" height="32" fill="#fff" />
-        {PERFORATIONS.map(([cx, cy]) => (
-          <circle key={`${cx},${cy}`} cx={cx} cy={cy} r="1.5" fill="#000" />
-        ))}
-      </mask>
-      <rect x="3" y="3" width="26" height="26" rx="1" mask={`url(#${maskId})`} className="fill-zinc-900 dark:fill-zinc-100" />
-      <path
-        d="M10 21.5V15.5a3 3 0 0 1 6 0v6M16 15.5a3 3 0 0 1 6 0v6"
-        fill="none"
-        strokeWidth="2.5"
-        strokeLinecap="round"
-        strokeLinejoin="round"
-        className="stroke-orange-500"
-      />
+      <rect x="3" y="3" width="26" height="26" rx="6" className="fill-zinc-100" />
+      <g fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-accent-500">
+        <rect x="6.75" y="9.25" width="18.5" height="13.5" rx="2.25" />
+        <path d="M7.75 10.75l8.25 6 8.25-6" />
+      </g>
     </svg>
   );
 }
@@ -44,7 +23,7 @@ export function Logo({ className }: { className?: string }) {
     <div className={cx("flex items-center gap-2 text-[17px] font-bold tracking-[-0.04em]", className)}>
       <LogoMark className="size-7" />
       <span>
-        mail<span className="text-orange-500">.</span>
+        mail<span className="text-accent-500">.</span>
       </span>
     </div>
   );

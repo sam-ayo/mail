@@ -84,6 +84,91 @@ export async function loader({ params, request, context }: Route.LoaderArgs) {
   }
 }
 
+type ListData = Awaited<ReturnType<typeof loader>>;
+interface ListCacheEntry {
+  data?: ListData;
+  /** Time the data loaded. */
+  at: number;
+  pending?: Promise<ListData>;
+}
+
+// First pages of lists that loaded before. A folder that you open again, or
+// that loaded early on hover, shows at once. It then reloads in the background.
+const listCache = new Map<string, ListCacheEntry>();
+const LIST_CACHE_LIMIT = 30;
+/** Cached data newer than this shows with no reload in the background. */
+const LIST_FRESH_MS = 10_000;
+/** The list on the screen. A reload of it always asks the server. */
+let shownListKey: string | null = null;
+
+function listKey(scope: string, folder: string, query: string) {
+  return `${scope}/${folder}?${query}`;
+}
+
+function rememberList(key: string, data: ListData, at: number) {
+  listCache.delete(key);
+  listCache.set(key, { data, at });
+  if (listCache.size > LIST_CACHE_LIMIT) listCache.delete(listCache.keys().next().value!);
+}
+
+function fetchList(key: string, serverLoader: () => Promise<ListData>) {
+  const previous = listCache.get(key);
+  const pending = serverLoader().then(
+    (data) => {
+      rememberList(key, data, Date.now());
+      return data;
+    },
+    (error) => {
+      if (listCache.get(key)?.pending === pending) {
+        if (previous?.data) listCache.set(key, { data: previous.data, at: previous.at });
+        else listCache.delete(key);
+      }
+      throw error;
+    },
+  );
+  listCache.set(key, { data: previous?.data, at: previous?.at ?? 0, pending });
+  return pending;
+}
+
+export async function clientLoader({ params, request, serverLoader }: Route.ClientLoaderArgs) {
+  const url = new URL(request.url);
+  // Later pages from infinite scroll do not use the cache.
+  if (url.searchParams.has("cursor")) return { ...(await serverLoader()), loadedAt: Date.now() };
+  const key = listKey(params.scope, params.folder, url.searchParams.get("q")?.trim() ?? "");
+  const prefetch = url.searchParams.has(PREFETCH_PARAM);
+  const entry = listCache.get(key);
+
+  if (entry?.data && key !== shownListKey) {
+    const refresh =
+      Date.now() - entry.at > LIST_FRESH_MS
+        ? (entry.pending ?? fetchList(key, serverLoader)).then(
+            (data) => ({ ...data, loadedAt: Date.now() }),
+            () => null,
+          )
+        : undefined;
+    return { ...entry.data, loadedAt: entry.at, refresh };
+  }
+
+  if (entry?.pending && key !== shownListKey) {
+    // A hover prefetch can stop before it completes. Then load again.
+    try {
+      return { ...(await entry.pending), loadedAt: Date.now() };
+    } catch (error) {
+      if (request.signal.aborted) throw error;
+    }
+  }
+
+  if (key === shownListKey) {
+    // A reload of the open list follows a change or asks for new mail. Other
+    // lists may be out of date too, so they reload when you open them.
+    for (const other of listCache.values()) other.at = 0;
+  }
+  const load = fetchList(key, serverLoader).then((data) => ({ ...data, loadedAt: Date.now() }));
+  // An error from a fetcher replaces the full page, so a failed prefetch
+  // stays silent. If you open the folder, the error shows then.
+  return prefetch ? load.catch(() => null as never) : load;
+}
+
 export function shouldRevalidate({
   currentParams,
   nextParams,
@@ -114,9 +199,38 @@ export interface ListOutletContext {
   closeThread(): void;
 }
 
-export default function ThreadList({ loaderData, params }: Route.ComponentProps) {
+export default function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const { scope } = params;
   const folder = params.folder as Folder;
+
+  // A cached list shows first. Newer data from the server replaces it when it arrives.
+  const [fresh, setFresh] = useState<{ from: typeof routeData; data: ListData; loadedAt: number }>();
+  useEffect(() => {
+    if (!("refresh" in routeData) || !routeData.refresh) return;
+    let live = true;
+    routeData.refresh.then((result) => {
+      if (live && result) setFresh({ from: routeData, data: result, loadedAt: result.loadedAt });
+    });
+    return () => {
+      live = false;
+    };
+  }, [routeData]);
+  const current = fresh?.from === routeData ? fresh : null;
+  const loaderData: ListData = current?.data ?? routeData;
+  // The first page from the server render has no load time.
+  const renderedAt = useMemo(() => Date.now(), [routeData]);
+  const loadedAt = current?.loadedAt ?? ("loadedAt" in routeData ? routeData.loadedAt : renderedAt);
+
+  const shownKey = listKey(scope, folder, loaderData.query);
+  useEffect(() => {
+    // The server render does not go through the client loader. Keep its list too.
+    if (!listCache.has(shownKey)) rememberList(shownKey, loaderData, loadedAt);
+    shownListKey = shownKey;
+    return () => {
+      if (shownListKey === shownKey) shownListKey = null;
+    };
+  }, [shownKey, loaderData, loadedAt]);
+
   const { accounts, account, patches, runAction } = useMail();
   const navigate = useNavigate();
   const location = useLocation();
@@ -131,7 +245,6 @@ export default function ThreadList({ loaderData, params }: Route.ComponentProps)
   // Extra pages from infinite scroll. A new first page resets them.
   const [extra, setExtra] = useState<ThreadSummary[]>([]);
   const [cursor, setCursor] = useState(loaderData.nextCursor);
-  const loadedAt = useMemo(() => Date.now(), [loaderData]);
   useEffect(() => {
     setExtra([]);
     setCursor(loaderData.nextCursor);

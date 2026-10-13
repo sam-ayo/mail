@@ -19,10 +19,10 @@ import {
   Tray,
   Warning,
 } from "@phosphor-icons/react";
-import { useSyncExternalStore } from "react";
-import { Link, NavLink, useNavigate } from "react-router";
+import { useEffect, useRef, useSyncExternalStore } from "react";
+import { Link, NavLink, useFetcher, useNavigate } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
-import { FOLDER_LABELS, FOLDERS, formatCount } from "~/lib/mail";
+import { FOLDER_LABELS, FOLDERS, formatCount, PREFETCH_PARAM } from "~/lib/mail";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
 import { ResizeHandle } from "./resize-handle";
@@ -81,14 +81,19 @@ export function Sidebar({
       </div>
 
       <div className="px-2.5 pb-1">
+        {/* Compose has the shape of a folder row, with the accent color.
+            The shortcut is plain text, as the counts are. */}
         <button
           type="button"
           onClick={() => openCompose()}
-          className="flex h-8 w-full items-center gap-2 rounded-[9px] bg-accent-600 px-2.5 text-sm font-medium text-white shadow-sm shadow-accent-600/30 press hover:bg-accent-700"
+          aria-keyshortcuts="c"
+          className="tappable press flex h-7 w-full items-center gap-2.5 rounded-[7px] px-2 text-[13px] font-medium text-accent-600 hover:bg-(--sidebar-hover) dark:text-accent-400"
         >
-          <NotePencil className="size-4" />
-          Compose
-          <kbd className="ml-auto border-white/20 bg-white/10 text-white/80">C</kbd>
+          <NotePencil className="size-4 shrink-0" />
+          <span className="flex-1 text-left">New message</span>
+          <span aria-hidden className="text-[11px] font-normal text-zinc-400 dark:text-zinc-500">
+            C
+          </span>
         </button>
       </div>
 
@@ -418,6 +423,14 @@ function FolderLink({
 }) {
   const Icon = FOLDER_ICONS[folder];
   const navigate = useNavigate();
+  // The list route caches what this fetcher loads, so the folder shows at once.
+  const fetcher = useFetcher();
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  function prefetch(start: boolean) {
+    clearTimeout(hoverTimer.current);
+    if (start && !active) hoverTimer.current = setTimeout(() => fetcher.load(`${to}?${PREFETCH_PARAM}`), 80);
+  }
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
   return (
     <li>
       <ContextMenu
@@ -429,7 +442,9 @@ function FolderLink({
       >
         <Link
           to={to}
-          prefetch="intent"
+          onMouseEnter={() => prefetch(true)}
+          onMouseLeave={() => prefetch(false)}
+          onFocus={() => prefetch(true)}
           className={cx(
             // As in the system sidebars, the selected row has a fill and no
             // bold text. A hovered row has a lighter fill of the same color.

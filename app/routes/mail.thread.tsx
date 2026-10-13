@@ -33,7 +33,7 @@ import { Avatar, FileName, Hint, IconButton, PROVIDER_NAMES, cx } from "~/compon
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
-import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, threadKey, threadRefs } from "~/lib/mail";
+import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { loadThread } from "~/server/mail.server";
 import { ProviderAuthError, ProviderError } from "~/server/providers/types";
@@ -364,9 +364,21 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
           <div id="reply-composer" className="mt-6">
             {draft ? (
               <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
-                <div className="flex items-center gap-2 border-b border-zinc-100 bg-zinc-50 px-4 py-2 text-xs text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900">
-                  {draft.reply?.kind === "forward" ? <ArrowBendUpRight className="size-3.5" /> : <ArrowBendUpLeft className="size-3.5" />}
-                  {draft.reply?.kind === "forward" ? "Forward" : "Reply"} from {owner?.email}
+                <div
+                  className={cx(
+                    "flex items-center gap-2 px-4 py-2 text-xs",
+                    !owner && "border-b border-zinc-100 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900",
+                  )}
+                  // The account color shows which address sends the reply.
+                  style={owner ? { background: owner.color, color: textOn(owner.color) } : undefined}
+                >
+                  {draft.reply?.kind === "forward" ? (
+                    <ArrowBendUpRight className="size-3.5 shrink-0" />
+                  ) : (
+                    <ArrowBendUpLeft className="size-3.5 shrink-0" />
+                  )}
+                  <span className="shrink-0 opacity-75">{draft.reply?.kind === "forward" ? "Forward" : "Reply"} from</span>
+                  <span className="min-w-0 truncate font-medium">{owner?.email}</span>
                 </div>
                 <Composer
                   key={draft.id}

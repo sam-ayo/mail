@@ -12,7 +12,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ComposeDraft } from "~/lib/compose";
-import { parseAddressList } from "~/lib/mail";
+import { parseAddressList, textOn } from "~/lib/mail";
 import { markdownToHtml } from "~/lib/markdown";
 import { useMail } from "./mail-context";
 import { ResizeHandle } from "./resize-handle";
@@ -415,7 +415,7 @@ function readSize(): WindowSize {
 
 /** The floating window for a new message or a forward. */
 export function ComposeWindow() {
-  const { compose, updateCompose, closeCompose } = useMail();
+  const { compose, updateCompose, closeCompose, account } = useMail();
   const [minimized, setMinimized] = useState(false);
   const [expanded, setExpandedState] = useState(false);
 
@@ -484,6 +484,7 @@ export function ComposeWindow() {
 
   if (!compose) return null;
   const title = compose.subject || "New message";
+  const sender = account(compose.accountId);
 
   return (
     <div
@@ -532,9 +533,12 @@ export function ComposeWindow() {
       )}
       <header
         className={cx(
-          "flex items-center gap-2 bg-zinc-900 px-4 py-2 text-sm text-white dark:bg-zinc-800",
+          "flex items-center gap-2 px-4 py-2 text-sm",
+          !sender && "bg-zinc-900 text-white dark:bg-zinc-800",
           movable ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-pointer",
         )}
+        // The account color shows which address sends the message.
+        style={sender ? { background: sender.color, color: textOn(sender.color) } : undefined}
         onClick={() => {
           const dragged = move.current?.moved;
           move.current = null;
@@ -573,7 +577,13 @@ export function ComposeWindow() {
         onLostPointerCapture={endMove}
         onDoubleClick={() => movable && setOffset({ x: 0, y: 0 })}
       >
-        <span className="flex-1 truncate font-medium">{title}</span>
+        <span className="truncate font-medium">{title}</span>
+        {sender && (
+          <span title={`From ${sender.email}`} className="min-w-0 truncate text-xs opacity-75">
+            {sender.email}
+          </span>
+        )}
+        <span className="flex-1" />
         <button
           type="button"
           aria-label={minimized ? "Open" : "Minimize"}

@@ -270,6 +270,17 @@ export const ACCOUNT_COLORS = [
   "#14b8a6",
 ];
 
+/** Returns the text color with the higher contrast on a hex background color. */
+export function textOn(background: string) {
+  const channel = (offset: number) => {
+    const value = parseInt(background.slice(offset, offset + 2), 16) / 255;
+    return value <= 0.04045 ? value / 12.92 : ((value + 0.055) / 1.055) ** 2.4;
+  };
+  const luminance = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+  // White has a luminance of 1. Zinc 900 (#18181b) has a luminance of about 0.01.
+  return (1.05 / (luminance + 0.05)) >= ((luminance + 0.05) / 0.06) ? "#ffffff" : "#18181b";
+}
+
 /** A message as the reading pane gets it. `html` is a full, sanitized document. */
 export interface RenderedMessage extends Omit<Message, "html"> {
   html?: string;

@@ -74,11 +74,13 @@ html.dark {
   --sidebar-selection: hsl(239 25% 87%);
   --sidebar-hover: hsl(239 25% 87% / 0.5);
 }
+/* The dark fills use the hue of the zinc scale. They are a small step above
+   zinc-950, as the light fills are a small step below white. */
 html.dark {
-  --sidebar: hsl(239 15% 17.5%);
-  --sidebar-border: hsl(239 15% 24%);
-  --sidebar-selection: hsl(239 17% 25%);
-  --sidebar-hover: hsl(239 17% 25% / 0.5);
+  --sidebar: oklch(21% 0.022 277);
+  --sidebar-border: oklch(26.5% 0.024 277);
+  --sidebar-selection: oklch(28.5% 0.026 277);
+  --sidebar-hover: oklch(28.5% 0.026 277 / 0.5);
 }
 
 /* Feel like an app on a phone, not like a web page. */

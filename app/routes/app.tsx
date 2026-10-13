@@ -35,6 +35,7 @@ import { getUserId } from "~/server/auth.server";
 import { userContext } from "~/server/context";
 import { getDemoDataset } from "~/server/providers/demo.server";
 import { DevDataToggle } from "~/components/dev-data-toggle";
+import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/app";
 
 export const middleware: Route.MiddlewareFunction[] = [
@@ -53,6 +54,18 @@ export async function loader({ context }: Route.LoaderArgs) {
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;
   return { accounts, devDataset };
+}
+
+export function shouldRevalidate({
+  currentUrl,
+  nextUrl,
+  formMethod,
+  defaultShouldRevalidate,
+}: ShouldRevalidateFunctionArgs) {
+  // A move to another folder or conversation does not change the accounts.
+  // Form submissions and explicit reloads still load them again.
+  if (!formMethod && currentUrl.href !== nextUrl.href) return false;
+  return defaultShouldRevalidate;
 }
 
 export default function AppLayout({ loaderData }: Route.ComponentProps) {
