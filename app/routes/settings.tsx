@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Plus, SignOut, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
+import { loadPaletteFont, PALETTES, usePalette, useTheme } from "~/components/theme";
 import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
 import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
@@ -77,6 +78,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             ))}
           </ul>
         </section>
+
+        <Appearance />
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -202,5 +205,87 @@ function AccountRow({ account }: { account: AccountSummary }) {
         </span>
       </div>
     </li>
+  );
+}
+
+function Appearance() {
+  const { palette, setPalette } = usePalette();
+  const { dark, toggle } = useTheme();
+  // The previews show each theme in its own font, so load all of them here.
+  useEffect(() => PALETTES.forEach((p) => loadPaletteFont(p.id)), []);
+
+  return (
+    <section className="mt-10">
+      <div className="mb-3 flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Appearance</h2>
+          <p className="text-sm text-zinc-500">The theme and the mode apply to this browser only.</p>
+        </div>
+        <div role="radiogroup" aria-label="Mode" className="flex shrink-0 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
+          {[
+            { value: false, label: "Light", Icon: Sun },
+            { value: true, label: "Dark", Icon: Moon },
+          ].map(({ value, label, Icon }) => (
+            <button
+              key={label}
+              type="button"
+              role="radio"
+              aria-checked={dark === value}
+              onClick={() => dark !== value && toggle()}
+              className={cx(
+                "press inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm",
+                dark === value
+                  ? "bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-zinc-100"
+                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
+              )}
+            >
+              <Icon className="size-4" /> {label}
+            </button>
+          ))}
+        </div>
+      </div>
+
+      <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Theme">
+        {PALETTES.map((p) => (
+          <label key={p.id} className="cursor-pointer">
+            <input
+              type="radio"
+              name="palette"
+              value={p.id}
+              checked={palette === p.id}
+              onChange={() => setPalette(p.id)}
+              className="peer sr-only"
+            />
+            {/* data-palette gives the preview the colors and the font of its theme. */}
+            <span
+              data-palette={p.id}
+              className="press block overflow-hidden rounded-xl bg-white font-sans text-zinc-900 ring-1 ring-zinc-200 peer-checked:ring-2 peer-checked:ring-accent-500 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-800"
+            >
+              <span className="flex h-20 gap-1.5 p-1.5" aria-hidden>
+                <span className="flex w-1/3 flex-col gap-1 rounded-md border border-(--sidebar-border) bg-(--sidebar) p-1">
+                  <span className="h-1.5 w-3/4 rounded-full bg-accent-500" />
+                  <span className="h-2.5 rounded bg-(--sidebar-selection)" />
+                  <span className="h-1.5 w-2/3 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                  <span className="h-1.5 w-1/2 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                </span>
+                <span className="flex flex-1 flex-col gap-1 py-1">
+                  <span className="rounded bg-accent-50 p-1 ring-1 ring-accent-500/60 ring-inset dark:bg-accent-500/10">
+                    <span className="block h-1.5 w-3/4 rounded-full bg-zinc-800 dark:bg-zinc-200" />
+                  </span>
+                  <span className="px-1">
+                    <span className="block h-1.5 w-2/3 rounded-full bg-zinc-300 dark:bg-zinc-700" />
+                  </span>
+                  <span className="mt-auto ml-auto h-3 w-8 rounded bg-accent-600" />
+                </span>
+              </span>
+              <span className="block border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
+                <span className="block text-sm font-medium">{p.label}</span>
+                <span className="block truncate text-xs text-zinc-500">{p.description}</span>
+              </span>
+            </span>
+          </label>
+        ))}
+      </fieldset>
+    </section>
   );
 }

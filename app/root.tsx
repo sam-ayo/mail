@@ -9,7 +9,7 @@ import {
 } from "react-router";
 
 import { Toaster } from "sonner";
-import { FAVICONS, THEME_COLORS, useTheme } from "./components/theme";
+import { DEFAULT_PALETTE, FAVICONS, PALETTES, THEME_COLORS, useTheme } from "./components/theme";
 import { ConfirmProvider } from "./components/confirm-dialog";
 import { TooltipProvider } from "./components/ui";
 import type { Route } from "./+types/root";
@@ -41,6 +41,17 @@ const themeScript = `(() => {
     const listWidth = Number(localStorage.getItem("list-width"));
     if (listWidth >= 300 && listWidth <= 720) document.documentElement.style.setProperty("--list-width", listWidth + "px");
     if (localStorage.getItem("sidebar-collapsed") === "1") document.documentElement.classList.add("sidebar-collapsed");
+    const palettes = ${JSON.stringify(PALETTES.map(({ id, font }) => ({ id, font })))};
+    const palette = palettes.find((p) => p.id === localStorage.getItem("palette"))
+      || palettes.find((p) => p.id === "${DEFAULT_PALETTE}");
+    document.documentElement.setAttribute("data-palette", palette.id);
+    if (palette.font) {
+      const link = document.createElement("link");
+      link.id = "font-" + palette.id;
+      link.rel = "stylesheet";
+      link.href = "https://fonts.googleapis.com/css2?family=" + palette.font + "&display=swap";
+      document.head.appendChild(link);
+    }
   } catch {}
 })();`;
 

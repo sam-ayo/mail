@@ -350,10 +350,9 @@ export function Composer({
       {error && <p className="px-4 pb-2 text-xs text-red-600">{error}</p>}
 
       <div className="flex items-center gap-1 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800">
-        <Button type="submit" variant="primary" className="h-8">
-          <PaperPlaneTilt className="size-3.5" /> Send
-          <kbd className="ml-1 border-white/20 bg-white/10 text-white/80">⌘↵</kbd>
-        </Button>
+        <IconButton label="Discard draft" onClick={onDiscard}>
+          <Trash className="size-4" />
+        </IconButton>
         <input
           ref={fileRef}
           type="file"
@@ -377,9 +376,10 @@ export function Composer({
           {preview ? <PencilSimple className="size-4" /> : <MarkdownLogo className="size-4" />}
         </IconButton>
         <div className="flex-1" />
-        <IconButton label="Discard draft" onClick={onDiscard}>
-          <Trash className="size-4" />
-        </IconButton>
+        <Button type="submit" variant="primary" className="h-8">
+          <PaperPlaneTilt className="size-3.5" /> Send
+          <kbd className="ml-1 border-white/25 bg-white/15 text-white">⌘↵</kbd>
+        </Button>
       </div>
     </form>
   );
