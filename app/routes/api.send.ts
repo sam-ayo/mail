@@ -1,4 +1,5 @@
 import type { ReplyContext } from "~/lib/compose";
+import { buildOutgoing } from "~/lib/compose";
 import { parseAddressList } from "~/lib/mail";
 import { requireUserId } from "~/server/auth.server";
 import { sendMessage } from "~/server/mail.server";
@@ -34,14 +35,22 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  // The iOS app sends the Markdown body and the quoted original. The web app sends HTML and text.
+  const body = form.has("markdown")
+    ? buildOutgoing({
+        body: text("markdown"),
+        quoted: form.has("quotedHtml") ? { html: text("quotedHtml"), text: text("quotedText") } : undefined,
+      })
+    : { html: text("html"), text: text("text") };
+
   try {
     await sendMessage(userId, text("accountId"), {
       to,
       cc,
       bcc,
       subject: text("subject"),
-      html: text("html"),
-      text: text("text"),
+      html: body.html,
+      text: body.text,
       reply,
       attachments: await Promise.all(
         files.map(async (file) => ({
