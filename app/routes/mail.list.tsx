@@ -20,7 +20,7 @@ import {
   Tray,
   Warning,
   X,
-} from "@phosphor-icons/react";
+} from "~/components/icons";
 import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";

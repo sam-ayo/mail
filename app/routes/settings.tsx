@@ -1,10 +1,10 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Plus, SignOut, Trash, Warning } from "@phosphor-icons/react";
+import { ArrowLeft, Plus, SignOut, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
-import { ACCOUNT_COLORS, type AccountSummary } from "~/lib/mail";
+import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
 import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
@@ -135,7 +135,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{account.email}</p>
-          <p className="text-xs text-zinc-500">{PROVIDER_NAMES[account.provider]}</p>
+          <p className="text-xs text-zinc-500">{PROVIDER_NAMES[shownProvider(account)]}</p>
         </div>
         {account.status === "reauth_required" && (
           <Link

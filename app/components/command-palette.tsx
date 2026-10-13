@@ -1,5 +1,5 @@
 import { Command as Cmdk } from "cmdk";
-import { MagnifyingGlass } from "@phosphor-icons/react";
+import { MagnifyingGlass } from "./icons";
 
 export interface Command {
   id: string;

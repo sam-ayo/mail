@@ -19,11 +19,11 @@ import {
   Trash,
   Tray,
   Warning,
-} from "@phosphor-icons/react";
+} from "./icons";
 import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Link, NavLink, useFetcher, useNavigate } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
-import { FOLDER_LABELS, FOLDERS, formatCount, PREFETCH_PARAM } from "~/lib/mail";
+import { FOLDER_LABELS, FOLDERS, formatCount, PREFETCH_PARAM, shownProvider } from "~/lib/mail";
 import { removeAccountPrompt, useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
@@ -177,7 +177,7 @@ export function Sidebar({
                           className={cx("size-3 shrink-0 text-zinc-400 transition-[rotate] duration-200 ease-out", open && "rotate-90")}
                         />
                         {/* The color dot on the account icon matches the dots in the message list. */}
-                        <span className="relative shrink-0" title={PROVIDER_NAMES[account.provider]}>
+                        <span className="relative shrink-0" title={PROVIDER_NAMES[shownProvider(account)]}>
                           <AccountIcon account={account} className="size-3.5 text-zinc-500" />
                           <span
                             className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px] ring-(--sidebar)"
@@ -284,10 +284,12 @@ export function setSidebarCollapsed(collapsed: boolean) {
   const content = document.querySelector<HTMLElement>("[data-sidebar-content]");
   // The position of the content now, with the slide that is in progress.
   const from = content?.getBoundingClientRect().left;
-  content?.getAnimations().forEach((animation) => animation.cancel());
+  const centered = [...(content?.querySelectorAll<HTMLElement>("[data-sidebar-centered]") ?? [])];
+  const centeredFrom = centered.map((element) => element.getBoundingClientRect().left);
+  [content, ...centered].forEach((element) => element?.getAnimations().forEach((animation) => animation.cancel()));
   document.documentElement.classList.toggle(COLLAPSED_CLASS, collapsed);
   if (!collapsed) endPeek();
-  if (content && from !== undefined) slideContent(content, from);
+  if (content && from !== undefined) slideContent(content, from, centered, centeredFrom);
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
   window.dispatchEvent(new Event(COLLAPSED_EVENT));
 }
@@ -295,17 +297,31 @@ export function setSidebarCollapsed(collapsed: boolean) {
 /** An animation of the space for the sidebar lays out the full page on each
     frame, and each email frame lays out its content again. Thus the space
     changes at once, and the content slides from its old position with a
-    transform. The browser can run a transform off the main thread. */
-function slideContent(content: HTMLElement, from: number) {
+    transform. The browser can run a transform off the main thread.
+
+    An element that has "data-sidebar-centered" is centered in a pane that
+    changes width. The pane gets wider at once, so the element jumps by half
+    the sidebar width before the slide starts. A second transform on the
+    element moves it from its old position to its new position, with no jump. */
+function slideContent(content: HTMLElement, from: number, centered: HTMLElement[], centeredFrom: number[]) {
   if (matchMedia("(prefers-reduced-motion: reduce)").matches) return;
   const distance = from - content.getBoundingClientRect().left;
   if (!distance) return;
   const style = getComputedStyle(document.documentElement);
   // The build can write "300ms" as ".3s".
   const time = style.getPropertyValue("--sidebar-duration").trim();
-  content.animate([{ transform: `translateX(${distance}px)` }, { transform: "none" }], {
+  const options = {
     duration: (parseFloat(time) || 0.3) * (time.endsWith("ms") ? 1 : 1000),
     easing: style.getPropertyValue("--ease-spring").trim() || "ease-out",
+  };
+  // Measure the new positions before the slide starts. The slide moves the
+  // elements, and a later measurement counts the distance two times.
+  const centeredTo = centered.map((element) => element.getBoundingClientRect().left);
+  content.animate([{ transform: `translateX(${distance}px)` }, { transform: "none" }], options);
+  centered.forEach((element, i) => {
+    // The slide of the content also moves the element, so remove that part.
+    const offset = centeredFrom[i] - centeredTo[i] - distance;
+    if (offset) element.animate([{ transform: `translateX(${offset}px)` }, { transform: "none" }], options);
   });
 }
 
@@ -484,7 +500,7 @@ function FolderLink({
           )}
         >
           <Icon
-            weight={active ? "fill" : "regular"}
+            weight={active ? "bold" : "regular"}
             className={cx(
               "size-4 shrink-0",
               active ? "text-accent-600 dark:text-accent-400" : "text-zinc-500 dark:text-zinc-400",

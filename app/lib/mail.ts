@@ -11,6 +11,13 @@ export interface AccountSummary {
   name: string;
   color: string;
   status: AccountStatus;
+  /** The provider that the app shows. A demo account can look like a Gmail or a custom domain account. */
+  look?: ProviderKind;
+}
+
+/** The provider to show for an account. */
+export function shownProvider(account: { provider: ProviderKind; look?: ProviderKind }) {
+  return account.look ?? account.provider;
 }
 
 export const FOLDERS = [

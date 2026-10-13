@@ -7,7 +7,7 @@ import {
   SidebarSimple,
   SignOut,
   Tray,
-} from "@phosphor-icons/react";
+} from "~/components/icons";
 import { useEffect, useMemo, useState } from "react";
 import { Drawer } from "@base-ui/react/drawer";
 import { Outlet, redirect, useLocation, useNavigate, useParams, useSubmit } from "react-router";

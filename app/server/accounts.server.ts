@@ -25,6 +25,7 @@ export interface ImapCredentials {
 
 export interface DemoCredentials {
   persona?: number;
+  look?: ProviderKind;
 }
 
 export type Credentials = OAuthCredentials | ImapCredentials | DemoCredentials;
@@ -60,7 +61,8 @@ function toAccount(row: AccountRow): Account {
 
 export function toSummary(account: Account): AccountSummary {
   const { id, provider, email, name, color, status } = account;
-  return { id, provider, email, name, color, status };
+  const look = provider === "demo" ? (account.credentials as DemoCredentials).look : undefined;
+  return { id, provider, email, name, color, status, ...(look && { look }) };
 }
 
 export async function createUser() {

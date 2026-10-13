@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Address, Folder, Message, Thread, ThreadAction, ThreadSummary, Unsubscribe } from "~/lib/mail";
+import type { Address, Folder, Message, ProviderKind, Thread, ThreadAction, ThreadSummary, Unsubscribe } from "~/lib/mail";
 import type { Account, DemoCredentials } from "../accounts.server";
 import { snippetFromText } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
@@ -56,6 +56,9 @@ const people = {
   client: { name: "Tomás Herrera", email: "tomas@herrera-coffee.example" },
   gumroad: { name: "Gumroad", email: "sales@gumroad.example" },
   vercel: { name: "Vercel", email: "notifications@vercel.example" },
+  coach: { name: "Dana Whitfield", email: "dana@whitfield-coaching.example" },
+  school: { name: "Oakridge Evening Classes", email: "enrol@oakridge.example" },
+  energy: { name: "Lumen Energy", email: "billing@lumen-energy.example" },
 } satisfies Record<string, Address>;
 
 function newsletterHtml(title: string, paragraphs: string[]) {
@@ -78,7 +81,7 @@ function receiptHtml(amount: string, item: string) {
 <p style="color:#697386;font-size:12px;margin-top:24px">Questions? Visit <a href="https://support.stripe.com">support.stripe.com</a>.</p></div>`;
 }
 
-// The work and personal demo accounts both receive these, so the unified
+// More than one demo account receives these, so the unified
 // inbox shows how it merges duplicates.
 const LISBON_TRIP: Seed = {
   from: people.airline,
@@ -379,11 +382,57 @@ const STUDIO_SEEDS: Seed[] = [
   },
 ];
 
-/** Each new demo account gets the next persona, so several demo accounts look like different mailboxes. */
-export const DEMO_PERSONAS = [
-  { label: "work", name: "Alex Morgan", domain: "northwind.demo", seeds: SEEDS },
-  { label: "personal", name: "Alex Morgan", domain: "fastmail.demo", seeds: PERSONAL_SEEDS },
-  { label: "studio", name: "Alex Morgan Studio", domain: "studio.demo", seeds: STUDIO_SEEDS },
+const OUTLOOK_SEEDS: Seed[] = [
+  {
+    from: people.coach,
+    subject: "Your plan for next week",
+    hoursAgo: 1.5,
+    unread: true,
+    body: "Hi Alex,\n\nGreat session today. Next week: three runs, one strength day, and a proper rest day on Friday.\n\nThe full plan is attached.\n\nDana",
+    attachment: { filename: "week-12-plan.txt", mimeType: "text/plain", content: "Mon: easy 5 km\nWed: strength\nThu: intervals\nFri: rest\nSun: long run 14 km" },
+    replies: [{ from: "me", hoursAgo: 1, body: "Thanks Dana! Can we move strength to Tuesday?" }],
+  },
+  {
+    from: people.school,
+    subject: "Your place on Beginner Spanish is confirmed",
+    hoursAgo: 9,
+    unread: true,
+    unsubscribe: { url: "https://oakridge.example/preferences", oneClick: false },
+    body: "Thanks for enrolling. Classes start on Tuesday 5 November at 7pm in Room 4. Bring a notebook. We supply the rest.",
+  },
+  {
+    from: people.energy,
+    subject: "Your bill for October: $64.20",
+    hoursAgo: 28,
+    body: "Your October bill is $64.20. We will take the payment by direct debit on 1 November.",
+  },
+  NORA_COFFEE,
+  {
+    from: people.airline,
+    subject: "Check in now for your flight to Oslo",
+    hoursAgo: 50,
+    starred: true,
+    body: "Online check-in is open for flight AU 214 to Oslo. Boarding starts at 8:40am from gate B12.",
+  },
+];
+
+/**
+ * Each new demo account gets the next persona, so several demo accounts look like different mailboxes.
+ * A persona with an `email` and a `look` looks like a real account, for screenshots and screen recordings.
+ */
+export const DEMO_PERSONAS: {
+  label: string;
+  title: string;
+  name: string;
+  domain: string;
+  email?: string;
+  look?: ProviderKind;
+  seeds: Seed[];
+}[] = [
+  { label: "work", title: "Custom domain", name: "Alex Morgan", domain: "northwind.io", email: "alex@northwind.io", look: "imap", seeds: SEEDS },
+  { label: "personal", title: "Gmail", name: "Alex Morgan", domain: "gmail.com", email: "alex.morgan@gmail.com", look: "google", seeds: PERSONAL_SEEDS },
+  { label: "studio", title: "Studio", name: "Alex Morgan Studio", domain: "studio.demo", seeds: STUDIO_SEEDS },
+  { label: "outlook", title: "Outlook", name: "Alex Morgan", domain: "outlook.com", email: "alex.morgan@outlook.com", look: "microsoft", seeds: OUTLOOK_SEEDS },
 ];
 
 function personaOf(account: Account) {

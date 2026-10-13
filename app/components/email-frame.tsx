@@ -105,7 +105,9 @@ export function EmailFrame({
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
       className="block w-full rounded-lg bg-white dark:bg-zinc-900"
-      style={{ height }}
+      // The light scheme makes "prefers-color-scheme" light in the frame, so
+      // the dark styles of the email do not apply. See BASE_STYLES.
+      style={{ height, colorScheme: "light" }}
     />
   );
 }

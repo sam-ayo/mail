@@ -18,7 +18,7 @@ import {
   Star,
   Trash,
   Tray,
-} from "@phosphor-icons/react";
+} from "~/components/icons";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useEffect, useMemo, useState } from "react";
 import { data, isRouteErrorResponse, useOutletContext, useRouteError } from "react-router";
@@ -33,7 +33,7 @@ import { Avatar, FileName, Hint, IconButton, PROVIDER_NAMES, cx } from "~/compon
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
-import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, threadKey, textOn, threadRefs } from "~/lib/mail";
+import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, shownProvider, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { loadThread } from "~/server/mail.server";
 import { ProviderAuthError, ProviderError } from "~/server/providers/types";
@@ -331,7 +331,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
               >
                 <span className="size-1.5 shrink-0 rounded-full" style={{ background: owner.color }} />
                 <span className="min-w-0 truncate">{owner.email}</span>
-                <span className="shrink-0 text-zinc-400">· {PROVIDER_NAMES[owner.provider]}</span>
+                <span className="shrink-0 text-zinc-400">· {PROVIDER_NAMES[shownProvider(owner)]}</span>
               </span>
             )}
           </div>

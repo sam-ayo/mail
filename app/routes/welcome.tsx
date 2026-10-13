@@ -1,9 +1,10 @@
-import { ArrowLeft, Sparkle } from "@phosphor-icons/react";
+import { ArrowLeft, Sparkle } from "~/components/icons";
 import { data, Form, Link } from "react-router";
 import { LegalLinks } from "~/components/legal";
-import { GoogleIcon, Logo, MicrosoftIcon, cx } from "~/components/ui";
+import { GoogleIcon, Logo, MicrosoftIcon, ProviderIcon, cx } from "~/components/ui";
 import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
+import { DEMO_PERSONAS } from "~/server/providers/demo.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
 
@@ -13,13 +14,19 @@ export async function loader({ request }: Route.LoaderArgs) {
   const session = await getSession(request);
   const error = session.get("error");
   return data(
-    { configured: oauthConfigured, signedIn: !!(await getUserId(request)), error },
+    {
+      configured: oauthConfigured,
+      signedIn: !!(await getUserId(request)),
+      error,
+      // Development only. A button for each demo persona.
+      demos: import.meta.env.DEV ? DEMO_PERSONAS.map(({ title, look }) => ({ title, look: look ?? "demo" })) : [],
+    },
     { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } },
   );
 }
 
 export default function Welcome({ loaderData }: Route.ComponentProps) {
-  const { configured, signedIn, error } = loaderData;
+  const { configured, signedIn, error, demos } = loaderData;
   return (
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
@@ -60,7 +67,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
             </ProviderLink>
           </div>
 
-          {import.meta.env.DEV && (
+          {demos.length > 0 && (
             <>
               <div className="my-6 flex items-center gap-3 text-xs text-zinc-400">
                 <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" /> or{" "}
@@ -72,11 +79,23 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
                   <Sparkle className="size-4" /> {signedIn ? "Add a demo account" : "Try a demo inbox"}
                 </button>
               </Form>
+              <Form method="post" action="/connect/demo" className="mt-2 grid grid-cols-2 gap-2">
+                {demos.map(({ title, look }, persona) => (
+                  <button
+                    key={title}
+                    name="persona"
+                    value={persona}
+                    className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 press hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
+                  >
+                    <ProviderIcon provider={look} className="size-3.5 shrink-0" /> {title}
+                  </button>
+                ))}
+              </Form>
             </>
           )}
         </div>
         <p className="mt-6 text-center text-xs text-zinc-400">
-          We encrypt your tokens and passwords before we store them.
+          We encrypt your sign-in tokens before we store them.
         </p>
         <LegalLinks className="mt-3" />
       </div>

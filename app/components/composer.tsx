@@ -8,7 +8,7 @@ import {
   Paperclip,
   Trash,
   X,
-} from "@phosphor-icons/react";
+} from "./icons";
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ComposeDraft } from "~/lib/compose";

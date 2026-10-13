@@ -1,5 +1,5 @@
 import { Dialog } from "@base-ui/react/dialog";
-import { X } from "@phosphor-icons/react";
+import { X } from "./icons";
 
 const GROUPS: { title: string; items: [string, string][] }[] = [
   {

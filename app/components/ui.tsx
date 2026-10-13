@@ -1,8 +1,8 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { clsx } from "clsx";
 import { useState } from "react";
-import { HardDrives, Sparkle } from "@phosphor-icons/react";
-import type { ProviderKind } from "~/lib/mail";
+import { HardDrives, Sparkle } from "./icons";
+import { shownProvider, type ProviderKind } from "~/lib/mail";
 
 export const cx = clsx;
 
@@ -73,17 +73,18 @@ export function AccountIcon({
   account,
   className,
 }: {
-  account: { email: string; provider: ProviderKind };
+  account: { email: string; provider: ProviderKind; look?: ProviderKind };
   className?: string;
 }) {
+  const provider = shownProvider(account);
   const domain = account.email.slice(account.email.lastIndexOf("@") + 1).toLowerCase();
   // A list can show a different account later, so keep the domain with the result.
   const [logo, setLogo] = useState<{ domain: string; loaded: boolean }>();
   const loaded = logo?.domain === domain && logo.loaded;
-  const hasLogo = account.provider !== "demo" && domain !== "" && !(logo?.domain === domain && !logo.loaded);
+  const hasLogo = provider !== "demo" && domain !== "" && !(logo?.domain === domain && !logo.loaded);
   return (
     <span className={cx("relative inline-block shrink-0", className)}>
-      {!loaded && <ProviderIcon provider={account.provider} className="block size-full" />}
+      {!loaded && <ProviderIcon provider={provider} className="block size-full" />}
       {hasLogo && (
         <img
           key={domain}
