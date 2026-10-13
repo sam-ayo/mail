@@ -10,6 +10,7 @@ import type {
 import type { Account } from "../accounts.server";
 import { setAccountStatus } from "../accounts.server";
 import { createTokenSource } from "../oauth/tokens.server";
+import { loadSummaries, saveSummaries } from "../summary-cache.server";
 import { buildMime, decodeEntities, mapLimit, parseAddresses, parseListUnsubscribe } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
 import { ProviderAuthError, ProviderError } from "./types";
@@ -239,19 +240,31 @@ export function createGmailProvider(account: Account): MailProvider {
         nextPageToken?: string;
       }>(`/threads?${params}`);
 
-      const threads = await mapLimit(list.threads ?? [], 10, async ({ id, historyId }) => {
-        // Only Sent and Drafts show a different summary, so other folders share one entry.
-        const people = folder === "sent" || folder === "drafts" ? "to" : "from";
-        const key = `${account.id}:${id}:${historyId}:${people}`;
-        const cached = summaryCache.get(key);
-        if (cached) return cached;
+      // Only Sent and Drafts show a different summary, so other folders share one entry.
+      const people = folder === "sent" || folder === "drafts" ? "to" : "from";
+      const keyFor = (id: string, historyId: string) => `${account.id}:${id}:${historyId}:${people}`;
+      const listed = list.threads ?? [];
+      // The memory cache is first. The database has the summaries from other server instances.
+      const misses = listed.filter((t) => !summaryCache.has(keyFor(t.id, t.historyId)));
+      const stored = await loadSummaries(account.id, people, misses);
+      const fetched: { historyId: string; summary: ThreadSummary }[] = [];
+
+      const threads = await mapLimit(listed, 10, async ({ id, historyId }) => {
+        const key = keyFor(id, historyId);
+        const cached = summaryCache.get(key) ?? stored.get(id);
+        if (cached) {
+          cacheSummary(key, cached);
+          return cached;
+        }
         const metadata = new URLSearchParams({ format: "metadata" });
         ["From", "To", "Subject", "Date", "Message-ID"].forEach((h) => metadata.append("metadataHeaders", h));
         const thread = await request<GmailThread>(`/threads/${encodeURIComponent(id)}?${metadata}`);
         const summary = summarize(thread, folder);
         cacheSummary(key, summary);
+        fetched.push({ historyId, summary });
         return summary;
       });
+      await saveSummaries(account.id, people, fetched);
 
       return { threads, nextCursor: list.nextPageToken };
     },
