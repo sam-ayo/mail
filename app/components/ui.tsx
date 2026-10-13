@@ -6,7 +6,7 @@ import { shownProvider, type ProviderKind } from "~/lib/mail";
 
 export const cx = clsx;
 
-// The mark is an envelope on a rounded square. Keep public/favicon.svg the same.
+// The mark is an envelope on a rounded square. Keep public/favicon.svg and faviconHref in theme.ts the same.
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden>

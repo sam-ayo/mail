@@ -1,8 +1,17 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 export const THEME_COLORS = { light: "#f8faff", dark: "#0d0f18" };
-// Change the version when the icons change, so browsers do not show a cached icon.
-export const FAVICONS = { light: "/favicon.svg?v=2", dark: "/favicon-dark.svg?v=2" };
+
+// The favicon is public/favicon.svg with the accent of the theme. It is a data
+// URL, so a theme change needs no request and no cache version.
+export function faviconHref(accent: string) {
+  const svg =
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 3 26 26">` +
+    `<rect x="3" y="3" width="26" height="26" rx="6" fill="#f4f4f5"/>` +
+    `<g fill="none" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
+    `<rect x="6.25" y="8.75" width="19.5" height="14.5" rx="2.5"/><path d="M7.5 10.5l8.5 6.25 8.5-6.25"/></g></svg>`;
+  return `data:image/svg+xml,${encodeURIComponent(svg)}`;
+}
 
 // The mode is "light", "dark", or "system". It is in storage, and no value
 // there means "system". The inline script in root.tsx sets the "dark" class on
@@ -28,8 +37,6 @@ function applyDark(dark: boolean) {
   document
     .querySelector('meta[name="theme-color"]')
     ?.setAttribute("content", dark ? THEME_COLORS.dark : THEME_COLORS.light);
-  // The light mark is dark, so it disappears on a dark tab bar.
-  document.querySelector('link[rel="icon"]')?.setAttribute("href", dark ? FAVICONS.dark : FAVICONS.light);
 }
 
 export function setThemeMode(mode: ThemeMode) {
@@ -72,12 +79,13 @@ export function useTheme() {
 
 // The themes. The CSS for each is in app.css. The script in root.tsx always
 // sets data-palette on <html>. Without it, the indigo values in @theme apply.
+// The accent is --color-accent-500 of the theme as hex, for the favicon.
 export const PALETTES = [
-  { id: "rose", label: "Rosé", description: "Soft, with a berry accent", font: "DM+Sans:opsz,wght@9..40,100..1000" },
-  { id: "indigo", label: "Indigo", description: "Cool and quiet", font: null },
-  { id: "paper", label: "Paper", description: "Warm, with a clay accent", font: "Instrument+Sans:wght@400..700" },
-  { id: "sage", label: "Sage", description: "Calm green-grey", font: "Figtree:wght@300..900" },
-  { id: "swiss", label: "Swiss", description: "Neutral grey, signal red", font: "Geist:wght@100..900" },
+  { id: "rose", label: "Rosé", description: "Soft, with a berry accent", font: "DM+Sans:opsz,wght@9..40,100..1000", accent: "#d8488c" },
+  { id: "indigo", label: "Indigo", description: "Cool and quiet", font: null, accent: "#6366f1" },
+  { id: "paper", label: "Paper", description: "Warm, with a clay accent", font: "Instrument+Sans:wght@400..700", accent: "#d6673f" },
+  { id: "sage", label: "Sage", description: "Calm green-grey", font: "Figtree:wght@300..900", accent: "#3f9b65" },
+  { id: "swiss", label: "Swiss", description: "Neutral grey, signal red", font: "Geist:wght@100..900", accent: "#f13936" },
 ] as const;
 
 export type PaletteId = (typeof PALETTES)[number]["id"];
@@ -85,6 +93,11 @@ export type PaletteId = (typeof PALETTES)[number]["id"];
 export const DEFAULT_PALETTE: PaletteId = "rose";
 
 // Load the font of a theme once. Inter loads in root.tsx, so Indigo has no font here.
+export function paletteFavicon(id: PaletteId) {
+  const palette = PALETTES.find((p) => p.id === id) ?? PALETTES[0];
+  return faviconHref(palette.accent);
+}
+
 export function loadPaletteFont(id: PaletteId) {
   const palette = PALETTES.find((p) => p.id === id);
   if (!palette?.font || document.getElementById(`font-${palette.id}`)) return;
@@ -112,6 +125,7 @@ export function usePalette() {
   const setPalette = useCallback((id: PaletteId) => {
     loadPaletteFont(id);
     document.documentElement.setAttribute("data-palette", id);
+    document.querySelector('link[rel="icon"]')?.setAttribute("href", paletteFavicon(id));
     localStorage.setItem("palette", id);
   }, []);
   return { palette, setPalette };

@@ -9,7 +9,7 @@ import {
 } from "react-router";
 
 import { Toaster } from "sonner";
-import { DEFAULT_PALETTE, FAVICONS, PALETTES, THEME_COLORS, useTheme } from "./components/theme";
+import { DEFAULT_PALETTE, PALETTES, THEME_COLORS, paletteFavicon, useTheme } from "./components/theme";
 import { ConfirmProvider } from "./components/confirm-dialog";
 import { TooltipProvider } from "./components/ui";
 import type { Route } from "./+types/root";
@@ -37,8 +37,6 @@ const themeScript = `(() => {
       document.documentElement.classList.toggle("dark", dark);
       document.querySelector('meta[name="theme-color"]')
         ?.setAttribute("content", dark ? "${THEME_COLORS.dark}" : "${THEME_COLORS.light}");
-      document.querySelector('link[rel="icon"]')
-        ?.setAttribute("href", dark ? "${FAVICONS.dark}" : "${FAVICONS.light}");
     };
     applyTheme();
     media.addEventListener("change", applyTheme);
@@ -48,10 +46,11 @@ const themeScript = `(() => {
     if (listWidth >= 300 && listWidth <= 720) document.documentElement.style.setProperty("--list-width", listWidth + "px");
     if (localStorage.getItem("sidebar-collapsed") === "1") document.documentElement.classList.add("sidebar-collapsed");
     if (localStorage.getItem("list-collapsed") === "1") document.documentElement.classList.add("list-collapsed");
-    const palettes = ${JSON.stringify(PALETTES.map(({ id, font }) => ({ id, font })))};
+    const palettes = ${JSON.stringify(PALETTES.map(({ id, font }) => ({ id, font, icon: paletteFavicon(id) })))};
     const palette = palettes.find((p) => p.id === localStorage.getItem("palette"))
       || palettes.find((p) => p.id === "${DEFAULT_PALETTE}");
     document.documentElement.setAttribute("data-palette", palette.id);
+    document.querySelector('link[rel="icon"]')?.setAttribute("href", palette.icon);
     if (palette.font) {
       const link = document.createElement("link");
       link.id = "font-" + palette.id;
@@ -73,7 +72,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         <meta name="theme-color" content={THEME_COLORS.light} suppressHydrationWarning />
         {/* The icon is here and not in links(), so the theme script can find it. */}
-        <link rel="icon" type="image/svg+xml" href={FAVICONS.light} suppressHydrationWarning />
+        <link rel="icon" type="image/svg+xml" href={paletteFavicon(DEFAULT_PALETTE)} suppressHydrationWarning />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
