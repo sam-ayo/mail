@@ -30,11 +30,11 @@ import { UnsubscribeDialog, isUnsubscribed } from "~/components/unsubscribe-dial
 import { useHotkeys } from "~/components/hotkeys";
 import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
 import { ContextMenu, copyText } from "~/components/menu";
-import { Avatar, FileName, Hint, IconButton, PROVIDER_NAMES, cx } from "~/components/ui";
+import { AccountIcon, Avatar, FileName, Hint, IconButton, cx } from "~/components/ui";
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
-import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, shownProvider, threadKey, textOn, threadRefs } from "~/lib/mail";
+import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { loadThread } from "~/server/mail.server";
 import { ProviderAuthError, ProviderError } from "~/server/providers/types";
@@ -335,9 +335,8 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
                 title={owner.email}
                 className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
               >
-                <span className="size-1.5 shrink-0 rounded-full" style={{ background: owner.color }} />
+                <AccountIcon account={owner} className="size-3.5" />
                 <span className="min-w-0 truncate">{owner.email}</span>
-                <span className="shrink-0 text-zinc-400">· {PROVIDER_NAMES[shownProvider(owner)]}</span>
               </span>
             )}
           </div>
