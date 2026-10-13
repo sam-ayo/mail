@@ -104,9 +104,10 @@ export function EmailFrame({
       title={title}
       sandbox="allow-same-origin allow-popups allow-popups-to-escape-sandbox"
       referrerPolicy="no-referrer"
-      className="block w-full rounded-lg bg-white dark:bg-zinc-900"
+      className="block w-full rounded-lg bg-white dark:bg-transparent"
       // The light scheme makes "prefers-color-scheme" light in the frame, so
-      // the dark styles of the email do not apply. See BASE_STYLES.
+      // the dark styles of the email do not apply. See BASE_STYLES. The frame
+      // and its document use the same scheme, so the frame can be transparent.
       style={{ height, colorScheme: "light" }}
     />
   );

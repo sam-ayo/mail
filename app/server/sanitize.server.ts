@@ -15,7 +15,8 @@ const QUOTE_SELECTORS = [
 const QUOTE_MARKERS = /class="[^"]*(gmail_quote|yahoo_quoted)|type="cite"|id="(divRplyFwdMsg|appendonsend|mail-editor-reference-message-container)"/;
 
 // In dark mode, the frame inverts the email and turns the hue back, so most
-// colours keep their hue. Images and background images get a second inversion,
+// colours keep their hue. The frame is transparent, so the email shows on the
+// colour of the message card. Images and background images get a second inversion,
 // so they show with their true colours. The parent sets the "dark" class.
 // The frame always uses the light colour scheme. If the email also applied
 // its own dark styles, the inversion would turn its light text dark again.
@@ -30,7 +31,7 @@ pre{white-space:pre-wrap}
 a{color:#4f46e5}
 body.hide-quotes ${QUOTE_SELECTORS.join(", body.hide-quotes ")}{display:none !important}
 html,html:root{color-scheme:light only !important}
-html.dark{background:oklch(22% 0.022 277)}
+html.dark{background:transparent}
 html.dark body{background:transparent;filter:invert(1) hue-rotate(180deg)}
 html.dark body :is(img,video,picture,svg,[background],[style*="background-image"]):not(:is([background],[style*="background-image"]) *){filter:invert(1) hue-rotate(180deg)}
 `;
