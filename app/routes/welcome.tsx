@@ -35,11 +35,11 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">
             {signedIn ? "Add another account" : "All your email, one fast inbox"}
           </h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            {signedIn
-              ? "Connect as many accounts as you like. They all show in your unified inbox."
-              : "Connect Gmail or Outlook. Add more accounts at any time."}
-          </p>
+          {signedIn && (
+            <p className="mt-2 text-sm text-zinc-500">
+              Connect as many accounts as you like. They all show in your unified inbox.
+            </p>
+          )}
 
           {error && (
             <p
