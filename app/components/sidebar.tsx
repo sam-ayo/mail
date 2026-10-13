@@ -26,7 +26,7 @@ import { FOLDER_LABELS, FOLDERS, formatCount } from "~/lib/mail";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
 import { ResizeHandle } from "./resize-handle";
-import { IconButton, Logo, ProviderIcon, cx } from "./ui";
+import { IconButton, Logo, PROVIDER_NAMES, ProviderIcon, cx } from "./ui";
 
 export const FOLDER_ICONS: Record<Folder, typeof Tray> = {
   inbox: Tray,
@@ -64,7 +64,6 @@ export function Sidebar({
   const { accounts, unreadCounts, openCompose } = useMail();
   const navigate = useNavigate();
   const totalUnread = Object.values(unreadCounts).reduce<number>((sum, n) => sum + (n ?? 0), 0);
-  const names = accountNames(accounts);
 
   return (
     // The panel floats in the window, as the sidebars of macOS 26 do.
@@ -154,11 +153,15 @@ export function Sidebar({
                         <CaretRight
                           className={cx("size-3 shrink-0 text-zinc-400 transition-[rotate] duration-200 ease-out", open && "rotate-90")}
                         />
-                        <span
-                          className="size-2 shrink-0 rounded-full"
-                          style={{ background: account.color }}
-                        />
-                        <span className="min-w-0 flex-1 truncate" title={account.email}>{names.get(account.id)}</span>
+                        {/* The color dot on the provider icon matches the dots in the message list. */}
+                        <span className="relative shrink-0" title={PROVIDER_NAMES[account.provider]}>
+                          <ProviderIcon provider={account.provider} className="size-3.5 text-zinc-500" />
+                          <span
+                            className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px] ring-(--sidebar)"
+                            style={{ background: account.color }}
+                          />
+                        </span>
+                        <AccountAddress email={account.email} />
                         {account.status === "reauth_required" ? (
                           <Warning className="size-3.5 text-amber-500" aria-label="Sign in again" />
                         ) : (
@@ -367,17 +370,19 @@ function SidebarResizeHandle() {
   );
 }
 
-/** The sidebar shows the part of the address before the "@" when no other
-    account has the same part. The full address is in the tooltip. */
-function accountNames(accounts: AccountSummary[]) {
-  const local = (email: string) => email.split("@")[0];
-  const seen = new Map<string, number>();
-  for (const account of accounts) seen.set(local(account.email), (seen.get(local(account.email)) ?? 0) + 1);
-  return new Map(
-    accounts.map((account) => [
-      account.id,
-      seen.get(local(account.email)) === 1 ? local(account.email) : account.email,
-    ]),
+/** The domain is lighter than the local part, so two accounts with the same
+    name ("sam@gmail.com", "sam@notableai.ca") stay different. */
+function AccountAddress({ email }: { email: string }) {
+  const at = email.lastIndexOf("@");
+  return (
+    <span className="min-w-0 flex-1 truncate" title={email}>
+      {at < 0 ? email : (
+        <>
+          {email.slice(0, at)}
+          <span className="text-zinc-400 dark:text-zinc-500">{email.slice(at)}</span>
+        </>
+      )}
+    </span>
   );
 }
 
