@@ -1,5 +1,6 @@
 import { ArrowLeft, Sparkle } from "@phosphor-icons/react";
 import { data, Form, Link } from "react-router";
+import { LegalLinks } from "~/components/legal";
 import { GoogleIcon, Logo, MicrosoftIcon, cx } from "~/components/ui";
 import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
@@ -77,6 +78,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
         <p className="mt-6 text-center text-xs text-zinc-400">
           We encrypt your tokens and passwords before we store them.
         </p>
+        <LegalLinks className="mt-3" />
       </div>
     </main>
   );
