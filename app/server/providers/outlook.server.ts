@@ -66,12 +66,10 @@ const LIST_FIELDS =
   "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,receivedDateTime,isRead,flag,hasAttachments,internetMessageId";
 const FULL_FIELDS = `${LIST_FIELDS},body,ccRecipients,bccRecipients,replyTo,isDraft,internetMessageHeaders`;
 
-// Graph conversation IDs are standard base64. URLs need a URL-safe form.
-const encodeId = (id: string) => id.replace(/\+/g, "-").replace(/\//g, "_").replace(/=+$/, "");
-function decodeId(id: string) {
-  const base64 = id.replace(/-/g, "+").replace(/_/g, "/");
-  return base64 + "=".repeat((4 - (base64.length % 4)) % 4);
-}
+// Graph conversation IDs are URL-safe base64 ("-" and "_"), with "=" padding.
+// URLs drop the padding. Do not change "-" or "_": Graph needs them as they are.
+const encodeId = (id: string) => id.replace(/=+$/, "");
+const decodeId = (id: string) => id + "=".repeat((4 - (id.length % 4)) % 4);
 
 const toAddress = (recipient?: GraphRecipient): Address => ({
   name: recipient?.emailAddress.name || undefined,
