@@ -13,6 +13,7 @@ import {
   ShieldWarning,
   SidebarSimple,
   SignIn,
+  SignOut,
   Star,
   Sun,
   Trash,
@@ -23,10 +24,11 @@ import { useEffect, useRef, useSyncExternalStore } from "react";
 import { Link, NavLink, useFetcher, useNavigate } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
 import { FOLDER_LABELS, FOLDERS, formatCount, PREFETCH_PARAM } from "~/lib/mail";
+import { removeAccountPrompt, useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
 import { ResizeHandle } from "./resize-handle";
-import { IconButton, Logo, PROVIDER_NAMES, ProviderIcon, cx } from "./ui";
+import { AccountIcon, IconButton, Logo, PROVIDER_NAMES, cx } from "./ui";
 
 export const FOLDER_ICONS: Record<Folder, typeof Tray> = {
   inbox: Tray,
@@ -63,6 +65,15 @@ export function Sidebar({
 }) {
   const { accounts, unreadCounts, openCompose } = useMail();
   const navigate = useNavigate();
+  const remover = useFetcher();
+  const confirm = useConfirm();
+
+  // The settings route removes the account. The mail stays on the server.
+  async function removeAccount(account: AccountSummary) {
+    if (!(await confirm(removeAccountPrompt(account.email)))) return;
+    remover.submit({ intent: "remove", accountId: account.id }, { method: "post", action: "/settings" });
+    if (scope === account.id) navigate("/mail/all/inbox");
+  }
   const totalUnread = Object.values(unreadCounts).reduce<number>((sum, n) => sum + (n ?? 0), 0);
 
   return (
@@ -144,6 +155,13 @@ export function Sidebar({
                         },
                         { label: "Copy address", icon: Copy, onSelect: () => copyText(account.email, "the address") },
                         { label: "Account settings", icon: Gear, onSelect: () => navigate("/settings") },
+                        "separator",
+                        {
+                          label: "Remove account",
+                          icon: SignOut,
+                          danger: true,
+                          onSelect: () => removeAccount(account),
+                        },
                       ]}
                     >
                       <NavLink
@@ -158,9 +176,9 @@ export function Sidebar({
                         <CaretRight
                           className={cx("size-3 shrink-0 text-zinc-400 transition-[rotate] duration-200 ease-out", open && "rotate-90")}
                         />
-                        {/* The color dot on the provider icon matches the dots in the message list. */}
+                        {/* The color dot on the account icon matches the dots in the message list. */}
                         <span className="relative shrink-0" title={PROVIDER_NAMES[account.provider]}>
-                          <ProviderIcon provider={account.provider} className="size-3.5 text-zinc-500" />
+                          <AccountIcon account={account} className="size-3.5 text-zinc-500" />
                           <span
                             className="absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px] ring-(--sidebar)"
                             style={{ background: account.color }}
@@ -174,19 +192,29 @@ export function Sidebar({
                         )}
                       </NavLink>
                     </ContextMenu>
-                    {open && (
-                      <ul className="mt-px mb-1 ml-5 space-y-px border-l border-(--sidebar-border) pl-2">
-                        {FOLDERS.filter((f) => f !== "inbox").map((name) => (
-                          <FolderLink
-                            key={name}
-                            to={`/mail/${account.id}/${name}`}
-                            folder={name}
-                            active={folder === name}
-                            compact
-                          />
-                        ))}
-                      </ul>
-                    )}
+                    {/* The folders stay in the page so that the height can animate.
+                        A grid row from 0fr to 1fr animates to the height of the content. */}
+                    <div
+                      inert={!open}
+                      className={cx(
+                        "grid transition-[grid-template-rows,opacity] duration-200 ease-out motion-reduce:transition-opacity",
+                        open ? "grid-rows-[1fr]" : "grid-rows-[0fr] opacity-0",
+                      )}
+                    >
+                      <div className="min-h-0 overflow-hidden">
+                        <ul className="mt-px mb-1 ml-5 space-y-px border-l border-(--sidebar-border) pl-2">
+                          {FOLDERS.filter((f) => f !== "inbox").map((name) => (
+                            <FolderLink
+                              key={name}
+                              to={`/mail/${account.id}/${name}`}
+                              folder={name}
+                              active={open && folder === name}
+                              compact
+                            />
+                          ))}
+                        </ul>
+                      </div>
+                    </div>
                   </li>
                 );
               })}
@@ -227,7 +255,7 @@ export function Sidebar({
         </div>
         {accounts.length === 1 && (
           <div className="flex items-center gap-2 px-2 pt-1 text-xs text-zinc-500">
-            <ProviderIcon provider={accounts[0].provider} className="size-3.5" />
+            <AccountIcon account={accounts[0]} className="size-3.5" />
             <span className="truncate">{accounts[0].email}</span>
           </div>
         )}

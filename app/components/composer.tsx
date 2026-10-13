@@ -14,6 +14,7 @@ import { flushSync } from "react-dom";
 import type { ComposeDraft } from "~/lib/compose";
 import { parseAddressList, textOn } from "~/lib/mail";
 import { markdownToHtml } from "~/lib/markdown";
+import { useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { ResizeHandle } from "./resize-handle";
 import { Button, FileName, Hint, IconButton, cx } from "./ui";
@@ -71,6 +72,7 @@ export function Composer({
   fill = false,
 }: ComposerProps) {
   const { accounts, send } = useMail();
+  const confirm = useConfirm();
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [showCopies, setShowCopies] = useState(!!(draft.cc || draft.bcc));
@@ -110,7 +112,7 @@ export function Composer({
     (preview ? bodyRef : previewRef).current?.focus();
   }
 
-  function submit() {
+  async function submit() {
     const recipients = [draft.to, draft.cc, draft.bcc].flatMap(parseAddressList);
     if (recipients.length === 0) return setError("Add at least one recipient.");
     const invalid = recipients.find((r) => !EMAIL.test(r.email));
@@ -121,7 +123,11 @@ export function Composer({
     if (
       files.length === 0 &&
       /\b(attached|attachment|enclosed)\b/i.test(draft.body) &&
-      !window.confirm("You wrote about an attachment, but no file is attached. Send anyway?")
+      !(await confirm({
+        title: "Send without an attachment?",
+        description: "You wrote about an attachment, but no file is attached.",
+        confirmLabel: "Send anyway",
+      }))
     ) {
       return;
     }

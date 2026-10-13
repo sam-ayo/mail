@@ -1,8 +1,9 @@
 import { useEffect, useRef, useState } from "react";
 import { ArrowLeft, Plus, SignOut, Trash, Warning } from "@phosphor-icons/react";
 import { data, Form, Link, useFetcher } from "react-router";
+import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
-import { Button, PROVIDER_NAMES, ProviderIcon, cx, inputClass } from "~/components/ui";
+import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, type AccountSummary } from "~/lib/mail";
 import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
 import { userContext } from "~/server/context";
@@ -99,6 +100,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
   const colorSaver = useFetcher<typeof action>();
   const remover = useFetcher<typeof action>();
   const removing = remover.state !== "idle";
+  const confirm = useConfirm();
   const lastName = useRef(account.name);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [showSaved, setShowSaved] = useState(false);
@@ -129,7 +131,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
     <li className={cx("flex flex-col gap-3 p-4", removing && "opacity-50")}>
       <div className="flex items-center gap-3">
         <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-          <ProviderIcon provider={account.provider} className="size-4 text-zinc-500" />
+          <AccountIcon account={account} className="size-5 text-zinc-500" />
         </span>
         <div className="min-w-0 flex-1">
           <p className="truncate text-sm font-medium">{account.email}</p>
@@ -151,9 +153,11 @@ function AccountRow({ account }: { account: AccountSummary }) {
             value="remove"
             disabled={removing}
             className="press inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
-            onClick={(event) => {
-              if (!confirm(`Remove ${account.email} from mail? Your mail stays on the server.`)) {
-                event.preventDefault();
+            onClick={async (event) => {
+              // The dialog does not block, so stop the submit and send it after the answer.
+              event.preventDefault();
+              if (await confirm(removeAccountPrompt(account.email))) {
+                remover.submit({ intent: "remove", accountId: account.id }, { method: "post" });
               }
             }}
           >

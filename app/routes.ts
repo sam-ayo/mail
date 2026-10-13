@@ -23,6 +23,7 @@ export default [
   route("api/send", "routes/api.send.ts"),
   route("api/attachments/:accountId", "routes/api.attachments.ts"),
   route("api/counts", "routes/api.counts.ts"),
+  route("api/avatar", "routes/api.avatar.ts"),
   route("api/unsubscribe", "routes/api.unsubscribe.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
 ] satisfies RouteConfig;

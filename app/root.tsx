@@ -10,6 +10,7 @@ import {
 
 import { Toaster } from "sonner";
 import { FAVICONS, THEME_COLORS, useTheme } from "./components/theme";
+import { ConfirmProvider } from "./components/confirm-dialog";
 import { TooltipProvider } from "./components/ui";
 import type { Route } from "./+types/root";
 import "./app.css";
@@ -72,7 +73,9 @@ export default function App() {
   const { dark } = useTheme();
   return (
     <TooltipProvider>
-      <Outlet />
+      <ConfirmProvider>
+        <Outlet />
+      </ConfirmProvider>
       {/* One Toaster for the whole app. Bottom center is far from the
           sidebar and the compose window. */}
       <Toaster

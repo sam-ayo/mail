@@ -1,5 +1,6 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { clsx } from "clsx";
+import { useState } from "react";
 import { HardDrives, Sparkle } from "@phosphor-icons/react";
 import type { ProviderKind } from "~/lib/mail";
 
@@ -64,6 +65,43 @@ export function ProviderIcon({ provider, className }: { provider: ProviderKind; 
   }
 }
 
+/**
+ * The company logo for an account at a custom domain, such as name@acme.com.
+ * The provider icon shows until the logo loads, and stays when there is no logo.
+ */
+export function AccountIcon({
+  account,
+  className,
+}: {
+  account: { email: string; provider: ProviderKind };
+  className?: string;
+}) {
+  const domain = account.email.slice(account.email.lastIndexOf("@") + 1).toLowerCase();
+  // A list can show a different account later, so keep the domain with the result.
+  const [logo, setLogo] = useState<{ domain: string; loaded: boolean }>();
+  const loaded = logo?.domain === domain && logo.loaded;
+  const hasLogo = account.provider !== "demo" && domain !== "" && !(logo?.domain === domain && !logo.loaded);
+  return (
+    <span className={cx("relative inline-block shrink-0", className)}>
+      {!loaded && <ProviderIcon provider={account.provider} className="block size-full" />}
+      {hasLogo && (
+        <img
+          key={domain}
+          src={`/api/avatar?domain=${encodeURIComponent(domain)}`}
+          alt=""
+          // The image can load before hydration, and then React gets no load event.
+          ref={(image) => {
+            if (image?.complete && image.naturalWidth > 0 && !loaded) setLogo({ domain, loaded: true });
+          }}
+          onLoad={() => setLogo({ domain, loaded: true })}
+          onError={() => setLogo({ domain, loaded: false })}
+          className={cx("absolute inset-0 size-full rounded-[3px] object-contain", !loaded && "invisible")}
+        />
+      )}
+    </span>
+  );
+}
+
 export const PROVIDER_NAMES: Record<ProviderKind, string> = {
   google: "Gmail",
   microsoft: "Outlook",
@@ -114,10 +152,15 @@ export function Avatar({
   size?: "sm" | "md" | "lg";
 }) {
   const hue = [...email].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  // The initials show until the logo loads, and stay when the server has no logo.
+  // A list row can show a different sender later, so keep the email with the result.
+  const [logo, setLogo] = useState<{ email: string; loaded: boolean }>();
+  const loaded = logo?.email === email && logo.loaded;
+  const hasLogo = email.includes("@") && !(logo?.email === email && !logo.loaded);
   return (
     <span
       className={cx(
-        "grid shrink-0 place-items-center overflow-hidden rounded-full font-semibold text-white select-none",
+        "relative grid shrink-0 place-items-center overflow-hidden rounded-full font-semibold text-white select-none",
         size === "sm" && "size-6 text-[10px]",
         size === "md" && "size-8 text-xs",
         size === "lg" && "size-10 text-sm",
@@ -126,6 +169,23 @@ export function Avatar({
       aria-hidden
     >
       {initialsFor(name, email)}
+      {hasLogo && (
+        <img
+          key={email}
+          src={`/api/avatar?email=${encodeURIComponent(email)}`}
+          alt=""
+          // The image can load before hydration, and then React gets no load event.
+          ref={(image) => {
+            if (image?.complete && image.naturalWidth > 0 && !loaded) setLogo({ email, loaded: true });
+          }}
+          onLoad={() => setLogo({ email, loaded: true })}
+          onError={() => setLogo({ email, loaded: false })}
+          className={cx(
+            "absolute inset-0 size-full bg-white object-cover",
+            !loaded && "invisible",
+          )}
+        />
+      )}
     </span>
   );
 }

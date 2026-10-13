@@ -45,7 +45,7 @@ import type { MenuEntry } from "~/components/menu";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
-import { Avatar, Hint, IconButton, ProviderIcon, cx } from "~/components/ui";
+import { AccountIcon, Avatar, Hint, IconButton, cx } from "~/components/ui";
 import type { AccountSummary, Folder, ThreadAction, ThreadSummary } from "~/lib/mail";
 import {
   displayName,
@@ -771,7 +771,7 @@ function AccountLabel({ accounts }: { accounts: AccountSummary[] }) {
       className="flex max-w-[50%] min-w-0 shrink-0 items-center gap-1 text-[11px] text-zinc-400"
       title={accounts.map((a) => a.email).join("\n")}
     >
-      <ProviderIcon provider={first.provider} className="size-3 shrink-0" />
+      <AccountIcon account={first} className="size-3" />
       {/* A long address shortens the name part only, so the domain always shows. */}
       <span className="flex min-w-0">
         <span className="truncate">{local}</span>
