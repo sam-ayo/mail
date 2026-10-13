@@ -49,7 +49,7 @@ export function documentBody(html: string) {
 }
 
 /** The body is Markdown. The HTML part shows it formatted, and the text part keeps the Markdown as written. */
-export function buildOutgoing(draft: ComposeDraft) {
+export function buildOutgoing(draft: Pick<ComposeDraft, "body" | "quoted">) {
   const bodyHtml = `<div style="font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',sans-serif;font-size:14px;line-height:1.5">${markdownToHtml(draft.body)}</div>`;
   return {
     html: draft.quoted ? `${bodyHtml}<br>${draft.quoted.html}` : bodyHtml,

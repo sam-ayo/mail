@@ -1,4 +1,4 @@
-import { createCipheriv, createDecipheriv, createHash, randomBytes } from "node:crypto";
+import { createCipheriv, createDecipheriv, createHash, createHmac, randomBytes, timingSafeEqual } from "node:crypto";
 import { env } from "./env.server";
 
 // AES-256-GCM. The stored format is "v1.<iv>.<tag>.<ciphertext>" in base64url.
@@ -31,4 +31,25 @@ export function randomToken(bytes = 32) {
 
 export function sha256Base64Url(input: string) {
   return createHash("sha256").update(input).digest("base64url");
+}
+
+/** Signs a JSON payload with the session secret. The result is "<payload>.<signature>" in base64url. */
+export function signPayload(payload: object) {
+  const body = Buffer.from(JSON.stringify(payload)).toString("base64url");
+  const signature = createHmac("sha256", env.sessionSecret).update(body).digest("base64url");
+  return `${body}.${signature}`;
+}
+
+/** Returns the payload if the signature is correct, or null. */
+export function verifyPayload<T>(token: string): T | null {
+  const [body, signature] = token.split(".");
+  if (!body || !signature) return null;
+  const expected = createHmac("sha256", env.sessionSecret).update(body).digest();
+  const actual = Buffer.from(signature, "base64url");
+  if (actual.length !== expected.length || !timingSafeEqual(actual, expected)) return null;
+  try {
+    return JSON.parse(Buffer.from(body, "base64url").toString("utf8")) as T;
+  } catch {
+    return null;
+  }
 }

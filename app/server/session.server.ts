@@ -5,7 +5,14 @@ type SessionData = {
   userId: string;
 };
 
+/** An OAuth flow that the iOS app started. `userId` is set when the app adds an account. */
+export type MobileFlow = {
+  challenge: string;
+  userId?: string;
+};
+
 type SessionFlashData = {
+  oauthMobile: MobileFlow;
   oauthState: string;
   oauthVerifier: string;
   oauthReturnTo: string;

@@ -26,4 +26,14 @@ export default [
   route("api/avatar", "routes/api.avatar.ts"),
   route("api/unsubscribe", "routes/api.unsubscribe.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
+
+  // The iOS app. It signs in with a bearer token.
+  route("api/mobile/token", "routes/api.mobile.token.ts"),
+  route("api/mobile/link", "routes/api.mobile.link.ts"),
+  route("api/mobile/logout", "routes/api.mobile.logout.ts"),
+  route("api/mobile/demo", "routes/api.mobile.demo.ts"),
+  route("api/v1/accounts", "routes/api.v1.accounts.ts"),
+  route("api/v1/accounts/:accountId", "routes/api.v1.account.ts"),
+  route("api/v1/threads", "routes/api.v1.threads.ts"),
+  route("api/v1/threads/:accountId/:threadId", "routes/api.v1.thread.ts"),
 ] satisfies RouteConfig;

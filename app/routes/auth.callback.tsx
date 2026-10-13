@@ -1,5 +1,10 @@
 import { data } from "react-router";
-import { connectAccount, redirectWithError } from "~/server/auth.server";
+import {
+  connectAccount,
+  connectMobileAccount,
+  mobileRedirectWithError,
+  redirectWithError,
+} from "~/server/auth.server";
 import { googleExchangeCode } from "~/server/oauth/google.server";
 import { microsoftExchangeCode } from "~/server/oauth/microsoft.server";
 import { getSession } from "~/server/session.server";
@@ -16,7 +21,10 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const expectedState = session.get("oauthState");
   const verifier = session.get("oauthVerifier");
   const returnTo = session.get("oauthReturnTo") ?? "/mail";
+  const mobile = session.get("oauthMobile");
   const url = new URL(request.url);
+  const fail = (message: string) =>
+    mobile ? mobileRedirectWithError(session, message) : redirectWithError(session, "/welcome", message);
 
   const providerError = url.searchParams.get("error");
   if (providerError) {
@@ -25,13 +33,13 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       providerError === "access_denied"
         ? "You cancelled the sign-in."
         : `Sign-in failed: ${description ?? providerError}`;
-    return redirectWithError(session, "/welcome", message);
+    return fail(message);
   }
 
   const code = url.searchParams.get("code");
   const state = url.searchParams.get("state");
   if (!code || !state || !verifier || state !== expectedState) {
-    return redirectWithError(session, "/welcome", "The sign-in link expired. Try again.");
+    return fail("The sign-in link expired. Try again.");
   }
 
   try {
@@ -39,10 +47,11 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       provider === "google"
         ? await googleExchangeCode(code, verifier)
         : await microsoftExchangeCode(code, verifier);
+    if (mobile) return connectMobileAccount(session, mobile, { provider, ...profile });
     // Allow only paths in this app. "//host" and "/\\host" go to other sites.
     const safeReturnTo = /^\/(?![/\\])/.test(returnTo) ? returnTo : "/mail";
     return connectAccount(session, { provider, ...profile }, safeReturnTo);
   } catch (error) {
-    return redirectWithError(session, "/welcome", errorMessage(error));
+    return fail(errorMessage(error));
   }
 }
