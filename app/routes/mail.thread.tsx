@@ -391,7 +391,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
                 />
               </div>
             ) : (
-              <div className="flex flex-wrap gap-2">
+              <div className="flex flex-wrap justify-end gap-2">
                 <ReplyButton onClick={() => startReply("reply")} shortcut="R">
                   <ArrowBendUpLeft className="size-4" /> Reply
                 </ReplyButton>

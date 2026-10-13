@@ -1,7 +1,8 @@
 import { useCallback, useSyncExternalStore } from "react";
 
 export const THEME_COLORS = { light: "#f8faff", dark: "#0d0f18" };
-export const FAVICONS = { light: "/favicon.svg", dark: "/favicon-dark.svg" };
+// Change the version when the icons change, so browsers do not show a cached icon.
+export const FAVICONS = { light: "/favicon.svg?v=2", dark: "/favicon-dark.svg?v=2" };
 
 // The theme is the "dark" class on <html>. The inline script in root.tsx sets
 // it before the first paint, so read the class and do not copy it into state.
