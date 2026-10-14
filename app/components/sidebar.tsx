@@ -129,11 +129,11 @@ export function Sidebar({
           type="button"
           onClick={() => openCompose()}
           aria-keyshortcuts="c"
-          className="tappable press flex h-7 w-full items-center gap-2.5 rounded-[7px] px-2 text-[13px] font-medium text-accent-600 hover:bg-(--sidebar-hover) dark:text-accent-400"
+          className="tappable press flex h-7 w-full items-center gap-2.5 rounded-[7px] px-2 text-[13px] font-medium pointer-coarse:h-11 pointer-coarse:text-base text-accent-600 hover:bg-(--sidebar-hover) dark:text-accent-400"
         >
           <NotePencil className="size-4 shrink-0" />
           <span className="flex-1 text-left">New message</span>
-          <span aria-hidden className="text-[11px] font-normal text-zinc-400 dark:text-zinc-500">
+          <span aria-hidden className="text-[11px] font-normal text-zinc-400 pointer-coarse:hidden dark:text-zinc-500">
             C
           </span>
         </button>
@@ -211,7 +211,7 @@ export function Sidebar({
                           }
                         }}
                         className={cx(
-                          "tappable group flex h-7 transition-colors duration-160 ease-out items-center gap-2 rounded-[7px] px-2 text-[13px]",
+                          "tappable group flex h-7 transition-colors duration-160 ease-out items-center gap-2 rounded-[7px] px-2 text-[13px] pointer-coarse:h-11 pointer-coarse:text-base",
                           current && folder === "inbox"
                             ? "bg-(--sidebar-selection) text-zinc-900 dark:text-white"
                             : "text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200",
@@ -287,18 +287,18 @@ export function Sidebar({
       <div className="space-y-px px-2.5 pb-2.5">
         <Link
           to="/welcome"
-          className="press flex h-7 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200"
+          className="press flex h-7 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 pointer-coarse:h-11 pointer-coarse:text-base hover:bg-(--sidebar-hover) dark:text-zinc-200"
         >
           <Plus className="size-4 text-zinc-500 dark:text-zinc-400" /> Add account
         </Link>
         <div className="flex items-center gap-1">
           <Link
             to="/settings"
-            className="press flex h-7 flex-1 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200"
+            className="press flex h-7 flex-1 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 pointer-coarse:h-11 pointer-coarse:text-base hover:bg-(--sidebar-hover) dark:text-zinc-200"
           >
             <Gear className="size-4 text-zinc-500 dark:text-zinc-400" /> Settings
           </Link>
-          <FooterButton label="Keyboard shortcuts" shortcut="?" onClick={onShowShortcuts}>
+          <FooterButton label="Keyboard shortcuts" shortcut="?" className="pointer-coarse:hidden" onClick={onShowShortcuts}>
             <Keyboard className="size-4" />
           </FooterButton>
           <FooterButton label={dark ? "Use light theme" : "Use dark theme"} onClick={onToggleTheme}>
@@ -319,14 +319,29 @@ export function Sidebar({
 }
 
 /** An icon button with the same hover as the Settings link beside it. */
-function FooterButton({ label, shortcut, onClick, children }: { label: string; shortcut?: string; onClick?: () => void; children: React.ReactNode }) {
+function FooterButton({
+  label,
+  shortcut,
+  className,
+  onClick,
+  children,
+}: {
+  label: string;
+  shortcut?: string;
+  className?: string;
+  onClick?: () => void;
+  children: React.ReactNode;
+}) {
   return (
     <Hint label={label} shortcut={shortcut}>
       <button
         type="button"
         aria-label={label}
         onClick={onClick}
-        className="press grid size-7 shrink-0 place-items-center rounded-[7px] text-zinc-500 hover:bg-(--sidebar-hover) dark:text-zinc-400"
+        className={cx(
+          "press grid size-7 shrink-0 place-items-center rounded-[7px] text-zinc-500 hover:bg-(--sidebar-hover) pointer-coarse:size-11 dark:text-zinc-400",
+          className,
+        )}
       >
         {children}
       </button>
@@ -556,7 +571,7 @@ function FolderLink({
             // As in the system sidebars, the selected row has a fill and no
             // bold text. A hovered row has a lighter fill of the same color.
             "tappable flex items-center gap-2.5 transition-colors duration-160 ease-out rounded-[7px] px-2 text-[13px]",
-            compact ? "h-6" : "h-7",
+            compact ? "h-6 pointer-coarse:h-10" : "h-7 pointer-coarse:h-11 pointer-coarse:text-base",
             active
               ? "bg-(--sidebar-selection) text-zinc-900 dark:text-white"
               : "text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200",

@@ -16,6 +16,7 @@ import { parseAddressList, textOn } from "~/lib/mail";
 import { markdownToHtml } from "~/lib/markdown";
 import { useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
+import { useMediaQuery } from "./touch";
 import { ResizeHandle } from "./resize-handle";
 import { Button, FileName, Hint, IconButton, cx } from "./ui";
 
@@ -422,8 +423,13 @@ function readSize(): WindowSize {
 /** The floating window for a new message or a forward. */
 export function ComposeWindow() {
   const { compose, updateCompose, closeCompose, account } = useMail();
-  const [minimized, setMinimized] = useState(false);
-  const [expanded, setExpandedState] = useState(false);
+  const [minimizedState, setMinimized] = useState(false);
+  const [expandedState, setExpandedState] = useState(false);
+  // On a phone the window is a sheet over the full screen, as in iOS Mail. It
+  // does not move, change size, or minimize.
+  const sheet = useMediaQuery("(max-width: 39.99rem)");
+  const minimized = minimizedState && !sheet;
+  const expanded = expandedState || sheet;
 
   useEffect(() => setMinimized(false), [compose?.id]);
 
@@ -460,7 +466,31 @@ export function ComposeWindow() {
   const move = useRef<{ x: number; y: number; offset: { x: number; y: number }; rect: DOMRect; moved: boolean } | null>(
     null,
   );
-  const movable = !expanded;
+  const movable = !expanded && !sheet;
+
+  // The iOS keyboard covers the page and does not make it smaller. It can
+  // also scroll the page. Thus the sheet follows the part of the screen that
+  // shows, so the header and the send button stay above the keyboard.
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    const element = windowRef.current;
+    if (!sheet || !viewport || !element) return;
+    const fit = () => {
+      const keyboard = Math.max(0, window.innerHeight - viewport.height - viewport.offsetTop);
+      element.style.top = `calc(${viewport.offsetTop}px + env(safe-area-inset-top) + 0.75rem)`;
+      element.style.bottom = `${keyboard}px`;
+      // The home indicator is under the keyboard.
+      element.style.paddingBottom = keyboard ? "0px" : "";
+    };
+    fit();
+    viewport.addEventListener("resize", fit);
+    viewport.addEventListener("scroll", fit);
+    return () => {
+      viewport.removeEventListener("resize", fit);
+      viewport.removeEventListener("scroll", fit);
+      element.style.top = element.style.bottom = element.style.paddingBottom = "";
+    };
+  }, [sheet, compose?.id]);
 
   // Keep the full window in the viewport when its size or the viewport size changes.
   useLayoutEffect(() => {
@@ -493,156 +523,161 @@ export function ComposeWindow() {
   const sender = account(compose.accountId);
 
   return (
-    <div
-      className={cx(
-        "fixed z-40 flex flex-col overflow-hidden rounded-t-xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-zinc-900/20 ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:ring-white/10",
-        expanded
-          ? "inset-x-2 top-4 bottom-0 sm:inset-x-[4%] sm:top-[4%] sm:bottom-[4%] sm:rounded-b-xl"
-          : "right-2 bottom-0 w-[min(720px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] sm:right-6",
-      )}
-      style={
-        expanded
-          ? undefined
-          : {
-              width: size.width ?? undefined,
-              height: !minimized && size.height !== null ? size.height : undefined,
-              translate: `${offset.x}px ${offset.y}px`,
-            }
-      }
-      ref={windowRef}
-      role="dialog"
-      aria-label={title}
-    >
-      {resizable && (
-        <>
-          <ResizeHandle
-            edge="left"
-            label="Resize window width"
-            min={MIN_WIDTH}
-            max={() => window.innerWidth - 32}
-            className="hidden sm:block"
-            size={() => windowRef.current?.getBoundingClientRect().width ?? MIN_WIDTH}
-            onResize={(width, done) => setSize({ width }, done)}
-            onReset={() => setSize({ width: null }, true)}
-          />
-          <ResizeHandle
-            edge="top"
-            label="Resize window height"
-            min={MIN_HEIGHT}
-            max={() => window.innerHeight - 16}
-            className="hidden sm:block"
-            size={() => windowRef.current?.getBoundingClientRect().height ?? MIN_HEIGHT}
-            onResize={(height, done) => setSize({ height }, done)}
-            onReset={() => setSize({ height: null }, true)}
-          />
-        </>
-      )}
-      <header
+    <>
+      {sheet && <div aria-hidden className="fixed inset-0 z-40 bg-zinc-950/40 motion-safe:animate-[fade-in_320ms_ease-out]" />}
+      <div
         className={cx(
-          "flex items-center gap-2 px-4 py-2 text-sm",
-          !sender && "bg-zinc-900 text-white dark:bg-zinc-800",
-          movable ? "cursor-grab touch-none active:cursor-grabbing" : "cursor-pointer",
+          "fixed z-40 flex flex-col overflow-hidden rounded-t-xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-zinc-900/20 ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:ring-white/10",
+          sheet
+            ? "inset-x-0 top-[calc(env(safe-area-inset-top)+0.75rem)] bottom-0 rounded-t-2xl motion-safe:animate-[sheet-up_320ms_var(--ease-drawer)]"
+            : expanded
+              ? "inset-x-2 top-4 bottom-0 sm:inset-x-[4%] sm:top-[4%] sm:bottom-[4%] sm:rounded-b-xl"
+              : "right-2 bottom-0 w-[min(720px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] sm:right-6",
         )}
-        // The account color shows which address sends the message.
-        style={sender ? { background: sender.color, color: textOn(sender.color) } : undefined}
-        onClick={() => {
-          const dragged = move.current?.moved;
-          move.current = null;
-          if (!dragged) setMinimized((value) => !value);
-        }}
-        onPointerDown={(event) => {
-          move.current = null;
-          if (!movable || event.button !== 0 || !windowRef.current) return;
-          if ((event.target as HTMLElement).closest("button")) return;
-          event.currentTarget.setPointerCapture(event.pointerId);
-          move.current = {
-            x: event.clientX,
-            y: event.clientY,
-            offset,
-            rect: windowRef.current.getBoundingClientRect(),
-            moved: false,
-          };
-        }}
-        onPointerMove={(event) => {
-          const start = move.current;
-          if (!start || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
-          let dx = event.clientX - start.x;
-          let dy = event.clientY - start.y;
-          if (!start.moved) {
-            if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
-            start.moved = true;
-            // Stop text selection while the pointer is over the page.
-            document.documentElement.style.userSelect = "none";
-          }
-          // Keep the full window in the viewport.
-          dx = Math.min(window.innerWidth - start.rect.right, Math.max(-start.rect.left, dx));
-          dy = Math.min(window.innerHeight - start.rect.bottom, Math.max(-start.rect.top, dy));
-          setOffset({ x: Math.round(start.offset.x + dx), y: Math.round(start.offset.y + dy) });
-        }}
-        onPointerUp={endMove}
-        onLostPointerCapture={endMove}
-        onDoubleClick={() => movable && setOffset({ x: 0, y: 0 })}
+        style={
+          expanded
+            ? undefined
+            : {
+                width: size.width ?? undefined,
+                height: !minimized && size.height !== null ? size.height : undefined,
+                translate: `${offset.x}px ${offset.y}px`,
+              }
+        }
+        ref={windowRef}
+        role="dialog"
+        aria-label={title}
       >
-        <span className="truncate font-medium">{title}</span>
-        {sender && (
-          <span title={`From ${sender.email}`} className="min-w-0 truncate text-xs opacity-75">
-            {sender.email}
-          </span>
+        {resizable && (
+          <>
+            <ResizeHandle
+              edge="left"
+              label="Resize window width"
+              min={MIN_WIDTH}
+              max={() => window.innerWidth - 32}
+              className="hidden sm:block"
+              size={() => windowRef.current?.getBoundingClientRect().width ?? MIN_WIDTH}
+              onResize={(width, done) => setSize({ width }, done)}
+              onReset={() => setSize({ width: null }, true)}
+            />
+            <ResizeHandle
+              edge="top"
+              label="Resize window height"
+              min={MIN_HEIGHT}
+              max={() => window.innerHeight - 16}
+              className="hidden sm:block"
+              size={() => windowRef.current?.getBoundingClientRect().height ?? MIN_HEIGHT}
+              onResize={(height, done) => setSize({ height }, done)}
+              onReset={() => setSize({ height: null }, true)}
+            />
+          </>
         )}
-        <span className="flex-1" />
-        <button
-          type="button"
-          aria-label={minimized ? "Open" : "Minimize"}
-          className="opacity-70 hover:opacity-100"
+        <header
+          className={cx(
+            "flex items-center gap-2 px-4 py-2 text-sm max-sm:py-3",
+            !sender && "bg-zinc-900 text-white dark:bg-zinc-800",
+            movable ? "cursor-grab touch-none active:cursor-grabbing" : !sheet && "cursor-pointer",
+          )}
+          // The account color shows which address sends the message.
+          style={sender ? { background: sender.color, color: textOn(sender.color) } : undefined}
+          onClick={() => {
+            const dragged = move.current?.moved;
+            move.current = null;
+            if (!dragged && !sheet) setMinimized((value) => !value);
+          }}
+          onPointerDown={(event) => {
+            move.current = null;
+            if (!movable || event.button !== 0 || !windowRef.current) return;
+            if ((event.target as HTMLElement).closest("button")) return;
+            event.currentTarget.setPointerCapture(event.pointerId);
+            move.current = {
+              x: event.clientX,
+              y: event.clientY,
+              offset,
+              rect: windowRef.current.getBoundingClientRect(),
+              moved: false,
+            };
+          }}
+          onPointerMove={(event) => {
+            const start = move.current;
+            if (!start || !event.currentTarget.hasPointerCapture(event.pointerId)) return;
+            let dx = event.clientX - start.x;
+            let dy = event.clientY - start.y;
+            if (!start.moved) {
+              if (Math.hypot(dx, dy) < DRAG_THRESHOLD) return;
+              start.moved = true;
+              // Stop text selection while the pointer is over the page.
+              document.documentElement.style.userSelect = "none";
+            }
+            // Keep the full window in the viewport.
+            dx = Math.min(window.innerWidth - start.rect.right, Math.max(-start.rect.left, dx));
+            dy = Math.min(window.innerHeight - start.rect.bottom, Math.max(-start.rect.top, dy));
+            setOffset({ x: Math.round(start.offset.x + dx), y: Math.round(start.offset.y + dy) });
+          }}
+          onPointerUp={endMove}
+          onLostPointerCapture={endMove}
+          onDoubleClick={() => movable && setOffset({ x: 0, y: 0 })}
         >
-          <CaretDown className={cx("size-4 transition-[rotate] duration-200 ease-out", minimized && "rotate-180")} />
-        </button>
-        <Hint label={expanded ? "Smaller window" : "Larger window"} shortcut="⌘⇧E">
+          <span className="truncate font-medium">{title}</span>
+          {sender && (
+            <span title={`From ${sender.email}`} className="min-w-0 truncate text-xs opacity-75">
+              {sender.email}
+            </span>
+          )}
+          <span className="flex-1" />
           <button
             type="button"
-            aria-label={expanded ? "Smaller window" : "Larger window"}
+            aria-label={minimized ? "Open" : "Minimize"}
+            className="opacity-70 hover:opacity-100 max-sm:hidden"
+          >
+            <CaretDown className={cx("size-4 transition-[rotate] duration-200 ease-out", minimized && "rotate-180")} />
+          </button>
+          <Hint label={expanded ? "Smaller window" : "Larger window"} shortcut="⌘⇧E">
+            <button
+              type="button"
+              aria-label={expanded ? "Smaller window" : "Larger window"}
+              onClick={(event) => {
+                event.stopPropagation();
+                setExpanded(!expanded);
+                setMinimized(false);
+              }}
+              className="opacity-70 hover:opacity-100 max-sm:hidden"
+            >
+              {expanded ? <ArrowsInSimple className="size-3.5" /> : <ArrowsOutSimple className="size-3.5" />}
+            </button>
+          </Hint>
+          <button
+            type="button"
+            aria-label="Close"
             onClick={(event) => {
               event.stopPropagation();
-              setExpanded(!expanded);
-              setMinimized(false);
+              closeCompose();
             }}
-            className="opacity-70 hover:opacity-100"
+            className="opacity-70 hover:opacity-100 max-sm:-my-2 max-sm:-mr-2 max-sm:grid max-sm:size-10 max-sm:place-items-center"
           >
-            {expanded ? <ArrowsInSimple className="size-3.5" /> : <ArrowsOutSimple className="size-3.5" />}
+            <X className="size-4 max-sm:size-5" />
           </button>
-        </Hint>
-        <button
-          type="button"
-          aria-label="Close"
-          onClick={(event) => {
-            event.stopPropagation();
-            closeCompose();
-          }}
-          className="opacity-70 hover:opacity-100"
-        >
-          <X className="size-4" />
-        </button>
-      </header>
-      {!minimized && (
-        <div
-          className={cx("overflow-y-auto", fill ? "min-h-0 flex-1" : "max-h-[80vh]")}
-          onKeyDown={(event) => {
-            if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "e") {
-              event.preventDefault();
-              setExpanded(!expanded);
-            }
-          }}
-        >
-          <Composer
-            key={compose.id}
-            draft={compose}
-            onChange={updateCompose}
-            onDiscard={closeCompose}
-            variant="window"
-            fill={fill}
-          />
-        </div>
-      )}
-    </div>
+        </header>
+        {!minimized && (
+          <div
+            className={cx("overflow-y-auto", fill ? "min-h-0 flex-1" : "max-h-[80vh]")}
+            onKeyDown={(event) => {
+              if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "e") {
+                event.preventDefault();
+                setExpanded(!expanded);
+              }
+            }}
+          >
+            <Composer
+              key={compose.id}
+              draft={compose}
+              onChange={updateCompose}
+              onDiscard={closeCompose}
+              variant="window"
+              fill={fill}
+            />
+          </div>
+        )}
+      </div>
+    </>
   );
 }

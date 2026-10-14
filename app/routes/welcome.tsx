@@ -31,7 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Welcome({ loaderData }: Route.ComponentProps) {
   const { configured, signedIn, error, demos } = loaderData;
   return (
-    <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
+    <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
         {signedIn && (
           <Link

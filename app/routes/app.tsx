@@ -202,7 +202,7 @@ function Shell() {
   }, [accounts, dark, navigate, openCompose, setThemeMode, sidebarCollapsed, submit, themeMode, toggleTheme]);
 
   return (
-    <div className="flex h-dvh overflow-hidden">
+    <div className="flex h-dvh overflow-hidden pt-[env(safe-area-inset-top)]">
       {/* On wide screens the sidebar collapses as in Colima GUI. The space
           it takes changes at once, and the content slides on a spring from
           its old position. The panel slides on the same spring, so its right

@@ -85,11 +85,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
         />
         {/* iOS opens the app from the home screen without the Safari bars.
             These tags are here and not in meta, because a route meta replaces
-            the root meta. */}
+            the root meta. With a translucent status bar, the pages go under
+            it, as in a native app. Each page leaves space for it with
+            env(safe-area-inset-top). */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-title" content="mail" />
-        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
@@ -144,7 +146,8 @@ export default function App() {
         theme={dark ? "dark" : "light"}
         position="bottom-center"
         offset={{ bottom: "calc(24px + env(safe-area-inset-bottom, 0px))" }}
-        mobileOffset={{ bottom: "calc(16px + env(safe-area-inset-bottom, 0px))" }}
+        // On a phone the toolbar is at the bottom, so the toast shows above it.
+        mobileOffset={{ bottom: "calc(60px + env(safe-area-inset-bottom, 0px))" }}
         toastOptions={{ classNames: { toast: "!font-sans" } }}
       />
     </TooltipProvider>
@@ -170,7 +173,7 @@ export function ErrorBoundary({ error }: Route.ErrorBoundaryProps) {
   }
 
   return (
-    <main className="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-3 p-8">
+    <main className="mx-auto flex min-h-full max-w-xl flex-col justify-center gap-3 p-8 pt-[calc(2rem+env(safe-area-inset-top))]">
       <h1 className="text-2xl font-semibold">{message}</h1>
       <p className="text-zinc-500">{details}</p>
       <Link to="/mail" className="text-sm font-medium text-accent-600">

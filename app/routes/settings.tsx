@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellSlash, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
@@ -48,17 +48,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Settings({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mx-auto max-w-2xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
+        {/* On a phone, a back button as in iOS. */}
         <Link
           to="/mail"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 max-md:press max-md:-ml-1.5 max-md:mb-2 max-md:gap-0 max-md:py-1.5 max-md:text-[17px] max-md:text-accent-600 dark:hover:text-zinc-100 max-md:dark:text-accent-400"
         >
-          <ArrowLeft className="size-4" /> Back to mail
+          <ArrowLeft className="size-4 max-md:hidden" />
+          <CaretLeft className="size-6 md:hidden" />
+          <span className="max-md:hidden">Back to mail</span>
+          <span className="md:hidden">Mail</span>
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight max-md:text-3xl max-md:font-bold">Settings</h1>
 
         <section className="mt-8">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Email accounts</h2>
               <p className="text-sm text-zinc-500">
@@ -67,7 +71,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </div>
             <Link
               to="/welcome"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-white hover:bg-accent-700"
             >
               <Plus className="size-4" /> Add account
             </Link>
@@ -176,7 +180,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
           defaultValue={account.name}
           placeholder="Display name"
           aria-label="Display name"
-          className={cx(inputClass, "w-auto min-w-0 flex-1 sm:max-w-64")}
+          className={cx(inputClass, "w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:max-w-64")}
           onChange={(event) => saveName(event.target.value, 600)}
           onBlur={(event) => saveName(event.target.value, 0)}
           onKeyDown={(event) => {
@@ -219,7 +223,7 @@ function Appearance() {
 
   return (
     <section className="mt-10">
-      <div className="mb-3 flex items-center justify-between gap-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h2 className="font-semibold">Appearance</h2>
           <p className="text-sm text-zinc-500">The theme and the mode apply to this browser only.</p>
@@ -407,7 +411,7 @@ function Notifications() {
 
   return (
     <section className="mt-10">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h2 className="font-semibold">Notifications</h2>
           <p className="text-sm text-zinc-500">{description[state]}</p>

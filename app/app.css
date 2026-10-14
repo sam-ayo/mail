@@ -276,6 +276,38 @@ button,
   -webkit-touch-callout: none;
 }
 
+/* A touch screen has no keyboard, so the shortcut hints do not show. */
+@media (pointer: coarse) {
+  kbd {
+    display: none !important;
+  }
+}
+
+/* An app on the Home Screen does not zoom, as a native app does not. The
+   email bodies are in frames, so they can still zoom. */
+@media (display-mode: standalone) {
+  html {
+    touch-action: pan-x pan-y;
+  }
+}
+
+/* A pushed screen and a sheet, as in iOS. */
+@keyframes pane-push {
+  from {
+    transform: translateX(100%);
+  }
+}
+@keyframes fade-in {
+  from {
+    opacity: 0;
+  }
+}
+@keyframes sheet-up {
+  from {
+    transform: translateY(100%);
+  }
+}
+
 /* iOS zooms into inputs with text smaller than 16px. */
 @media (pointer: coarse) {
   input,
