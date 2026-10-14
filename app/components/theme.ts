@@ -7,7 +7,6 @@ export const THEME_COLORS = { light: "#f8faff", dark: "#0d0f18" };
 export function faviconHref(accent: string) {
   const svg =
     `<svg xmlns="http://www.w3.org/2000/svg" viewBox="3 3 26 26">` +
-    `<rect x="3" y="3" width="26" height="26" rx="6" fill="#f4f4f5"/>` +
     `<g fill="none" stroke="${accent}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">` +
     `<rect x="6.25" y="8.75" width="19.5" height="14.5" rx="2.5"/><path d="M7.5 10.5l8.5 6.25 8.5-6.25"/></g></svg>`;
   return `data:image/svg+xml,${encodeURIComponent(svg)}`;

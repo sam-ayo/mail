@@ -10,7 +10,6 @@ export const cx = clsx;
 export function LogoMark({ className }: { className?: string }) {
   return (
     <svg viewBox="0 0 32 32" className={className} aria-hidden>
-      <rect x="3" y="3" width="26" height="26" rx="6" className="fill-zinc-100" />
       <g fill="none" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" className="stroke-accent-500">
         <rect x="6.75" y="9.25" width="18.5" height="13.5" rx="2.25" />
         <path d="M7.75 10.75l8.25 6 8.25-6" />
@@ -21,8 +20,9 @@ export function LogoMark({ className }: { className?: string }) {
 
 export function Logo({ className }: { className?: string }) {
   return (
-    <div className={cx("flex items-center gap-2 text-[17px] font-bold tracking-[-0.04em]", className)}>
-      <LogoMark className="size-7" />
+    <div className={cx("flex items-center text-[17px] font-bold tracking-[-0.04em]", className)}>
+      {/* The envelope has empty space at its sides, so the label moves into it. */}
+      <LogoMark className="-mr-0.5 size-7" />
       <span>
         mail<span className="text-accent-500">.</span>
       </span>
