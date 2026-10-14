@@ -146,17 +146,29 @@ export function MailProvider({
     refreshCounts();
   }, [refreshCounts, accounts.length]);
 
-  // Check for new mail every minute while the tab is visible.
+  // Check for new mail every 20 seconds while the tab is visible. Also check
+  // when you come back to the tab, because a hidden tab does not check.
   const idle = pendingActions === 0 && revalidator.state === "idle";
   const idleRef = useRef(idle);
   idleRef.current = idle;
   useEffect(() => {
-    const interval = setInterval(() => {
+    let lastCheck = Date.now();
+    const check = (minAge: number) => {
       if (document.visibilityState !== "visible" || !idleRef.current) return;
+      if (Date.now() - lastCheck < minAge) return;
+      lastCheck = Date.now();
       revalidator.revalidate();
       refreshCounts();
-    }, 60_000);
-    return () => clearInterval(interval);
+    };
+    const interval = setInterval(() => check(10_000), 20_000);
+    const onReturn = () => check(5_000);
+    document.addEventListener("visibilitychange", onReturn);
+    window.addEventListener("focus", onReturn);
+    return () => {
+      clearInterval(interval);
+      document.removeEventListener("visibilitychange", onReturn);
+      window.removeEventListener("focus", onReturn);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [refreshCounts]);
 
