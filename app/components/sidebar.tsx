@@ -211,7 +211,7 @@ export function Sidebar({
                           }
                         }}
                         className={cx(
-                          "tappable press group flex h-7 items-center gap-2 rounded-[7px] px-2 text-[13px]",
+                          "tappable group flex h-7 transition-colors duration-160 ease-out items-center gap-2 rounded-[7px] px-2 text-[13px]",
                           current && folder === "inbox"
                             ? "bg-(--sidebar-selection) text-zinc-900 dark:text-white"
                             : "text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200",
@@ -555,7 +555,7 @@ function FolderLink({
           className={cx(
             // As in the system sidebars, the selected row has a fill and no
             // bold text. A hovered row has a lighter fill of the same color.
-            "tappable press flex items-center gap-2.5 rounded-[7px] px-2 text-[13px]",
+            "tappable flex items-center gap-2.5 transition-colors duration-160 ease-out rounded-[7px] px-2 text-[13px]",
             compact ? "h-6" : "h-7",
             active
               ? "bg-(--sidebar-selection) text-zinc-900 dark:text-white"
