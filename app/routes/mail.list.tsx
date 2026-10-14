@@ -28,6 +28,7 @@ import {
   data,
   Form,
   Link,
+  matchPath,
   Outlet,
   useFetcher,
   useLocation,
@@ -272,6 +273,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
       .filter((thread) => !thread.removed);
   }, [loaderData.threads, extra, patches, loadedAt, scope]);
 
+  const base = `/mail/${scope}/${folder}`;
   const openKey =
     childParams.accountId && childParams.threadId
       ? threadKey(childParams.accountId, childParams.threadId)
@@ -279,6 +281,34 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const openIndex = openKey
     ? threads.findIndex((t) => threadKey(t.accountId, t.id) === openKey)
     : -1;
+
+  // The conversation that loads now. Its row shows as open at once, before
+  // the server answers. A conversation that is not in the cache can take a
+  // second to load.
+  const pendingParams =
+    navigation.state === "loading"
+      ? matchPath(`${base}/:accountId/:threadId`, navigation.location.pathname)?.params
+      : undefined;
+  const pendingKey =
+    pendingParams?.accountId && pendingParams.threadId
+      ? threadKey(pendingParams.accountId, pendingParams.threadId)
+      : null;
+  const selectedKey = pendingKey ?? openKey;
+  // A cached conversation loads in a few milliseconds. On a wide screen, the
+  // placeholder shows only after a short wait, so it does not flash before a
+  // fast load. On a narrow screen, the list stays until the pane shows, so
+  // the placeholder shows at once.
+  const [slowKey, setSlowKey] = useState<string | null>(null);
+  useEffect(() => {
+    if (!pendingKey || pendingKey === openKey) return;
+    const wide = window.matchMedia("(min-width: 64rem)").matches;
+    const timer = setTimeout(() => setSlowKey(pendingKey), wide ? 100 : 0);
+    return () => clearTimeout(timer);
+  }, [pendingKey, openKey]);
+  const loadingThread =
+    pendingKey && pendingKey !== openKey && slowKey === pendingKey
+      ? threads.find((t) => threadKey(t.accountId, t.id) === pendingKey)
+      : undefined;
 
   const [focusIndex, setFocusIndex] = useState(0);
   const [selected, setSelected] = useState<Set<string>>(new Set());
@@ -294,7 +324,6 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   }, [focusIndex]);
 
   const search = loaderData.query ? `?q=${encodeURIComponent(loaderData.query)}` : "";
-  const base = `/mail/${scope}/${folder}`;
   const hrefFor = (thread: ThreadSummary) => `${base}/${thread.accountId}/${thread.id}${search}`;
   const prefetchHref = (thread: ThreadSummary) =>
     `${hrefFor(thread)}${search ? "&" : "?"}${PREFETCH_PARAM}`;
@@ -546,7 +575,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
           "relative flex min-w-0 flex-col border-r border-zinc-200 dark:border-zinc-800",
           // The resize handle sets --list-width. Without it, the default width applies.
           "w-full lg:w-[var(--list-width,420px)] lg:shrink-0 xl:w-[var(--list-width,460px)]",
-          openKey && "hidden lg:flex lg:in-[.list-collapsed]:hidden",
+          (openKey || loadingThread) && "hidden lg:flex lg:in-[.list-collapsed]:hidden",
         )}
       >
         <ListResizeHandle list={listRef} collapsible={Boolean(openKey)} />
@@ -654,7 +683,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
                   index={index}
                   thread={thread}
                   href={hrefFor(thread)}
-                  active={key === openKey}
+                  active={key === selectedKey}
                   focused={openIndex < 0 && index === focusIndex}
                   selected={selected.has(key)}
                   folder={folder}
@@ -674,11 +703,41 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
         )}
       </section>
 
-      {openKey && <ListExpandHandle />}
-      <div data-list-thread className={cx("min-w-0 flex-1", openKey ? "flex" : "hidden lg:flex")}>
-        <Outlet context={context} />
+      {(openKey || loadingThread) && <ListExpandHandle />}
+      <div data-list-thread className={cx("min-w-0 flex-1", openKey || loadingThread ? "flex" : "hidden lg:flex")}>
+        {loadingThread ? <ThreadPlaceholder thread={loadingThread} /> : <Outlet context={context} />}
       </div>
     </div>
+  );
+}
+
+/**
+ * Shows in the conversation pane while a conversation loads from the server.
+ * The list row gives the subject, so it shows at once. The row does not tell
+ * who sent the newest message, so the message card has no name.
+ */
+function ThreadPlaceholder({ thread }: { thread: ThreadSummary }) {
+  const bar = "animate-pulse rounded bg-zinc-100 dark:bg-zinc-800";
+  return (
+    <article aria-busy="true" className="flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
+      {/* The same height as the header of the conversation. */}
+      <header className="h-[49px] shrink-0 border-b border-zinc-200 dark:border-zinc-800" />
+      <div className="flex-1 overflow-y-auto">
+        <div className="mx-auto max-w-6xl px-6 py-6">
+          <h1 dir="auto" className="mb-6 text-xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere]">
+            {thread.subject}
+          </h1>
+          <div className="flex items-start gap-3 rounded-xl border border-zinc-200 px-4 py-3 dark:border-zinc-800">
+            <div className={cx("size-8 shrink-0 rounded-full", bar)} />
+            <div className="min-w-0 flex-1 space-y-2 pt-1">
+              <div className={cx("h-3.5 w-1/4", bar)} />
+              <div className={cx("h-3 w-2/3", bar)} />
+              <div className={cx("h-3 w-1/2", bar)} />
+            </div>
+          </div>
+        </div>
+      </div>
+    </article>
   );
 }
 
@@ -864,6 +923,10 @@ function ThreadRow({
           prefetch="intent"
           onMouseEnter={() => onPrefetch(true)}
           onMouseLeave={() => onPrefetch(false)}
+          // A touch screen has no hover. Load when the finger touches the row.
+          // A scroll cancels the touch, and the load does not start.
+          onPointerDown={(event) => event.pointerType !== "mouse" && onPrefetch(true)}
+          onPointerCancel={() => onPrefetch(false)}
           onFocus={() => onPrefetch(true)}
           className={cx(
             "tappable flex gap-3 border-b border-zinc-100 py-3 pr-4 pl-15 outline-none transition-colors dark:border-zinc-800/70",
