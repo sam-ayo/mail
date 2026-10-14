@@ -12,6 +12,7 @@ import type { Account } from "./accounts.server";
 import { getAccount, listAccounts } from "./accounts.server";
 import { createDemoProvider } from "./providers/demo.server";
 import { createGmailProvider } from "./providers/gmail.server";
+import { createHostedProvider } from "./providers/hosted.server";
 import { createImapProvider } from "./providers/imap.server";
 import { createOutlookProvider } from "./providers/outlook.server";
 import type { MailProvider, OutgoingMessage } from "./providers/types";
@@ -27,6 +28,8 @@ export function providerFor(account: Account): MailProvider {
       return createOutlookProvider(account);
     case "imap":
       return createImapProvider(account);
+    case "hosted":
+      return createHostedProvider(account);
     case "demo":
       return createDemoProvider(account);
   }

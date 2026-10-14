@@ -1,7 +1,7 @@
 import { Tooltip } from "@base-ui/react/tooltip";
 import { clsx } from "clsx";
 import { useState } from "react";
-import { HardDrives, Sparkle } from "./icons";
+import { EnvelopeSimple, HardDrives, Sparkle } from "./icons";
 import { shownProvider, type ProviderKind } from "~/lib/mail";
 
 export const cx = clsx;
@@ -60,6 +60,8 @@ export function ProviderIcon({ provider, className }: { provider: ProviderKind; 
       return <MicrosoftIcon className={className} />;
     case "imap":
       return <HardDrives className={className} />;
+    case "hosted":
+      return <EnvelopeSimple className={className} />;
     case "demo":
       return <Sparkle className={className} />;
   }
@@ -107,6 +109,7 @@ export const PROVIDER_NAMES: Record<ProviderKind, string> = {
   google: "Gmail",
   microsoft: "Outlook",
   imap: "IMAP",
+  hosted: "Relay",
   demo: "Demo",
 };
 

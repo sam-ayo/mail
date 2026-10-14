@@ -25,9 +25,21 @@ export const env = {
     clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
     tenant: process.env.MICROSOFT_TENANT || "common",
   },
+  hosted: {
+    /** The addresses that Relay hosts. The first one also gets mail for unknown addresses at its domain. */
+    mailboxes: (process.env.HOSTED_MAILBOXES || "")
+      .split(",")
+      .map((address) => address.trim().toLowerCase())
+      .filter(Boolean),
+    /** The password that connects a hosted address to a workspace. */
+    password: process.env.HOSTED_MAIL_PASSWORD || "",
+    resendApiKey: process.env.RESEND_API_KEY || "",
+    resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || "",
+  },
 };
 
 export const oauthConfigured = {
   google: !!(env.google.clientId && env.google.clientSecret),
   microsoft: !!(env.microsoft.clientId && env.microsoft.clientSecret),
+  hosted: !!(env.hosted.mailboxes.length && env.hosted.password && env.hosted.resendApiKey),
 };
