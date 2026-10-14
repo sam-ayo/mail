@@ -14,6 +14,8 @@ export const env = {
   isProduction,
   appUrl: (process.env.APP_URL || "http://localhost:5180").replace(/\/$/, ""),
   databaseUrl: secret("DATABASE_URL"),
+  /** Vercel sends it in the Authorization header of cron job requests. */
+  cronSecret: process.env.CRON_SECRET || "",
   sessionSecret: secret("SESSION_SECRET"),
   encryptionKey: secret("ENCRYPTION_KEY"),
   google: {
