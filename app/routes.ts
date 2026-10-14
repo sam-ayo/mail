@@ -8,6 +8,7 @@ export default [
   route("auth/:provider", "routes/auth.start.tsx"),
   route("auth/:provider/callback", "routes/auth.callback.tsx"),
   route("connect/demo", "routes/connect.demo.tsx"),
+  route("connect/hosted", "routes/connect.hosted.tsx"),
   route("logout", "routes/logout.tsx"),
 
   layout("routes/app.tsx", [
@@ -25,5 +26,6 @@ export default [
   route("api/counts", "routes/api.counts.ts"),
   route("api/avatar", "routes/api.avatar.ts"),
   route("api/unsubscribe", "routes/api.unsubscribe.ts"),
+  route("api/inbound/resend", "routes/api.inbound.resend.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
 ] satisfies RouteConfig;

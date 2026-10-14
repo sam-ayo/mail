@@ -1,6 +1,6 @@
 // Types and helpers that the server and the browser share.
 
-export type ProviderKind = "google" | "microsoft" | "imap" | "demo";
+export type ProviderKind = "google" | "microsoft" | "imap" | "hosted" | "demo";
 
 export type AccountStatus = "active" | "reauth_required";
 

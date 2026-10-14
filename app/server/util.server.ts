@@ -92,7 +92,7 @@ export function snippetFromText(text: string | undefined, length = 160) {
 export async function buildMime(
   from: Address,
   message: OutgoingMessage,
-  options: { keepBcc: boolean },
+  options: { keepBcc: boolean; messageId?: string },
 ): Promise<Buffer> {
   const references = [
     ...(message.reply?.references ?? []),
@@ -104,6 +104,7 @@ export async function buildMime(
     cc: message.cc.map(toNodemailer),
     bcc: message.bcc.map(toNodemailer),
     subject: message.subject,
+    messageId: options.messageId,
     text: message.text,
     html: message.html,
     inReplyTo: message.reply?.messageIdHeader,

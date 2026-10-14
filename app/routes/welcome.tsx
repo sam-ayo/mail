@@ -1,7 +1,7 @@
-import { ArrowLeft, Sparkle } from "~/components/icons";
+import { ArrowLeft, EnvelopeSimple, Sparkle } from "~/components/icons";
 import { data, Form, Link } from "react-router";
 import { LegalLinks } from "~/components/legal";
-import { GoogleIcon, Logo, MicrosoftIcon, ProviderIcon, cx } from "~/components/ui";
+import { GoogleIcon, Logo, MicrosoftIcon, ProviderIcon, cx, inputClass } from "~/components/ui";
 import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
 import { DEMO_PERSONAS } from "~/server/providers/demo.server";
@@ -75,6 +75,28 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
               <MicrosoftIcon className="size-[18px]" /> Continue with Microsoft
             </ProviderLink>
           </div>
+
+          {configured.hosted && (
+            <details className="group mt-4 text-sm">
+              <summary className="cursor-pointer list-none text-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
+                Use an address that Relay hosts
+              </summary>
+              <Form method="post" action="/connect/hosted" className="mt-3 flex flex-col gap-2">
+                <input name="email" type="email" required placeholder="Address" autoComplete="username" className={inputClass} />
+                <input
+                  name="password"
+                  type="password"
+                  required
+                  placeholder="Hosted mail password"
+                  autoComplete="current-password"
+                  className={inputClass}
+                />
+                <button className="flex h-10 items-center justify-center gap-2 rounded-xl border border-zinc-200 font-medium press hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800">
+                  <EnvelopeSimple className="size-4" /> Connect
+                </button>
+              </Form>
+            </details>
+          )}
 
           {demos.length > 0 && (
             <>

@@ -140,7 +140,7 @@ const fromEnvelope = (list?: MessageAddressObject[]): Address[] =>
     .filter((a) => a.address)
     .map((a) => ({ name: a.name || undefined, email: a.address! }));
 
-const fromParsed = (value?: AddressObject | AddressObject[]): Address[] =>
+export const fromParsed = (value?: AddressObject | AddressObject[]): Address[] =>
   (Array.isArray(value) ? value : value ? [value] : [])
     .flatMap((group) => group.value)
     .filter((a) => a.address)
@@ -150,6 +150,45 @@ const fromParsed = (value?: AddressObject | AddressObject[]): Address[] =>
 function rawHeader(parsed: ParsedMail, name: string) {
   const line = parsed.headerLines.find((h) => h.key === name)?.line;
   return line?.slice(line.indexOf(":") + 1).trim();
+}
+
+/** Makes the app's message from a parsed RFC 5322 message. Attachment IDs are the attachment indexes. */
+export function messageFromParsed(
+  parsed: ParsedMail,
+  state: { id: string; threadId: string; unread: boolean; starred: boolean },
+): Message {
+  const text = parsed.text ?? undefined;
+  return {
+    ...state,
+    from: fromParsed(parsed.from)[0] ?? { email: "unknown" },
+    to: fromParsed(parsed.to),
+    cc: fromParsed(parsed.cc),
+    bcc: fromParsed(parsed.bcc),
+    replyTo: fromParsed(parsed.replyTo),
+    subject: parsed.subject || "(no subject)",
+    date: (parsed.date ?? new Date()).toISOString(),
+    snippet: snippetFromText(text),
+    html: parsed.html || undefined,
+    text,
+    attachments: parsed.attachments.map((attachment, index) => ({
+      id: String(index),
+      filename: attachment.filename || "attachment",
+      mimeType: attachment.contentType,
+      size: attachment.size,
+      contentId: attachment.contentId?.replace(/^<|>$/g, ""),
+      inline: attachment.contentDisposition === "inline" || attachment.related === true,
+    })),
+    messageIdHeader: parsed.messageId,
+    references: Array.isArray(parsed.references)
+      ? parsed.references
+      : parsed.references
+        ? [parsed.references]
+        : undefined,
+    unsubscribe: parseListUnsubscribe(
+      rawHeader(parsed, "list-unsubscribe"),
+      rawHeader(parsed, "list-unsubscribe-post"),
+    ),
+  };
 }
 
 function hasAttachment(structure: FetchMessageObject["bodyStructure"]): boolean {
@@ -283,41 +322,12 @@ export function createImapProvider(account: Account): MailProvider {
 
     async getThread(threadId: string): Promise<Thread> {
       const { message, parsed } = await parseMessage(threadId);
-      const text = parsed.text ?? undefined;
-      const result: Message = {
+      const result = messageFromParsed(parsed, {
         id: threadId,
         threadId,
-        from: fromParsed(parsed.from)[0] ?? { email: "unknown" },
-        to: fromParsed(parsed.to),
-        cc: fromParsed(parsed.cc),
-        bcc: fromParsed(parsed.bcc),
-        replyTo: fromParsed(parsed.replyTo),
-        subject: parsed.subject || "(no subject)",
-        date: (parsed.date ?? new Date()).toISOString(),
-        snippet: snippetFromText(text),
-        html: parsed.html || undefined,
-        text,
         unread: !message.flags?.has("\\Seen"),
         starred: !!message.flags?.has("\\Flagged"),
-        attachments: parsed.attachments.map((attachment, index) => ({
-          id: String(index),
-          filename: attachment.filename || "attachment",
-          mimeType: attachment.contentType,
-          size: attachment.size,
-          contentId: attachment.contentId?.replace(/^<|>$/g, ""),
-          inline: attachment.contentDisposition === "inline" || attachment.related === true,
-        })),
-        messageIdHeader: parsed.messageId,
-        references: Array.isArray(parsed.references)
-          ? parsed.references
-          : parsed.references
-            ? [parsed.references]
-            : undefined,
-        unsubscribe: parseListUnsubscribe(
-          rawHeader(parsed, "list-unsubscribe"),
-          rawHeader(parsed, "list-unsubscribe-post"),
-        ),
-      };
+      });
       return {
         accountId: account.id,
         id: threadId,
