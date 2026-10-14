@@ -28,7 +28,7 @@ import { removeAccountPrompt, useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
 import { ResizeHandle } from "./resize-handle";
-import { AccountIcon, IconButton, Logo, PROVIDER_NAMES, cx } from "./ui";
+import { AccountIcon, Hint, IconButton, Logo, PROVIDER_NAMES, cx } from "./ui";
 
 export const FOLDER_ICONS: Record<Folder, typeof Tray> = {
   inbox: Tray,
@@ -254,12 +254,12 @@ export function Sidebar({
           >
             <Gear className="size-4 text-zinc-500 dark:text-zinc-400" /> Settings
           </Link>
-          <IconButton label="Keyboard shortcuts" shortcut="?" onClick={onShowShortcuts}>
+          <FooterButton label="Keyboard shortcuts" shortcut="?" onClick={onShowShortcuts}>
             <Keyboard className="size-4" />
-          </IconButton>
-          <IconButton label={dark ? "Use light theme" : "Use dark theme"} onClick={onToggleTheme}>
+          </FooterButton>
+          <FooterButton label={dark ? "Use light theme" : "Use dark theme"} onClick={onToggleTheme}>
             {dark ? <Sun className="size-4" /> : <Moon className="size-4" />}
-          </IconButton>
+          </FooterButton>
         </div>
         {accounts.length === 1 && (
           <div className="flex items-center gap-2 px-2 pt-1 text-xs text-zinc-500">
@@ -271,6 +271,22 @@ export function Sidebar({
     </nav>
     {resizable && <SidebarResizeHandle />}
     </div>
+  );
+}
+
+/** An icon button with the same hover as the Settings link beside it. */
+function FooterButton({ label, shortcut, onClick, children }: { label: string; shortcut?: string; onClick?: () => void; children: React.ReactNode }) {
+  return (
+    <Hint label={label} shortcut={shortcut}>
+      <button
+        type="button"
+        aria-label={label}
+        onClick={onClick}
+        className="press grid size-7 shrink-0 place-items-center rounded-[7px] text-zinc-500 hover:bg-(--sidebar-hover) dark:text-zinc-400"
+      >
+        {children}
+      </button>
+    </Hint>
   );
 }
 
