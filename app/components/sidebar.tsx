@@ -20,10 +20,10 @@ import {
   Tray,
   Warning,
 } from "./icons";
-import { useEffect, useRef, useSyncExternalStore } from "react";
-import { Link, NavLink, useFetcher, useNavigate } from "react-router";
+import { type ComponentProps, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { Link, NavLink, matchPath, useFetcher, useNavigate, useNavigation } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
-import { FOLDER_LABELS, FOLDERS, formatCount, PREFETCH_PARAM, shownProvider } from "~/lib/mail";
+import { FOLDER_LABELS, FOLDERS, formatCount, isFolder, PREFETCH_PARAM, shownProvider } from "~/lib/mail";
 import { removeAccountPrompt, useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { ContextMenu, copyText } from "./menu";
@@ -47,9 +47,35 @@ export function reconnectUrl(account: AccountSummary) {
   return "/welcome";
 }
 
+/** The list loads before the route changes. The sidebar shows the folder
+    that loads, so a click changes the sidebar at once. */
+function usePendingFolder(scope: string | undefined, folder: Folder | undefined) {
+  const { location } = useNavigation();
+  const match = location && matchPath("/mail/:scope/:folder/*", location.pathname);
+  if (!match || !isFolder(match.params.folder)) return { scope, folder };
+  return { scope: match.params.scope, folder: match.params.folder };
+}
+
+/** Loads a list on hover, so the list shows at once after a click. The list
+    route caches what the fetcher loads. */
+function useHoverPrefetch(to: string, active: boolean) {
+  const fetcher = useFetcher();
+  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  function prefetch(start: boolean) {
+    clearTimeout(hoverTimer.current);
+    if (start && !active) hoverTimer.current = setTimeout(() => fetcher.load(`${to}?${PREFETCH_PARAM}`), 80);
+  }
+  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+  return {
+    onMouseEnter: () => prefetch(true),
+    onMouseLeave: () => prefetch(false),
+    onFocus: () => prefetch(true),
+  };
+}
+
 export function Sidebar({
-  scope,
-  folder,
+  scope: shownScope,
+  folder: shownFolder,
   onShowShortcuts,
   onToggleTheme,
   dark,
@@ -64,9 +90,14 @@ export function Sidebar({
   resizable?: boolean;
 }) {
   const { accounts, unreadCounts, openCompose } = useMail();
+  const { scope, folder } = usePendingFolder(shownScope, shownFolder);
   const navigate = useNavigate();
   const remover = useFetcher();
   const confirm = useConfirm();
+  // A click on the row of the open account closes its folders. A move to
+  // another account opens them again.
+  const [closedAccount, setClosedAccount] = useState<string | null>(null);
+  useEffect(() => setClosedAccount(null), [scope]);
 
   // The settings route removes the account. The mail stays on the server.
   async function removeAccount(account: AccountSummary) {
@@ -127,7 +158,8 @@ export function Sidebar({
             <SectionTitle>Accounts</SectionTitle>
             <ul className="space-y-px">
               {accounts.map((account) => {
-                const open = scope === account.id;
+                const current = scope === account.id;
+                const open = current && closedAccount !== account.id;
                 return (
                   <li key={account.id}>
                     <ContextMenu
@@ -164,11 +196,23 @@ export function Sidebar({
                         },
                       ]}
                     >
-                      <NavLink
+                      <AccountLink
                         to={`/mail/${account.id}/inbox`}
+                        active={current && folder === "inbox"}
+                        aria-expanded={open}
+                        onClick={(event) => {
+                          if (!current || event.metaKey || event.ctrlKey || event.shiftKey || event.altKey) return;
+                          // The inbox is on the screen, so the click only opens or closes the folders.
+                          if (folder === "inbox") {
+                            event.preventDefault();
+                            setClosedAccount(open ? account.id : null);
+                          } else {
+                            setClosedAccount(null);
+                          }
+                        }}
                         className={cx(
                           "tappable press group flex h-7 items-center gap-2 rounded-[7px] px-2 text-[13px]",
-                          open && folder === "inbox"
+                          current && folder === "inbox"
                             ? "bg-(--sidebar-selection) text-zinc-900 dark:text-white"
                             : "text-zinc-700 hover:bg-(--sidebar-hover) dark:text-zinc-200",
                         )}
@@ -185,7 +229,7 @@ export function Sidebar({
                           <span
                             className={cx(
                               "absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px]",
-                              open && folder === "inbox"
+                              current && folder === "inbox"
                                 ? "ring-(--sidebar-selection)"
                                 : "ring-(--sidebar) group-hover:ring-[color-mix(in_oklab,var(--sidebar-selection)_50%,var(--sidebar))]",
                             )}
@@ -198,7 +242,7 @@ export function Sidebar({
                         ) : (
                           <Count value={unreadCounts[account.id]} />
                         )}
-                      </NavLink>
+                      </AccountLink>
                     </ContextMenu>
                     {/* The folders stay in the page so that the height can animate.
                         A grid row from 0fr to 1fr animates to the height of the content. */}
@@ -476,6 +520,10 @@ function Count({ value }: { value: number | null | undefined }) {
   );
 }
 
+function AccountLink({ active, ...props }: { active: boolean } & ComponentProps<typeof NavLink>) {
+  return <NavLink {...props} {...useHoverPrefetch(String(props.to), active)} />;
+}
+
 function FolderLink({
   to,
   folder,
@@ -491,14 +539,7 @@ function FolderLink({
 }) {
   const Icon = FOLDER_ICONS[folder];
   const navigate = useNavigate();
-  // The list route caches what this fetcher loads, so the folder shows at once.
-  const fetcher = useFetcher();
-  const hoverTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
-  function prefetch(start: boolean) {
-    clearTimeout(hoverTimer.current);
-    if (start && !active) hoverTimer.current = setTimeout(() => fetcher.load(`${to}?${PREFETCH_PARAM}`), 80);
-  }
-  useEffect(() => () => clearTimeout(hoverTimer.current), []);
+  const prefetch = useHoverPrefetch(to, active);
   return (
     <li>
       <ContextMenu
@@ -510,9 +551,7 @@ function FolderLink({
       >
         <Link
           to={to}
-          onMouseEnter={() => prefetch(true)}
-          onMouseLeave={() => prefetch(false)}
-          onFocus={() => prefetch(true)}
+          {...prefetch}
           className={cx(
             // As in the system sidebars, the selected row has a fill and no
             // bold text. A hovered row has a lighter fill of the same color.
