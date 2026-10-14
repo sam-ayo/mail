@@ -250,7 +250,9 @@ function Appearance() {
 
       <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Theme">
         {PALETTES.map((p) => (
-          <label key={p.id} className="cursor-pointer">
+          // "relative" keeps the sr-only radio inside the scroll area. Without
+          // it, the focus scrolls the overflow-hidden app frame and shows a gap.
+          <label key={p.id} className="relative cursor-pointer">
             <input
               type="radio"
               name="palette"
