@@ -12,6 +12,8 @@ export default defineConfig({
     // The Worker has no public URL. Only the cron trigger runs it.
     workersDev: false,
     previewUrls: false,
+    // Workers Logs keep each run and its result, so a failed check shows in the dashboard.
+    observability: { enabled: true },
     triggers: [triggers.scheduled({ schedule: "* * * * *" })],
     env: {
       CHECK_URL: bindings.text("https://mail.samayo.me/api/cron/check-mail"),
