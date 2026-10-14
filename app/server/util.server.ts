@@ -114,9 +114,11 @@ export async function buildMime(
       contentType: attachment.contentType,
       content: attachment.content,
     })),
-    keepBcc: options.keepBcc,
   } as ConstructorParameters<typeof MailComposer>[0]);
-  return composer.compile().build();
+  // MailComposer ignores a keepBcc option. The compiled message reads it.
+  const node = composer.compile();
+  node.keepBcc = options.keepBcc;
+  return node.build();
 }
 
 function toNodemailer(address: Address) {

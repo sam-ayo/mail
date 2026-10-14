@@ -25,6 +25,16 @@ const FOLDER_FILTER: Record<Folder, string> = {
   trash: "folder = 'trash'",
 };
 
+/**
+ * The messages that a list row summarizes. A conversation in Inbox also shows
+ * the replies in Sent. Spam and Trash show only their own messages.
+ */
+const SUMMARY_FILTER: Record<Folder, string> = {
+  ...Object.fromEntries(Object.keys(FOLDER_FILTER).map((folder) => [folder, "folder NOT IN ('spam', 'trash')"])),
+  spam: FOLDER_FILTER.spam,
+  trash: FOLDER_FILTER.trash,
+} as Record<Folder, string>;
+
 interface SummaryRow {
   id: string;
   thread_id: string;
@@ -37,6 +47,7 @@ interface SummaryRow {
   starred: boolean;
   has_attachments: boolean;
   message_id: string | null;
+  outgoing: boolean;
 }
 
 /** Normalizes a Message-ID to the form with angle brackets. */
@@ -99,7 +110,12 @@ export async function storeMessage(input: {
       messageId ?? null,
       parsed.subject ?? "",
       JSON.stringify(fromParsed(parsed.from)[0] ?? { email: "unknown" }),
-      JSON.stringify([...fromParsed(parsed.to), ...fromParsed(parsed.cc)]),
+      JSON.stringify([
+        ...fromParsed(parsed.to),
+        ...fromParsed(parsed.cc),
+        // Only the stored copy of a sent message has a Bcc header.
+        ...fromParsed(parsed.bcc),
+      ]),
       snippetFromText(parsed.text),
       parsed.text ?? "",
       parsed.attachments.some((a) => a.contentDisposition !== "inline" && !a.related),
@@ -140,6 +156,8 @@ export function createHostedProvider(account: Account): MailProvider {
     const latest = rows[rows.length - 1];
     const people = new Map<string, Address>();
     for (const row of rows) {
+      // Sent shows the recipients of the sent messages. Other folders show the senders.
+      if (folder === "sent" && !row.outgoing) continue;
       const list = folder === "sent" ? row.to_addresses : [row.from_address];
       for (const address of list) people.set(address.email.toLowerCase(), address);
     }
@@ -198,8 +216,8 @@ export function createHostedProvider(account: Account): MailProvider {
 
       const rows = await query<SummaryRow>(
         `SELECT id, thread_id, subject, snippet, from_address, to_addresses, date, unread, starred,
-           has_attachments, message_id
-         FROM hosted_messages WHERE mailbox = $1 AND thread_id = ANY($2) AND ${filter}
+           has_attachments, message_id, outgoing
+         FROM hosted_messages WHERE mailbox = $1 AND thread_id = ANY($2) AND ${SUMMARY_FILTER[folder]}
          ORDER BY date`,
         [mailbox, ids],
       );
