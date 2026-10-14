@@ -8,7 +8,10 @@ import { DEMO_PERSONAS } from "~/server/providers/demo.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
 
-export const meta: Route.MetaFunction = () => [{ title: "Sign in · mail" }];
+export const meta: Route.MetaFunction = () => [
+  { title: "Relay Mail · Sign in" },
+  { name: "description", content: "Relay Mail is an email client. It shows your Gmail and Outlook accounts in one inbox." },
+];
 
 export async function loader({ request }: Route.LoaderArgs) {
   const session = await getSession(request);
@@ -43,9 +46,15 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">
             {signedIn ? "Add another account" : "All your email, one fast inbox"}
           </h1>
-          {signedIn && (
+          {signedIn ? (
             <p className="mt-2 text-sm text-zinc-500">
               Connect as many accounts as you like. They all show in your unified inbox.
+            </p>
+          ) : (
+            // Google compares this name with the app name on the OAuth consent screen.
+            <p className="mt-2 text-sm text-zinc-500">
+              Relay Mail is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
+              write, and sort your email.
             </p>
           )}
 
