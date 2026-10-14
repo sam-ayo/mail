@@ -38,9 +38,17 @@ export default function Privacy() {
 
       <h2>Storage</h2>
       <p>
-        mail keeps only your account profiles and your OAuth tokens in its database. It encrypts the tokens before
-        it stores them. mail does not keep a copy of your messages or attachments. It gets them from Google or
-        Microsoft each time and sends them directly to your browser over HTTPS.
+        mail keeps your account profiles and your OAuth tokens in its database. It encrypts the tokens before it
+        stores them.
+      </p>
+      <p>
+        To show your message lists quickly, mail also keeps a cache of each conversation in the list: the subject,
+        the senders and recipients, the date, and a short snippet of the text. mail encrypts this cache, and deletes
+        each entry after 60 days. When you remove an account, mail deletes its cache at once.
+      </p>
+      <p>
+        mail does not keep a copy of the full messages or of the attachments. It gets them from Google or Microsoft
+        each time and sends them directly to your browser over HTTPS.
       </p>
       <p>mail uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
 
@@ -65,8 +73,8 @@ export default function Privacy() {
 
       <h2>Remove your data</h2>
       <p>
-        To remove an account, open Settings and click Remove. mail then deletes the profile and the tokens of that
-        account. Your mail stays with Google or Microsoft. You can also revoke the access of mail at{" "}
+        To remove an account, open Settings and click Remove. mail then deletes the profile, the tokens, and the cache of
+        that account. Your mail stays with Google or Microsoft. You can also revoke the access of mail at{" "}
         <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> or{" "}
         <a href="https://account.microsoft.com/privacy/app-access">account.microsoft.com/privacy/app-access</a>.
       </p>
