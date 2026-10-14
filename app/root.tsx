@@ -6,8 +6,10 @@ import {
   Outlet,
   Scripts,
   ScrollRestoration,
+  useNavigate,
 } from "react-router";
 
+import { useEffect } from "react";
 import { Toaster } from "sonner";
 import { DEFAULT_PALETTE, PALETTES, THEME_COLORS, paletteFavicon, useTheme } from "./components/theme";
 import { ConfirmProvider } from "./components/confirm-dialog";
@@ -22,6 +24,9 @@ export const links: Route.LinksFunction = () => [
     rel: "stylesheet",
     href: "https://fonts.googleapis.com/css2?family=Inter:ital,opsz,wght@0,14..32,100..900;1,14..32,100..900&display=swap",
   },
+  // The manifest and the touch icon let a phone add the app to the home screen.
+  { rel: "manifest", href: "/manifest.webmanifest" },
+  { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
 ];
 
 export const meta: Route.MetaFunction = () => [{ title: "mail" }];
@@ -78,6 +83,13 @@ export function Layout({ children }: { children: React.ReactNode }) {
           name="viewport"
           content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content"
         />
+        {/* iOS opens the app from the home screen without the Safari bars.
+            These tags are here and not in meta, because a route meta replaces
+            the root meta. */}
+        <meta name="mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-capable" content="yes" />
+        <meta name="apple-mobile-web-app-title" content="mail" />
+        <meta name="apple-mobile-web-app-status-bar-style" content="default" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />
         <Links />
@@ -91,8 +103,36 @@ export function Layout({ children }: { children: React.ReactNode }) {
   );
 }
 
+// The service worker keeps the app usable offline and shows notifications. It
+// is off in development, because its saved files would hide code changes.
+function useServiceWorker() {
+  const navigate = useNavigate();
+  useEffect(() => {
+    if (!import.meta.env.PROD || !("serviceWorker" in navigator)) return;
+    navigator.serviceWorker.register("/sw.js").then(async () => {
+      const registration = await navigator.serviceWorker.ready;
+      // This page and its files loaded before the service worker started. Save them too.
+      const urls = [
+        location.href,
+        ...performance.getEntriesByType("resource").map((entry) => entry.name),
+      ];
+      registration.active?.postMessage({ type: "cache-urls", urls });
+    }, (error) => console.error("Service worker registration failed", error));
+
+    // A click on a notification opens its thread in the window that is open.
+    const onMessage = (event: MessageEvent) => {
+      if (event.data?.type !== "open-url") return;
+      const url = new URL(event.data.url);
+      if (url.origin === location.origin) navigate(url.pathname + url.search);
+    };
+    navigator.serviceWorker.addEventListener("message", onMessage);
+    return () => navigator.serviceWorker.removeEventListener("message", onMessage);
+  }, [navigate]);
+}
+
 export default function App() {
   const { dark } = useTheme();
+  useServiceWorker();
   return (
     <TooltipProvider>
       <ConfirmProvider>

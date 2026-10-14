@@ -38,6 +38,13 @@ export const env = {
     resendApiKey: process.env.RESEND_API_KEY || "",
     resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || "",
   },
+  /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
+  push: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || "",
+    privateKey: process.env.VAPID_PRIVATE_KEY || "",
+    /** Push services use this contact if the app sends too much. */
+    subject: process.env.VAPID_SUBJECT || "mailto:mail@samayo.me",
+  },
 };
 
 export const oauthConfigured = {

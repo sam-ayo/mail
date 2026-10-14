@@ -27,6 +27,8 @@ export default [
   route("api/avatar", "routes/api.avatar.ts"),
   route("api/unsubscribe", "routes/api.unsubscribe.ts"),
   route("api/inbound/resend", "routes/api.inbound.resend.ts"),
+  route("api/push", "routes/api.push.ts"),
   route("api/cron/expire-cache", "routes/api.cron.expire-cache.ts"),
+  route("api/cron/check-mail", "routes/api.cron.check-mail.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
 ] satisfies RouteConfig;

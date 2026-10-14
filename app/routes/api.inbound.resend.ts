@@ -1,5 +1,6 @@
 import { env } from "~/server/env.server";
 import { resolvePendingMessageIds, storeMessage } from "~/server/providers/hosted.server";
+import { notifyHostedMessage } from "~/server/push.server";
 import type { ReceivedEmail } from "~/server/resend.server";
 import { downloadRaw, getReceivedEmail, verifyWebhook } from "~/server/resend.server";
 import { parseAddresses } from "~/server/util.server";
@@ -21,15 +22,21 @@ export async function action({ request }: Route.ActionArgs) {
   const raw = await downloadRaw(email);
   for (const mailbox of mailboxes) {
     await resolvePendingMessageIds(mailbox);
-    await storeMessage({
+    const folder = failsAuthentication(email) ? "spam" : "inbox";
+    const id = await storeMessage({
       mailbox,
       raw,
-      folder: failsAuthentication(email) ? "spam" : "inbox",
+      folder,
       outgoing: false,
       unread: true,
       // Each mailbox gets its own copy. A repeated webhook adds no copy.
       sourceId: mailboxes.length === 1 ? email.id : `${email.id}:${mailbox}`,
     });
+    // A repeated webhook stores nothing, so it sends no second notification.
+    // A failed notification must not make Resend send the webhook again.
+    if (id && folder === "inbox") {
+      await notifyHostedMessage(mailbox, id).catch((error) => console.error("Push failed", error));
+    }
   }
   return new Response(null, { status: 204 });
 }

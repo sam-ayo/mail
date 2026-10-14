@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
+import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
@@ -80,6 +81,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </section>
 
         <Appearance />
+
+        <Notifications />
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -291,6 +294,136 @@ function Appearance() {
           </label>
         ))}
       </fieldset>
+    </section>
+  );
+}
+
+type PushState = "loading" | "unsupported" | "install" | "denied" | "off" | "on";
+
+async function serviceWorker() {
+  return (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register("/sw.js"));
+}
+
+function readPushState(): Promise<PushState> | PushState {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    // Safari on iPhone and iPad has push only for apps on the Home Screen.
+    const ios = /iPhone|iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return ios ? "install" : "unsupported";
+  }
+  if (Notification.permission === "denied") return "denied";
+  return navigator.serviceWorker
+    .getRegistration()
+    .then((registration) => registration?.pushManager.getSubscription())
+    .then((subscription) => (subscription && Notification.permission === "granted" ? "on" : "off"));
+}
+
+/** The push key is in base64url. Safari needs it as bytes. */
+function keyBytes(key: string) {
+  const base64 = (key + "=".repeat((4 - (key.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+}
+
+function Notifications() {
+  const [state, setState] = useState<PushState>("loading");
+  const [busy, setBusy] = useState(false);
+  // Safari allows the subscription only while it handles the click. Thus the
+  // service worker and the key are ready before the click.
+  const ready = useRef<Promise<{ registration: ServiceWorkerRegistration; publicKey: string | null }>>(undefined);
+
+  useEffect(() => {
+    Promise.resolve(readPushState()).then(
+      (value) => {
+        setState(value);
+        if (value !== "off" && value !== "on") return;
+        ready.current = Promise.all([
+          serviceWorker().then(() => navigator.serviceWorker.ready),
+          fetch("/api/push").then((response) => response.json() as Promise<{ publicKey: string | null }>),
+        ]).then(([registration, { publicKey }]) => ({ registration, publicKey }));
+        // A failure shows when the person clicks.
+        ready.current.catch(() => {});
+      },
+      () => setState("unsupported"),
+    );
+  }, []);
+
+  async function turnOn() {
+    setBusy(true);
+    try {
+      const { registration, publicKey } = await ready.current!;
+      if (!publicKey) throw new Error("The server cannot send notifications yet");
+      // The subscription asks for permission if necessary.
+      const subscription = await registration.pushManager
+        .subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) })
+        .catch((error) => {
+          if (Notification.permission !== "granted") return null;
+          throw error;
+        });
+      if (!subscription) {
+        setState(Notification.permission === "denied" ? "denied" : "off");
+        return;
+      }
+      const response = await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      if (!response.ok) throw new Error("The server did not save the subscription");
+      setState("on");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Notifications did not turn on");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function turnOff() {
+    setBusy(true);
+    try {
+      const subscription = await (await serviceWorker()).pushManager.getSubscription();
+      if (subscription) {
+        await fetch("/api/push", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      setState("off");
+    } catch {
+      toast.error("Notifications did not turn off");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const description: Record<PushState, string> = {
+    loading: "Get a notification on this device when new mail comes to your inbox.",
+    off: "Get a notification on this device when new mail comes to your inbox.",
+    on: "This device gets a notification when new mail comes to your inbox.",
+    denied: "This browser blocks notifications from mail. Allow them in the browser or system settings.",
+    install: "On iPhone and iPad, add mail to your Home Screen first. Tap Share, then Add to Home Screen.",
+    unsupported: "This browser cannot show notifications.",
+  };
+
+  return (
+    <section className="mt-10">
+      <div className="flex items-center justify-between gap-4">
+        <div>
+          <h2 className="font-semibold">Notifications</h2>
+          <p className="text-sm text-zinc-500">{description[state]}</p>
+        </div>
+        {state === "on" ? (
+          <Button className="shrink-0" disabled={busy} onClick={turnOff}>
+            <BellSlash className="size-4" /> Turn off
+          </Button>
+        ) : (
+          (state === "off" || state === "loading") && (
+            <Button className="shrink-0" variant="primary" disabled={busy || state === "loading"} onClick={turnOn}>
+              <Bell className="size-4" /> Turn on
+            </Button>
+          )
+        )}
+      </div>
     </section>
   );
 }
