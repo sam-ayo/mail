@@ -47,8 +47,12 @@ export default function Privacy() {
         each entry after 60 days. When you remove an account, mail deletes its cache at once.
       </p>
       <p>
-        mail does not keep a copy of the full messages or of the attachments. It gets them from Google or Microsoft
-        each time and sends them directly to your browser over HTTPS.
+        For Gmail and Outlook accounts, mail does not keep a copy of the full messages or of the attachments. It
+        gets them from Google or Microsoft each time and sends them directly to your browser over HTTPS.
+      </p>
+      <p>
+        For an address that mail hosts, mail is the mail server. It keeps the full messages and their attachments
+        in its database until you delete them. Resend receives and sends this mail for mail.
       </p>
       <p>mail uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
 

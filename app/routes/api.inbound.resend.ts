@@ -15,37 +15,42 @@ export async function action({ request }: Route.ActionArgs) {
   if (event.type !== "email.received" || !event.data?.email_id) return new Response(null, { status: 204 });
 
   const email = await getReceivedEmail(event.data.email_id);
-  const mailbox = mailboxFor(email);
-  if (!mailbox) return new Response(null, { status: 204 });
+  const mailboxes = mailboxesFor(email);
+  if (mailboxes.length === 0) return new Response(null, { status: 204 });
 
-  await resolvePendingMessageIds(mailbox);
-  await storeMessage({
-    mailbox,
-    raw: await downloadRaw(email),
-    folder: failsAuthentication(email) ? "spam" : "inbox",
-    outgoing: false,
-    unread: true,
-    sourceId: email.id,
-  });
+  const raw = await downloadRaw(email);
+  for (const mailbox of mailboxes) {
+    await resolvePendingMessageIds(mailbox);
+    await storeMessage({
+      mailbox,
+      raw,
+      folder: failsAuthentication(email) ? "spam" : "inbox",
+      outgoing: false,
+      unread: true,
+      // Each mailbox gets its own copy. A repeated webhook adds no copy.
+      sourceId: mailboxes.length === 1 ? email.id : `${email.id}:${mailbox}`,
+    });
+  }
   return new Response(null, { status: 204 });
 }
 
 /**
- * The hosted address that gets the message. Mail for an unknown address at a
- * hosted domain goes to the first hosted address.
+ * The hosted addresses that get the message. Mail for an unknown address at a
+ * hosted domain goes to the first hosted address at that domain.
  */
-function mailboxFor(email: ReceivedEmail) {
+function mailboxesFor(email: ReceivedEmail) {
   const recipients = [email.received_for, email.to, email.cc, email.bcc]
     .flat()
     .filter((value): value is string => typeof value === "string")
     .flatMap((value) => parseAddresses(value))
     .map((address) => address.email.toLowerCase());
   const { mailboxes } = env.hosted;
-  const exact = mailboxes.find((mailbox) => recipients.includes(mailbox));
-  if (exact) return exact;
+  const exact = mailboxes.filter((mailbox) => recipients.includes(mailbox));
+  if (exact.length) return exact;
   const domain = (address: string) => address.slice(address.lastIndexOf("@") + 1);
   const domains = new Set(recipients.map(domain));
-  return mailboxes.find((mailbox) => domains.has(domain(mailbox)));
+  const fallback = mailboxes.find((mailbox) => domains.has(domain(mailbox)));
+  return fallback ? [fallback] : [];
 }
 
 /** A message that fails DMARC claims a sender that did not send it. */

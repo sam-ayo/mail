@@ -112,13 +112,15 @@ export async function storeMessage(input: {
 
 /**
  * Sets the Message-ID of sent messages that did not have one when they were
- * stored. Thus a reply to such a message finds its thread.
+ * stored. Thus a reply to such a message finds its thread. Resend keeps
+ * messages for 30 days, so older rows cannot get an ID.
  */
 export async function resolvePendingMessageIds(mailbox: string) {
   const pending = await query<{ id: string; source_id: string }>(
     `SELECT id, source_id FROM hosted_messages
      WHERE mailbox = $1 AND outgoing AND message_id IS NULL AND source_id LIKE 'sent:%'
-     ORDER BY date DESC LIMIT 20`,
+       AND created_at > now() - interval '30 days'
+     ORDER BY date DESC`,
     [mailbox.toLowerCase()],
   );
   for (const row of pending) {
