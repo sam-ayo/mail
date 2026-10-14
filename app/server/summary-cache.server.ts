@@ -8,6 +8,8 @@ import { query } from "./db.server";
 
 export type SummaryPeople = "from" | "to";
 
+// The privacy policy promises this limit. Reads ignore older rows, and a daily
+// cron job deletes them.
 const MAX_AGE_DAYS = 60;
 
 export async function loadSummaries(
@@ -20,8 +22,9 @@ export async function loadSummaries(
   try {
     const rows = await query<{ thread_id: string; history_id: string; summary: string }>(
       `SELECT thread_id, history_id, summary FROM thread_summaries
-       WHERE account_id = $1 AND people = $2 AND thread_id = ANY($3)`,
-      [accountId, people, threads.map((t) => t.id)],
+       WHERE account_id = $1 AND people = $2 AND thread_id = ANY($3)
+         AND updated_at >= now() - make_interval(days => $4)`,
+      [accountId, people, threads.map((t) => t.id), MAX_AGE_DAYS],
     );
     const historyIds = new Map(threads.map((t) => [t.id, t.historyId]));
     for (const row of rows) {
@@ -55,13 +58,19 @@ export async function saveSummaries(
         entries.map((e) => encrypt(JSON.stringify(e.summary))),
       ],
     );
-    // Remove old rows now and then. A removed row costs one provider call later.
-    if (Math.random() < 0.02) {
-      await query(`DELETE FROM thread_summaries WHERE updated_at < now() - make_interval(days => $1)`, [
-        MAX_AGE_DAYS,
-      ]);
-    }
   } catch (error) {
     console.error("Thread summary cache write failed", error);
   }
+}
+
+/** Deletes the summaries that are older than the maximum age. A daily cron job calls it. */
+export async function deleteExpiredSummaries() {
+  const rows = await query<{ count: number }>(
+    `WITH deleted AS (
+       DELETE FROM thread_summaries WHERE updated_at < now() - make_interval(days => $1) RETURNING 1
+     )
+     SELECT COUNT(*)::int AS count FROM deleted`,
+    [MAX_AGE_DAYS],
+  );
+  return rows[0]?.count ?? 0;
 }
