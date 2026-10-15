@@ -8,7 +8,7 @@ export default function Terms() {
   return (
     <LegalPage title="Terms of service">
       <p>
-        These terms apply when you use mail (also called Relay Mail) at mail.samayo.me. When you use mail, you agree
+        These terms apply when you use mail at mail.samayo.me. When you use mail, you agree
         to these terms.
       </p>
 

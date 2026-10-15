@@ -6,6 +6,7 @@ import {
   ArrowDown01Icon,
   ArrowExpand01Icon,
   ArrowLeft02Icon,
+  ArrowLeft01Icon,
   ArrowRight01Icon,
   ArrowShrink02Icon,
   ArrowUp01Icon,
@@ -35,6 +36,7 @@ import {
   Menu01Icon,
   Moon02Icon,
   MoreHorizontalIcon,
+  Notification01Icon,
   NotificationOff01Icon,
   PencilEdit01Icon,
   PencilEdit02Icon,
@@ -80,8 +82,10 @@ export const ArrowSquareOut = icon(LinkSquare02Icon);
 export const ArrowsInLineVertical = icon(UnfoldLessIcon);
 export const ArrowsInSimple = icon(ArrowShrink02Icon);
 export const ArrowsOutSimple = icon(ArrowExpand01Icon);
+export const Bell = icon(Notification01Icon);
 export const BellSlash = icon(NotificationOff01Icon);
 export const CaretDown = icon(ArrowDown01Icon);
+export const CaretLeft = icon(ArrowLeft01Icon);
 export const CaretRight = icon(ArrowRight01Icon);
 export const CaretUp = icon(ArrowUp01Icon);
 export const CheckSquare = icon(CheckmarkSquare02Icon);

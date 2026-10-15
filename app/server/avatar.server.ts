@@ -18,7 +18,7 @@ const TIMEOUT_MS = 3000;
 const MAX_REDIRECTS = 4;
 // An avatar shows at 40 pixels at most. A 2x screen needs about 80 pixels, so a smaller logo is blurry.
 const SHARP_WIDTH = 64;
-const USER_AGENT = "Mozilla/5.0 (compatible; RelayMail/1.0; +https://mail.samayo.me)";
+const USER_AGENT = "Mozilla/5.0 (compatible; mail/1.0; +https://mail.samayo.me)";
 
 // The logo of these domains is the logo of the mail service, not of the person.
 const PERSONAL_DOMAINS = new Set([

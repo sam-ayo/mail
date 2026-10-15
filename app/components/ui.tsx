@@ -109,7 +109,7 @@ export const PROVIDER_NAMES: Record<ProviderKind, string> = {
   google: "Gmail",
   microsoft: "Outlook",
   imap: "IMAP",
-  hosted: "Relay",
+  hosted: "Hosted",
   demo: "Demo",
 };
 

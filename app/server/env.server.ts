@@ -28,7 +28,7 @@ export const env = {
     tenant: process.env.MICROSOFT_TENANT || "common",
   },
   hosted: {
-    /** The addresses that Relay hosts. The first one also gets mail for unknown addresses at its domain. */
+    /** The addresses that mail hosts. The first one also gets mail for unknown addresses at its domain. */
     mailboxes: (process.env.HOSTED_MAILBOXES || "")
       .split(",")
       .map((address) => address.trim().toLowerCase())
@@ -37,6 +37,13 @@ export const env = {
     password: process.env.HOSTED_MAIL_PASSWORD || "",
     resendApiKey: process.env.RESEND_API_KEY || "",
     resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || "",
+  },
+  /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
+  push: {
+    publicKey: process.env.VAPID_PUBLIC_KEY || "",
+    privateKey: process.env.VAPID_PRIVATE_KEY || "",
+    /** Push services use this contact if the app sends too much. */
+    subject: process.env.VAPID_SUBJECT || "mailto:mail@samayo.me",
   },
 };
 

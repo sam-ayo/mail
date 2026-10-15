@@ -13,6 +13,7 @@ import {
   LinkSimple,
   List,
   MagnifyingGlass,
+  NotePencil,
   Paperclip,
   ShieldWarning,
   Star,
@@ -21,7 +22,7 @@ import {
   Warning,
   X,
 } from "~/components/icons";
-import { forwardRef, useEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
 import {
@@ -45,6 +46,7 @@ import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
 import type { MenuEntry } from "~/components/menu";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { setListCollapsed } from "~/components/list-panel";
+import { SINGLE_PANE, useMediaQuery, usePaneSwipeBack, usePullToRefresh, useRowSwipe } from "~/components/touch";
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
 import { AccountIcon, Avatar, Hint, IconButton, cx } from "~/components/ui";
@@ -235,7 +237,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
     };
   }, [shownKey, loaderData, loadedAt]);
 
-  const { accounts, account, patches, runAction } = useMail();
+  const { accounts, account, patches, runAction, openCompose } = useMail();
   const navigate = useNavigate();
   const location = useLocation();
   const navigation = useNavigation();
@@ -245,6 +247,8 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const searchRef = useRef<HTMLInputElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const listRef = useRef<HTMLElement>(null);
+  const pullIndicator = useRef<HTMLDivElement>(null);
+  const [scroller, setScroller] = useState<HTMLElement | null>(null);
 
   // Extra pages from infinite scroll. A new first page resets them.
   const [extra, setExtra] = useState<ThreadSummary[]>([]);
@@ -329,6 +333,21 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
     `${hrefFor(thread)}${search ? "&" : "?"}${PREFETCH_PARAM}`;
   const openThread = (thread: ThreadSummary | undefined) => thread && navigate(hrefFor(thread));
   const closeThread = () => navigate(`${base}${search}`);
+
+  // Below lg, the conversation is a pane over the list, as a pushed screen in
+  // iOS. It slides in, and a swipe from the left edge or the back button
+  // slides it out. The list stays under it, so it keeps its scroll position.
+  const singlePane = useMediaQuery(SINGLE_PANE);
+  const paneOpen = Boolean(openKey || loadingThread);
+  const swipeBack = usePaneSwipeBack({ enabled: singlePane && paneOpen, onBack: closeThread });
+  const resetPane = swipeBack.reset;
+  const [pushing, setPushing] = useState(false);
+  const wasOpen = useRef(paneOpen);
+  useLayoutEffect(() => {
+    if (paneOpen && !wasOpen.current && singlePane) setPushing(true);
+    if (!paneOpen) resetPane();
+    wasOpen.current = paneOpen;
+  }, [paneOpen, singlePane, resetPane]);
 
   // The thread route caches what these fetchers load, so the open shows at once.
   const hoverFetcher = useFetcher();
@@ -555,7 +574,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
     threads,
     actOnOpenThread: (action) => act(action, targetThreads().slice(0, 1)),
     openRelative: (offset) => move(offset),
-    closeThread,
+    closeThread: singlePane ? swipeBack.back : closeThread,
   };
 
   const scopeAccount = scope === "all" ? undefined : account(scope);
@@ -564,6 +583,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
     navigation.state === "loading" &&
     navigation.location.pathname.split("/").slice(0, 4).join("/") !== base;
   const refreshing = revalidator.state === "loading";
+  usePullToRefresh({ scroller, indicator: pullIndicator, refreshing, onRefresh: () => revalidator.revalidate() });
 
   return (
     // The list slides out past the left edge of this pane, which clips it.
@@ -575,8 +595,10 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
           "relative flex min-w-0 flex-col border-r border-zinc-200 dark:border-zinc-800",
           // The resize handle sets --list-width. Without it, the default width applies.
           "w-full lg:w-[var(--list-width,420px)] lg:shrink-0 xl:w-[var(--list-width,460px)]",
-          (openKey || loadingThread) && "hidden lg:flex lg:in-[.list-collapsed]:hidden",
+          paneOpen && "lg:in-[.list-collapsed]:hidden",
         )}
+        // The conversation covers the list on a narrow screen.
+        inert={singlePane && paneOpen}
       >
         <ListResizeHandle list={listRef} collapsible={Boolean(openKey)} />
         {/* With the sidebar collapsed, the header moves away from the sidebar
@@ -591,7 +613,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
               <List className="size-4" />
             </IconButton>
             <div className="min-w-0 flex-1">
-              <h1 className="truncate text-lg font-semibold tracking-tight">
+              <h1 className="truncate text-lg font-semibold tracking-tight max-md:text-2xl max-md:font-bold">
                 {loaderData.query ? "Search results" : FOLDER_LABELS[folder]}
               </h1>
               {scopeAccount && (
@@ -609,8 +631,10 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
                 }
               />
             ) : (
+              // A touch screen has pull-to-refresh instead.
               <IconButton
                 label="Check for new mail"
+                className="pointer-coarse:hidden"
                 onClick={() => revalidator.revalidate()}
                 disabled={refreshing}
               >
@@ -660,51 +684,85 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
           );
         })}
 
-        {threads.length === 0 ? (
-          <ul className="flex-1 overflow-y-auto">
-            <EmptyList folder={folder} query={loaderData.query} />
-          </ul>
-        ) : (
-          <Virtuoso
-            ref={virtuosoRef}
-            data={threads}
-            // The server renders the first rows, so the list shows before hydration.
-            initialItemCount={Math.min(threads.length, 30)}
-            computeItemKey={(_, thread) => threadKey(thread.accountId, thread.id)}
-            endReached={loadMore}
-            increaseViewportBy={400}
-            className={cx("flex-1 overscroll-contain transition-opacity", loading && "opacity-50")}
-            components={{ List: ThreadListElement, Item: ThreadListItem, Footer: cursor ? ListFooter : undefined }}
-            context={{ loading: moreFetcher.state !== "idle", loadMore }}
-            itemContent={(index, thread) => {
-              const key = threadKey(thread.accountId, thread.id);
-              return (
-                <ThreadRow
-                  index={index}
-                  thread={thread}
-                  href={hrefFor(thread)}
-                  active={key === selectedKey}
-                  focused={openIndex < 0 && index === focusIndex}
-                  selected={selected.has(key)}
-                  folder={folder}
-                  accounts={
-                    showAccount
-                      ? threadRefs(thread).flatMap((ref) => account(ref.accountId) ?? [])
-                      : []
-                  }
-                  onToggleSelected={() => toggleSelected(thread)}
-                  onAction={(action) => act(action, [thread])}
-                  menu={() => menuFor(thread)}
-                  onPrefetch={(start) => prefetch(start ? thread : null)}
-                />
-              );
-            }}
-          />
-        )}
+        <div className="relative flex min-h-0 flex-1 flex-col">
+          <div
+            ref={pullIndicator}
+            aria-hidden
+            className="pointer-events-none absolute inset-x-0 top-3 flex justify-center opacity-0"
+          >
+            <ArrowClockwise className="size-5 rotate-(--pull-turn) text-zinc-400 in-[[data-refreshing]]:animate-spin" />
+          </div>
+          {threads.length === 0 ? (
+            <ul ref={setScroller} className="flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-zinc-950">
+              <EmptyList folder={folder} query={loaderData.query} />
+            </ul>
+          ) : (
+            <Virtuoso
+              ref={virtuosoRef}
+              scrollerRef={(element) => setScroller(element instanceof HTMLElement ? element : null)}
+              data={threads}
+              // The server renders the first rows, so the list shows before hydration.
+              initialItemCount={Math.min(threads.length, 30)}
+              computeItemKey={(_, thread) => threadKey(thread.accountId, thread.id)}
+              endReached={loadMore}
+              increaseViewportBy={400}
+              className={cx("flex-1 overscroll-contain bg-white transition-opacity dark:bg-zinc-950", loading && "opacity-50")}
+              components={{ List: ThreadListElement, Item: ThreadListItem, Footer: cursor ? ListFooter : undefined }}
+              context={{ loading: moreFetcher.state !== "idle", loadMore }}
+              itemContent={(index, thread) => {
+                const key = threadKey(thread.accountId, thread.id);
+                return (
+                  <ThreadRow
+                    index={index}
+                    thread={thread}
+                    href={hrefFor(thread)}
+                    active={key === selectedKey}
+                    focused={openIndex < 0 && index === focusIndex}
+                    selected={selected.has(key)}
+                    folder={folder}
+                    accounts={
+                      showAccount
+                        ? threadRefs(thread).flatMap((ref) => account(ref.accountId) ?? [])
+                        : []
+                    }
+                    onToggleSelected={() => toggleSelected(thread)}
+                    onAction={(action) => act(action, [thread])}
+                    menu={() => menuFor(thread)}
+                    onPrefetch={(start) => prefetch(start ? thread : null)}
+                  />
+                );
+              }}
+            />
+          )}
+        </div>
+
+        {/* A toolbar at the bottom of the screen on a phone, as in iOS Mail. */}
+        <footer className="flex items-center border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
+          <span className="size-11" />
+          <UpdatedAt loadedAt={loadedAt} refreshing={refreshing} />
+          <IconButton
+            label="New message"
+            className="size-11 text-accent-600 dark:text-accent-400"
+            onClick={() => openCompose()}
+          >
+            <NotePencil className="size-6" />
+          </IconButton>
+        </footer>
       </section>
 
       {(openKey || loadingThread) && <ListExpandHandle />}
-      <div data-list-thread className={cx("min-w-0 flex-1", openKey || loadingThread ? "flex" : "hidden lg:flex")}>
+      <div
+        ref={swipeBack.pane}
+        data-list-thread
+        onAnimationEnd={() => setPushing(false)}
+        className={cx(
+          "min-w-0 flex-1",
+          paneOpen
+            ? "flex max-lg:absolute max-lg:inset-0 max-lg:z-10 max-lg:shadow-[-1px_0_16px_rgb(0_0_0/0.12)]"
+            : "hidden lg:flex",
+          pushing && "max-lg:motion-safe:animate-[pane-push_320ms_var(--ease-drawer)]",
+        )}
+      >
         {loadingThread ? <ThreadPlaceholder thread={loadingThread} /> : <Outlet context={context} />}
       </div>
     </div>
@@ -853,6 +911,33 @@ function ListFooter({ context }: { context?: ListContext }) {
   );
 }
 
+/** The status in the bottom toolbar on a phone, as "Updated Just Now" in iOS Mail. */
+function UpdatedAt({ loadedAt, refreshing }: { loadedAt: number; refreshing: boolean }) {
+  // The server does not know the time on the device, so the text shows after hydration.
+  const [now, setNow] = useState<number | null>(null);
+  useEffect(() => {
+    setNow(Date.now());
+    const timer = setInterval(() => setNow(Date.now()), 30_000);
+    return () => clearInterval(timer);
+  }, [loadedAt]);
+  let text = "";
+  if (refreshing) text = "Checking for mail…";
+  else if (now !== null) {
+    const minutes = Math.floor((now - loadedAt) / 60_000);
+    text =
+      minutes < 1
+        ? "Updated just now"
+        : minutes < 60
+          ? `Updated ${minutes} min ago`
+          : `Updated at ${new Date(loadedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
+  }
+  return (
+    <p aria-live="polite" className="min-w-0 flex-1 truncate text-center text-xs text-zinc-500">
+      {text}
+    </p>
+  );
+}
+
 function isRemoval(action: ThreadAction, folder: Folder) {
   return (
     (["archive", "trash", "spam", "inbox"] as ThreadAction[]).includes(action) &&
@@ -913,147 +998,183 @@ function ThreadRow({
   menu(): MenuEntry[];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
+  const rowRef = useRef<HTMLDivElement>(null);
+  const contentRef = useRef<HTMLDivElement>(null);
+  // A swipe to the left archives, or moves back to the inbox. A swipe to the
+  // right marks the conversation as read or unread.
+  const restore = folder === "archive" || folder === "trash" || folder === "spam";
+  const leftAction: ThreadAction = restore ? "inbox" : "archive";
+  const stopSwipeClick = useRowSwipe({
+    row: rowRef,
+    content: contentRef,
+    left: { removes: isRemoval(leftAction, folder), run: () => onAction(leftAction) },
+    right: { removes: false, run: () => onAction(thread.unread ? "read" : "unread") },
+  });
   const people = thread.participants.slice(0, 3).map(displayName).join(", ") || "(no sender)";
   const prefix = folder === "sent" || folder === "drafts" ? "To: " : "";
   return (
     <ContextMenu items={menu} onOpenChange={setMenuOpen}>
-      <div data-index={index} data-thread-key={threadKey(thread.accountId, thread.id)} className="group relative">
-        <Link
-          to={href}
-          prefetch="intent"
-          onMouseEnter={() => onPrefetch(true)}
-          onMouseLeave={() => onPrefetch(false)}
-          // A touch screen has no hover. Load when the finger touches the row.
-          // A scroll cancels the touch, and the load does not start.
-          onPointerDown={(event) => event.pointerType !== "mouse" && onPrefetch(true)}
-          onPointerCancel={() => onPrefetch(false)}
-          onFocus={() => onPrefetch(true)}
-          className={cx(
-            "tappable flex gap-3 border-b border-zinc-100 py-3 pr-4 pl-15 outline-none transition-colors dark:border-zinc-800/70",
-            active
-              ? "bg-accent-50 dark:bg-accent-500/10"
-              : selected
-                ? "bg-accent-50/60 dark:bg-accent-500/5"
-                : menuOpen
-                  ? "bg-zinc-100 dark:bg-zinc-800/70"
-                  : "hover:bg-zinc-50 dark:hover:bg-zinc-900",
-            focused && "ring-2 ring-accent-500/60 ring-inset",
-            "focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset",
-          )}
+      <div
+        ref={rowRef}
+        data-index={index}
+        data-thread-key={threadKey(thread.accountId, thread.id)}
+        className="group relative touch-pan-y"
+      >
+        {/* The colors under the row show while it moves. */}
+        <div
+          aria-hidden
+          className="absolute inset-0 hidden items-center justify-start gap-2 bg-sky-500 pl-6 text-sm font-medium text-white group-data-[swipe=right]:flex"
         >
-          <div className="min-w-0 flex-1">
-            <div className="flex items-center gap-2">
-              {thread.unread && (
-                <span
-                  className={cx("size-2 shrink-0 rounded-full", accounts.length === 0 && "bg-accent-500")}
-                  style={accounts.length > 0 ? { background: accounts[0].color } : undefined}
-                  aria-label="Unread"
-                />
-              )}
-              <span
-                dir="auto"
-                className={cx(
-                  "min-w-0 truncate text-sm",
-                  thread.unread ? "font-semibold text-zinc-900 dark:text-white" : "text-zinc-700 dark:text-zinc-300",
-                )}
-              >
-                {prefix}
-                {people}
-              </span>
-              {thread.messageCount > 1 && (
-                <span className="shrink-0 text-xs text-zinc-400 tabular-nums">{formatCount(thread.messageCount)}</span>
-              )}
-              <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-zinc-400 group-hover:invisible">
-                {accounts.length > 1 && (
-                  <span
-                    className="flex -space-x-0.5"
-                    role="img"
-                    aria-label={`In ${accounts.length} accounts`}
-                    title={accounts.map((a) => a.email).join("\n")}
-                  >
-                    {accounts.map((a) => (
-                      <span
-                        key={a.id}
-                        className="size-2 rounded-full ring-1 ring-white dark:ring-zinc-950"
-                        style={{ background: a.color }}
-                      />
-                    ))}
-                  </span>
-                )}
-                {thread.hasAttachments && <Paperclip className="size-3" />}
-                {thread.starred && <Star weight="fill" className="size-3 text-amber-400" />}
-                <LocalDate iso={thread.date} format={formatListDate} />
-              </span>
-            </div>
-            <p
-              className={cx(
-                "mt-0.5 truncate text-sm",
-                thread.unread ? "font-medium text-zinc-900 dark:text-zinc-100" : "text-zinc-600 dark:text-zinc-400",
-              )}
-            >
-              <bdi>{thread.subject}</bdi>
-            </p>
-            {/* Keep the line when there is no preview, so every row has the same height. */}
-            <div className="mt-0.5 flex items-center gap-3">
-              <p dir="auto" className="min-w-0 flex-1 truncate text-xs text-zinc-500">
-                {thread.snippet.replace(/\s+/g, " ") || "\u00a0"}
-              </p>
-              {accounts.length > 0 && <AccountLabel accounts={accounts} />}
-            </div>
-          </div>
-        </Link>
-
-        <button
-          type="button"
-          aria-label={selected ? "Deselect conversation" : "Select conversation"}
-          aria-pressed={selected}
-          onClick={onToggleSelected}
-          className="absolute top-3.5 left-4"
+          {thread.unread ? <EnvelopeSimpleOpen className="size-5" /> : <EnvelopeSimple className="size-5" />}
+          {thread.unread ? "Read" : "Unread"}
+        </div>
+        <div
+          aria-hidden
+          className="absolute inset-0 hidden items-center justify-end gap-2 bg-violet-500 pr-6 text-sm font-medium text-white group-data-[swipe=left]:flex"
         >
-          <span className={cx("block", selected && "invisible", "group-hover:invisible")}>
-            <Avatar name={thread.participants[0]?.name} email={thread.participants[0]?.email ?? "?"} />
-          </span>
-          <span
+          {restore ? "Inbox" : "Archive"}
+          {restore ? <Tray className="size-5" /> : <Archive className="size-5" />}
+        </div>
+        <div ref={contentRef} className="relative bg-white dark:bg-zinc-950">
+          <Link
+            to={href}
+            prefetch="intent"
+            onMouseEnter={() => onPrefetch(true)}
+            onMouseLeave={() => onPrefetch(false)}
+            // A touch screen has no hover. Load when the finger touches the row.
+            // A scroll cancels the touch, and the load does not start.
+            onPointerDown={(event) => event.pointerType !== "mouse" && onPrefetch(true)}
+            onPointerCancel={() => onPrefetch(false)}
+            onFocus={() => onPrefetch(true)}
+            onClickCapture={stopSwipeClick}
             className={cx(
-              "absolute inset-0 place-items-center rounded-full",
-              selected
-                ? "grid bg-accent-600 text-white"
-                : "hidden bg-zinc-200 text-zinc-600 group-hover:grid dark:bg-zinc-700 dark:text-zinc-200",
+              "tappable flex gap-3 border-b border-zinc-100 py-3 pr-4 pl-15 outline-none transition-colors dark:border-zinc-800/70",
+              active
+                ? "bg-accent-50 dark:bg-accent-500/10"
+                : selected
+                  ? "bg-accent-50/60 dark:bg-accent-500/5"
+                  : menuOpen
+                    ? "bg-zinc-100 dark:bg-zinc-800/70"
+                    : "hover:bg-zinc-50 active:bg-zinc-100 dark:hover:bg-zinc-900 dark:active:bg-zinc-900",
+              // The keyboard cursor. A touch screen has no keyboard cursor.
+              focused && "pointer-fine:ring-2 pointer-fine:ring-accent-500/60 pointer-fine:ring-inset",
+              "focus-visible:ring-2 focus-visible:ring-accent-500 focus-visible:ring-inset",
             )}
           >
-            <CheckSquare className="size-4" />
-          </span>
-        </button>
+            <div className="min-w-0 flex-1">
+              <div className="flex items-center gap-2">
+                {thread.unread && (
+                  <span
+                    className={cx("size-2 shrink-0 rounded-full", accounts.length === 0 && "bg-accent-500")}
+                    style={accounts.length > 0 ? { background: accounts[0].color } : undefined}
+                    aria-label="Unread"
+                  />
+                )}
+                <span
+                  dir="auto"
+                  className={cx(
+                    "min-w-0 truncate text-sm",
+                    thread.unread ? "font-semibold text-zinc-900 dark:text-white" : "text-zinc-700 dark:text-zinc-300",
+                  )}
+                >
+                  {prefix}
+                  {people}
+                </span>
+                {thread.messageCount > 1 && (
+                  <span className="shrink-0 text-xs text-zinc-400 tabular-nums">{formatCount(thread.messageCount)}</span>
+                )}
+                <span className="ml-auto flex shrink-0 items-center gap-1.5 text-xs text-zinc-400 group-hover:invisible">
+                  {accounts.length > 1 && (
+                    <span
+                      className="flex -space-x-0.5"
+                      role="img"
+                      aria-label={`In ${accounts.length} accounts`}
+                      title={accounts.map((a) => a.email).join("\n")}
+                    >
+                      {accounts.map((a) => (
+                        <span
+                          key={a.id}
+                          className="size-2 rounded-full ring-1 ring-white dark:ring-zinc-950"
+                          style={{ background: a.color }}
+                        />
+                      ))}
+                    </span>
+                  )}
+                  {thread.hasAttachments && <Paperclip className="size-3" />}
+                  {thread.starred && <Star weight="fill" className="size-3 text-amber-400" />}
+                  <LocalDate iso={thread.date} format={formatListDate} />
+                </span>
+              </div>
+              <p
+                className={cx(
+                  "mt-0.5 truncate text-sm",
+                  thread.unread ? "font-medium text-zinc-900 dark:text-zinc-100" : "text-zinc-600 dark:text-zinc-400",
+                )}
+              >
+                <bdi>{thread.subject}</bdi>
+              </p>
+              {/* Keep the line when there is no preview, so every row has the same height. */}
+              <div className="mt-0.5 flex items-center gap-3">
+                <p dir="auto" className="min-w-0 flex-1 truncate text-xs text-zinc-500">
+                  {thread.snippet.replace(/\s+/g, " ") || "\u00a0"}
+                </p>
+                {accounts.length > 0 && <AccountLabel accounts={accounts} />}
+              </div>
+            </div>
+          </Link>
 
-        <div className="absolute top-2 right-3 hidden items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm group-hover:flex dark:border-zinc-700 dark:bg-zinc-900">
-          {folder === "archive" || folder === "trash" || folder === "spam" ? (
-            <RowAction label="Move to Inbox" onClick={() => onAction("inbox")}>
-              <Tray className="size-3.5" />
-            </RowAction>
-          ) : (
-            <RowAction label="Archive" shortcut="E" onClick={() => onAction("archive")}>
-              <Archive className="size-3.5" />
-            </RowAction>
-          )}
-          {folder !== "trash" && (
-            <RowAction label="Move to Trash" shortcut="#" onClick={() => onAction("trash")}>
-              <Trash className="size-3.5" />
-            </RowAction>
-          )}
-          <RowAction
-            label={thread.unread ? "Mark as read" : "Mark as unread"}
-            shortcut="U"
-            onClick={() => onAction(thread.unread ? "read" : "unread")}
+          <button
+            type="button"
+            aria-label={selected ? "Deselect conversation" : "Select conversation"}
+            aria-pressed={selected}
+            onClick={onToggleSelected}
+            className="absolute top-3.5 left-4"
           >
-            {thread.unread ? <EnvelopeSimpleOpen className="size-3.5" /> : <EnvelopeSimple className="size-3.5" />}
-          </RowAction>
-          <RowAction
-            label={thread.starred ? "Remove star" : "Star"}
-            shortcut="S"
-            onClick={() => onAction(thread.starred ? "unstar" : "star")}
-          >
-            <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-3.5", thread.starred && "text-amber-400")} />
-          </RowAction>
+            <span className={cx("block", selected && "invisible", "group-hover:invisible")}>
+              <Avatar name={thread.participants[0]?.name} email={thread.participants[0]?.email ?? "?"} />
+            </span>
+            <span
+              className={cx(
+                "absolute inset-0 place-items-center rounded-full",
+                selected
+                  ? "grid bg-accent-600 text-white"
+                  : "hidden bg-zinc-200 text-zinc-600 group-hover:grid dark:bg-zinc-700 dark:text-zinc-200",
+              )}
+            >
+              <CheckSquare className="size-4" />
+            </span>
+          </button>
+
+          <div className="absolute top-2 right-3 hidden items-center gap-0.5 rounded-lg border border-zinc-200 bg-white p-0.5 shadow-sm group-hover:flex dark:border-zinc-700 dark:bg-zinc-900">
+            {folder === "archive" || folder === "trash" || folder === "spam" ? (
+              <RowAction label="Move to Inbox" onClick={() => onAction("inbox")}>
+                <Tray className="size-3.5" />
+              </RowAction>
+            ) : (
+              <RowAction label="Archive" shortcut="E" onClick={() => onAction("archive")}>
+                <Archive className="size-3.5" />
+              </RowAction>
+            )}
+            {folder !== "trash" && (
+              <RowAction label="Move to Trash" shortcut="#" onClick={() => onAction("trash")}>
+                <Trash className="size-3.5" />
+              </RowAction>
+            )}
+            <RowAction
+              label={thread.unread ? "Mark as read" : "Mark as unread"}
+              shortcut="U"
+              onClick={() => onAction(thread.unread ? "read" : "unread")}
+            >
+              {thread.unread ? <EnvelopeSimpleOpen className="size-3.5" /> : <EnvelopeSimple className="size-3.5" />}
+            </RowAction>
+            <RowAction
+              label={thread.starred ? "Remove star" : "Star"}
+              shortcut="S"
+              onClick={() => onAction(thread.starred ? "unstar" : "star")}
+            >
+              <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-3.5", thread.starred && "text-amber-400")} />
+            </RowAction>
+          </div>
         </div>
       </div>
     </ContextMenu>

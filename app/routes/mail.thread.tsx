@@ -6,6 +6,7 @@ import {
   ArrowsInLineVertical,
   BellSlash,
   CaretDown,
+  CaretLeft,
   CaretUp,
   Copy,
   DotsThree,
@@ -34,7 +35,7 @@ import { AccountIcon, Avatar, FileName, Hint, IconButton, cx } from "~/component
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
-import { attachmentUrl, displayName, PREFETCH_PARAM, formatAddress, formatFullDate, threadKey, textOn, threadRefs } from "~/lib/mail";
+import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { loadThread } from "~/server/mail.server";
 import { ProviderAuthError, ProviderError } from "~/server/providers/types";
@@ -266,6 +267,16 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
           With the sidebar collapsed, the header then moves away from the
           sidebar button. */}
       <header className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:max-lg:in-[.sidebar-collapsed]:pl-14 lg:in-[.list-collapsed]:in-[.sidebar-collapsed]:pl-14">
+        {/* Below lg the list is under the conversation. The back button and
+            a swipe from the left edge go back to it, as in iOS. */}
+        <button
+          type="button"
+          onClick={list.closeThread}
+          className="press -ml-1 flex min-w-0 shrink items-center rounded-lg py-1.5 pr-2 text-accent-600 lg:hidden dark:text-accent-400"
+        >
+          <CaretLeft className="size-6 shrink-0" />
+          <span className="truncate text-[17px]">{FOLDER_LABELS[list.folder]}</span>
+        </button>
         <IconButton
           label="Show message list"
           className="max-lg:hidden [:root:not(.list-collapsed)_&]:hidden"
@@ -275,55 +286,63 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         </IconButton>
         <div className="mx-1 h-5 w-px bg-zinc-200 max-lg:hidden dark:bg-zinc-800 [:root:not(.list-collapsed)_&]:hidden" />
         {removalActions ? (
-          <IconButton label="Move to Inbox" onClick={() => list.actOnOpenThread("inbox")}>
+          <IconButton className="max-md:hidden" label="Move to Inbox" onClick={() => list.actOnOpenThread("inbox")}>
             <Tray className="size-4" />
           </IconButton>
         ) : (
-          <IconButton label="Archive" shortcut="E" onClick={() => list.actOnOpenThread("archive")}>
+          <IconButton className="max-md:hidden" label="Archive" shortcut="E" onClick={() => list.actOnOpenThread("archive")}>
             <Archive className="size-4" />
           </IconButton>
         )}
         {list.folder !== "trash" && (
-          <IconButton label="Move to Trash" shortcut="#" onClick={() => list.actOnOpenThread("trash")}>
+          <IconButton className="max-md:hidden" label="Move to Trash" shortcut="#" onClick={() => list.actOnOpenThread("trash")}>
             <Trash className="size-4" />
           </IconButton>
         )}
         {list.folder !== "spam" && (
-          <IconButton label="Mark as spam" shortcut="!" onClick={() => list.actOnOpenThread("spam")}>
+          <IconButton className="max-md:hidden" label="Mark as spam" shortcut="!" onClick={() => list.actOnOpenThread("spam")}>
             <ShieldWarning className="size-4" />
           </IconButton>
         )}
-        <IconButton label="Mark as unread" shortcut="U" onClick={() => list.actOnOpenThread("unread")}>
+        <IconButton className="max-md:hidden" label="Mark as unread" shortcut="U" onClick={() => list.actOnOpenThread("unread")}>
           <EnvelopeSimple className="size-4" />
         </IconButton>
         <IconButton
           label={thread.starred ? "Remove star" : "Star"}
           shortcut="S"
+          className="max-md:hidden"
           onClick={() => list.actOnOpenThread(thread.starred ? "unstar" : "star")}
         >
           <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-4", thread.starred && "text-amber-400")} />
         </IconButton>
         <div className="flex-1" />
         {index >= 0 && (
-          <span className="mr-1 text-xs text-zinc-400 tabular-nums">
+          <span className="mr-1 text-xs text-zinc-400 tabular-nums max-md:hidden">
             {index + 1} of {list.threads.length}
           </span>
         )}
-        <IconButton label="Previous conversation" shortcut="K" disabled={index <= 0} onClick={() => list.openRelative(-1)}>
-          <CaretUp className="size-4" />
+        <IconButton
+          label="Previous conversation"
+          shortcut="K"
+          className="max-md:size-10"
+          disabled={index <= 0}
+          onClick={() => list.openRelative(-1)}
+        >
+          <CaretUp className="size-4 max-md:size-5" />
         </IconButton>
         <IconButton
           label="Next conversation"
           shortcut="J"
+          className="max-md:size-10"
           disabled={index < 0 || index >= list.threads.length - 1}
           onClick={() => list.openRelative(1)}
         >
-          <CaretDown className="size-4" />
+          <CaretDown className="size-4 max-md:size-5" />
         </IconButton>
       </header>
 
-      <div className="flex-1 overflow-y-auto">
-        <div className="mx-auto max-w-6xl px-6 py-6">
+      <div className="flex-1 overflow-y-auto overscroll-contain">
+        <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 md:py-6">
           {/* The subject gets the full width. A long subject must not wrap into
               a narrow column next to the account badge. */}
           <div className="mb-6 space-y-2">
@@ -411,6 +430,42 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
           </div>
         </div>
       </div>
+
+      {/* A toolbar at the bottom of the screen on a phone, as in iOS Mail. */}
+      <footer className="flex items-center justify-around border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
+        {removalActions ? (
+          <IconButton label="Move to Inbox" className="size-11" onClick={() => list.actOnOpenThread("inbox")}>
+            <Tray className="size-5" />
+          </IconButton>
+        ) : (
+          <IconButton label="Archive" className="size-11" onClick={() => list.actOnOpenThread("archive")}>
+            <Archive className="size-5" />
+          </IconButton>
+        )}
+        {list.folder !== "trash" && (
+          <IconButton label="Move to Trash" className="size-11" onClick={() => list.actOnOpenThread("trash")}>
+            <Trash className="size-5" />
+          </IconButton>
+        )}
+        {list.folder !== "spam" && (
+          <IconButton label="Mark as spam" className="size-11" onClick={() => list.actOnOpenThread("spam")}>
+            <ShieldWarning className="size-5" />
+          </IconButton>
+        )}
+        <IconButton label="Mark as unread" className="size-11" onClick={() => list.actOnOpenThread("unread")}>
+          <EnvelopeSimple className="size-5" />
+        </IconButton>
+        <IconButton
+          label={thread.starred ? "Remove star" : "Star"}
+          className="size-11"
+          onClick={() => list.actOnOpenThread(thread.starred ? "unstar" : "star")}
+        >
+          <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-5", thread.starred && "text-amber-400")} />
+        </IconButton>
+        <IconButton label="Reply" className="size-11 text-accent-600 dark:text-accent-400" onClick={() => startReply("reply")}>
+          <ArrowBendUpLeft className="size-5" />
+        </IconButton>
+      </footer>
     </article>
   );
 }
@@ -542,13 +597,14 @@ function MessageCard({
               <p className="truncate text-xs text-zinc-500">{message.snippet}</p>
             )}
           </div>
-          <LocalDate iso={message.date} format={formatFullDate} className="shrink-0 pt-0.5 text-xs text-zinc-400" />
+          <LocalDate iso={message.date} format={formatFullDate} className="shrink-0 pt-0.5 text-xs text-zinc-400 max-md:hidden" />
+          <LocalDate iso={message.date} format={formatListDate} className="shrink-0 pt-0.5 text-xs text-zinc-400 md:hidden" />
           {/* The buttons keep their space when the message closes, so the date does not move. */}
           <div
             onClick={(event) => event.stopPropagation()}
             inert={!expanded}
             className={cx(
-              "-mt-1 -mr-2 flex shrink-0 transition-opacity duration-200 ease-out",
+              "-mt-1 -mr-2 flex shrink-0 transition-opacity duration-200 ease-out max-md:hidden",
               !expanded && "opacity-0",
             )}
           >
@@ -717,7 +773,7 @@ export function ErrorBoundary() {
     ? String(error.data)
     : "Something went wrong while the conversation loaded.";
   return (
-    <div className="flex flex-1 flex-col items-center justify-center gap-3 p-8 text-center">
+    <div className="flex flex-1 flex-col items-center justify-center gap-3 bg-white p-8 text-center dark:bg-zinc-950">
       <p className="max-w-sm text-sm text-zinc-500">{message}</p>
       {list && (
         <button type="button" onClick={list.closeThread} className="text-sm font-medium text-accent-600 hover:underline">

@@ -7,7 +7,7 @@ export default function Privacy() {
   return (
     <LegalPage title="Privacy policy">
       <p>
-        mail (also called Relay Mail) is an email client at mail.samayo.me. It shows your Gmail, Outlook, and
+        mail is an email client at mail.samayo.me. It shows your Gmail, Outlook, and
         Microsoft 365 accounts in one inbox. This policy tells you which data mail uses, and how.
       </p>
 

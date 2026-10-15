@@ -1,0 +1,16 @@
+{
+  "name": "relay-mail-cron",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "build": "cf build",
+    "deploy": "cf deploy",
+    "typecheck": "cf workers types && tsc"
+  },
+  "devDependencies": {
+    "@cloudflare/vite-plugin": "beta",
+    "cf": "^1.0.0-beta.14",
+    "typescript": "^7.0.2",
+    "vite": "^8.3.0"
+  }
+}

@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
+import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
@@ -47,17 +48,21 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Settings({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-6 py-10">
+      <div className="mx-auto max-w-2xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
+        {/* On a phone, a back button as in iOS. */}
         <Link
           to="/mail"
-          className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
+          className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 max-md:press max-md:-ml-1.5 max-md:mb-2 max-md:gap-0 max-md:py-1.5 max-md:text-[17px] max-md:text-accent-600 dark:hover:text-zinc-100 max-md:dark:text-accent-400"
         >
-          <ArrowLeft className="size-4" /> Back to mail
+          <ArrowLeft className="size-4 max-md:hidden" />
+          <CaretLeft className="size-6 md:hidden" />
+          <span className="max-md:hidden">Back to mail</span>
+          <span className="md:hidden">Mail</span>
         </Link>
-        <h1 className="text-2xl font-semibold tracking-tight">Settings</h1>
+        <h1 className="text-2xl font-semibold tracking-tight max-md:text-3xl max-md:font-bold">Settings</h1>
 
         <section className="mt-8">
-          <div className="mb-3 flex items-center justify-between">
+          <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <div>
               <h2 className="font-semibold">Email accounts</h2>
               <p className="text-sm text-zinc-500">
@@ -66,7 +71,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </div>
             <Link
               to="/welcome"
-              className="inline-flex items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium text-white hover:bg-accent-700"
+              className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-white hover:bg-accent-700"
             >
               <Plus className="size-4" /> Add account
             </Link>
@@ -80,6 +85,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         </section>
 
         <Appearance />
+
+        <Notifications />
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -173,7 +180,7 @@ function AccountRow({ account }: { account: AccountSummary }) {
           defaultValue={account.name}
           placeholder="Display name"
           aria-label="Display name"
-          className={cx(inputClass, "w-auto min-w-0 flex-1 sm:max-w-64")}
+          className={cx(inputClass, "w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:max-w-64")}
           onChange={(event) => saveName(event.target.value, 600)}
           onBlur={(event) => saveName(event.target.value, 0)}
           onKeyDown={(event) => {
@@ -216,7 +223,7 @@ function Appearance() {
 
   return (
     <section className="mt-10">
-      <div className="mb-3 flex items-center justify-between gap-4">
+      <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h2 className="font-semibold">Appearance</h2>
           <p className="text-sm text-zinc-500">The theme and the mode apply to this browser only.</p>
@@ -291,6 +298,136 @@ function Appearance() {
           </label>
         ))}
       </fieldset>
+    </section>
+  );
+}
+
+type PushState = "loading" | "unsupported" | "install" | "denied" | "off" | "on";
+
+async function serviceWorker() {
+  return (await navigator.serviceWorker.getRegistration()) ?? (await navigator.serviceWorker.register("/sw.js"));
+}
+
+function readPushState(): Promise<PushState> | PushState {
+  if (!("serviceWorker" in navigator) || !("PushManager" in window) || !("Notification" in window)) {
+    // Safari on iPhone and iPad has push only for apps on the Home Screen.
+    const ios = /iPhone|iPad/.test(navigator.userAgent) || (navigator.platform === "MacIntel" && navigator.maxTouchPoints > 1);
+    return ios ? "install" : "unsupported";
+  }
+  if (Notification.permission === "denied") return "denied";
+  return navigator.serviceWorker
+    .getRegistration()
+    .then((registration) => registration?.pushManager.getSubscription())
+    .then((subscription) => (subscription && Notification.permission === "granted" ? "on" : "off"));
+}
+
+/** The push key is in base64url. Safari needs it as bytes. */
+function keyBytes(key: string) {
+  const base64 = (key + "=".repeat((4 - (key.length % 4)) % 4)).replace(/-/g, "+").replace(/_/g, "/");
+  return Uint8Array.from(atob(base64), (c) => c.charCodeAt(0));
+}
+
+function Notifications() {
+  const [state, setState] = useState<PushState>("loading");
+  const [busy, setBusy] = useState(false);
+  // Safari allows the subscription only while it handles the click. Thus the
+  // service worker and the key are ready before the click.
+  const ready = useRef<Promise<{ registration: ServiceWorkerRegistration; publicKey: string | null }>>(undefined);
+
+  useEffect(() => {
+    Promise.resolve(readPushState()).then(
+      (value) => {
+        setState(value);
+        if (value !== "off" && value !== "on") return;
+        ready.current = Promise.all([
+          serviceWorker().then(() => navigator.serviceWorker.ready),
+          fetch("/api/push").then((response) => response.json() as Promise<{ publicKey: string | null }>),
+        ]).then(([registration, { publicKey }]) => ({ registration, publicKey }));
+        // A failure shows when the person clicks.
+        ready.current.catch(() => {});
+      },
+      () => setState("unsupported"),
+    );
+  }, []);
+
+  async function turnOn() {
+    setBusy(true);
+    try {
+      const { registration, publicKey } = await ready.current!;
+      if (!publicKey) throw new Error("The server cannot send notifications yet");
+      // The subscription asks for permission if necessary.
+      const subscription = await registration.pushManager
+        .subscribe({ userVisibleOnly: true, applicationServerKey: keyBytes(publicKey) })
+        .catch((error) => {
+          if (Notification.permission !== "granted") return null;
+          throw error;
+        });
+      if (!subscription) {
+        setState(Notification.permission === "denied" ? "denied" : "off");
+        return;
+      }
+      const response = await fetch("/api/push", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(subscription.toJSON()),
+      });
+      if (!response.ok) throw new Error("The server did not save the subscription");
+      setState("on");
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "Notifications did not turn on");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  async function turnOff() {
+    setBusy(true);
+    try {
+      const subscription = await (await serviceWorker()).pushManager.getSubscription();
+      if (subscription) {
+        await fetch("/api/push", {
+          method: "DELETE",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ endpoint: subscription.endpoint }),
+        });
+        await subscription.unsubscribe();
+      }
+      setState("off");
+    } catch {
+      toast.error("Notifications did not turn off");
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  const description: Record<PushState, string> = {
+    loading: "Get a notification on this device when new mail comes to your inbox.",
+    off: "Get a notification on this device when new mail comes to your inbox.",
+    on: "This device gets a notification when new mail comes to your inbox.",
+    denied: "This browser blocks notifications from mail. Allow them in the browser or system settings.",
+    install: "On iPhone and iPad, add mail to your Home Screen first. Tap Share, then Add to Home Screen.",
+    unsupported: "This browser cannot show notifications.",
+  };
+
+  return (
+    <section className="mt-10">
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div>
+          <h2 className="font-semibold">Notifications</h2>
+          <p className="text-sm text-zinc-500">{description[state]}</p>
+        </div>
+        {state === "on" ? (
+          <Button className="shrink-0" disabled={busy} onClick={turnOff}>
+            <BellSlash className="size-4" /> Turn off
+          </Button>
+        ) : (
+          (state === "off" || state === "loading") && (
+            <Button className="shrink-0" variant="primary" disabled={busy || state === "loading"} onClick={turnOn}>
+              <Bell className="size-4" /> Turn on
+            </Button>
+          )
+        )}
+      </div>
     </section>
   );
 }

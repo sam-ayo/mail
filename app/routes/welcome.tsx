@@ -9,8 +9,8 @@ import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Relay Mail · Sign in" },
-  { name: "description", content: "Relay Mail is an email client. It shows your Gmail and Outlook accounts in one inbox." },
+  { title: "Sign in · mail" },
+  { name: "description", content: "mail is an email client. It shows your Gmail and Outlook accounts in one inbox." },
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -31,7 +31,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export default function Welcome({ loaderData }: Route.ComponentProps) {
   const { configured, signedIn, error, demos } = loaderData;
   return (
-    <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
+    <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
         {signedIn && (
           <Link
@@ -53,7 +53,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           ) : (
             // Google compares this name with the app name on the OAuth consent screen.
             <p className="mt-2 text-sm text-zinc-500">
-              Relay Mail is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
+              mail is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
               write, and sort your email.
             </p>
           )}
@@ -79,7 +79,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           {configured.hosted && (
             <details className="group mt-4 text-sm">
               <summary className="cursor-pointer list-none text-center text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100">
-                Use an address that Relay hosts
+                Use a hosted address
               </summary>
               <Form method="post" action="/connect/hosted" className="mt-3 flex flex-col gap-2">
                 <input name="email" type="email" required placeholder="Address" autoComplete="username" className={inputClass} />
