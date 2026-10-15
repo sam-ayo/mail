@@ -237,8 +237,10 @@ function Shell() {
           />
         </div>
       </div>
-      {/* On small screens the sidebar is a drawer. Swipe left to close it. */}
+      {/* On small screens the sidebar is a drawer. Swipe right from the left
+          edge to open it. Swipe left to close it. */}
       <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
+        <Drawer.SwipeArea className="fixed inset-y-0 left-0 z-30 w-5 md:hidden" />
         <Drawer.Portal>
           <Drawer.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
           <Drawer.Viewport className="fixed inset-0 z-40 flex items-stretch justify-start md:hidden">
