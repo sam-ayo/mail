@@ -20,7 +20,7 @@ import {
   Tray,
   Warning,
 } from "./icons";
-import { type ComponentProps, useEffect, useRef, useState, useSyncExternalStore } from "react";
+import { type ComponentProps, createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
 import { Link, NavLink, matchPath, useFetcher, useNavigate, useNavigation } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
 import { FOLDER_LABELS, FOLDERS, formatCount, isFolder, PREFETCH_PARAM, shownProvider } from "~/lib/mail";
@@ -73,6 +73,10 @@ function useHoverPrefetch(to: string, active: boolean) {
   };
 }
 
+/** A long press on a row opens a menu. In the drawer the menus are off, because
+    a menu catches the touch, and then a swipe on a row does not close the drawer. */
+const RowMenus = createContext(true);
+
 export function Sidebar({
   scope: shownScope,
   folder: shownFolder,
@@ -80,6 +84,7 @@ export function Sidebar({
   onToggleTheme,
   dark,
   resizable,
+  drawer,
 }: {
   scope?: string;
   folder?: Folder;
@@ -88,6 +93,8 @@ export function Sidebar({
   dark: boolean;
   /** Shows a handle at the right edge that changes the width of the panel. */
   resizable?: boolean;
+  /** The panel is in the drawer on a small screen. */
+  drawer?: boolean;
 }) {
   const { accounts, unreadCounts, openCompose } = useMail();
   const { scope, folder } = usePendingFolder(shownScope, shownFolder);
@@ -109,6 +116,7 @@ export function Sidebar({
 
   return (
     // The panel floats in the window, as the sidebars of macOS 26 do.
+    <RowMenus.Provider value={!drawer}>
     <div
       className={cx(
         "relative h-full shrink-0 p-2",
@@ -163,6 +171,7 @@ export function Sidebar({
                 return (
                   <li key={account.id}>
                     <ContextMenu
+                      disabled={drawer}
                       items={() => [
                         { label: "Open Inbox", icon: Tray, onSelect: () => navigate(`/mail/${account.id}/inbox`) },
                         {
@@ -315,6 +324,7 @@ export function Sidebar({
     </nav>
     {resizable && <SidebarResizeHandle />}
     </div>
+    </RowMenus.Provider>
   );
 }
 
@@ -555,9 +565,11 @@ function FolderLink({
   const Icon = FOLDER_ICONS[folder];
   const navigate = useNavigate();
   const prefetch = useHoverPrefetch(to, active);
+  const rowMenus = useContext(RowMenus);
   return (
     <li>
       <ContextMenu
+        disabled={!rowMenus}
         items={() => [
           { label: `Open ${FOLDER_LABELS[folder]}`, icon: Icon, onSelect: () => navigate(to) },
           { label: "Open in new tab", icon: ArrowSquareOut, onSelect: () => window.open(to, "_blank", "noopener") },

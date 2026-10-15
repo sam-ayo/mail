@@ -261,8 +261,10 @@ html {
   overscroll-behavior: none;
 }
 
-/* One focus ring for every control. It shows for keyboard focus only. */
-:where(button, a, [role="button"], [tabindex]):focus-visible {
+/* One focus ring for every control. It shows for keyboard focus only. An
+   element with tabindex -1, such as the drawer, gets focus from code only. It
+   is not a control, so it has no ring. */
+:where(button, a, [role="button"], [tabindex]:not([tabindex="-1"])):focus-visible {
   outline: 2px solid var(--color-accent-500);
   outline-offset: 2px;
 }
@@ -306,6 +308,14 @@ button,
   from {
     transform: translateY(100%);
   }
+}
+
+/* A drawer swipe sets this variable on the drawer at each touch move. The
+   children do not inherit it, so their styles do not change at each move. */
+@property --drawer-swipe-movement-x {
+  syntax: "<length>";
+  inherits: false;
+  initial-value: 0px;
 }
 
 /* iOS zooms into inputs with text smaller than 16px. */

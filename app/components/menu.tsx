@@ -26,14 +26,17 @@ export function ContextMenu({
   items,
   children,
   onOpenChange,
+  disabled,
 }: {
   items(): MenuEntry[];
   /** The trigger element. It must accept a ref and props. */
   children: React.ReactElement<Record<string, unknown>>;
   onOpenChange?(open: boolean): void;
+  /** No menu opens, and the trigger does not catch touches. */
+  disabled?: boolean;
 }) {
   return (
-    <Base.Root onOpenChange={(open) => onOpenChange?.(open)}>
+    <Base.Root disabled={disabled} onOpenChange={(open) => onOpenChange?.(open)}>
       <Base.Trigger render={children} />
       <Base.Portal>
         <Base.Positioner className="z-[60] outline-none">

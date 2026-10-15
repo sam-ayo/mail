@@ -9,7 +9,7 @@ import {
   SignOut,
   Tray,
 } from "~/components/icons";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "@base-ui/react/drawer";
 import { Outlet, redirect, useLocation, useNavigate, useParams, useSubmit } from "react-router";
 import type { Command } from "~/components/command-palette";
@@ -30,6 +30,7 @@ import {
 } from "~/components/sidebar";
 import { useTheme, useThemeMode } from "~/components/theme";
 import { cx } from "~/components/ui";
+import type { Folder } from "~/lib/mail";
 import { FOLDER_LABELS, FOLDERS, isFolder } from "~/lib/mail";
 import { listAccounts, toSummary } from "~/server/accounts.server";
 import { getUserId } from "~/server/auth.server";
@@ -97,30 +98,7 @@ function Shell() {
   const { mode: themeMode, setMode: setThemeMode } = useThemeMode();
   const [paletteOpen, setPaletteOpen] = useState(false);
   const [shortcutsOpen, setShortcutsOpen] = useState(false);
-  const [navOpen, setNavOpen] = useState(false);
-  const location = useLocation();
   const sidebarCollapsed = useSidebarCollapsed();
-
-  // The list header opens the sidebar drawer on small screens.
-  useEffect(() => {
-    const open = () => setNavOpen(true);
-    window.addEventListener("mail:open-nav", open);
-    return () => window.removeEventListener("mail:open-nav", open);
-  }, []);
-  useEffect(() => setNavOpen(false), [location.pathname]);
-
-  // Safari has its own swipe back from the left edge, and it goes back in the
-  // history. A touch on the swipe area must open the drawer, so the touch
-  // stops the Safari gesture. This listener is on the document, so it runs
-  // after the React listener. The drawer ignores a touch that is prevented.
-  useEffect(() => {
-    const onStart = (event: TouchEvent) => {
-      if (!event.cancelable) return;
-      if ((event.target as Element).closest?.("[data-nav-swipe-area]")) event.preventDefault();
-    };
-    document.addEventListener("touchstart", onStart, { passive: false });
-    return () => document.removeEventListener("touchstart", onStart);
-  }, []);
 
   const scope = params.scope ?? "all";
   const folder = isFolder(params.folder) ? params.folder : undefined;
@@ -254,31 +232,14 @@ function Shell() {
           />
         </div>
       </div>
-      {/* On small screens the sidebar is a drawer. Swipe right from the left
-          edge to open it. Swipe left to close it. When a conversation is
-          open, the same swipe goes back to the list, so the area is off. */}
-      <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
-        <Drawer.SwipeArea
-          data-nav-swipe-area
-          disabled={Boolean(params.threadId)}
-          className="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
-        />
-        <Drawer.Portal>
-          <Drawer.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
-          <Drawer.Viewport className="fixed inset-0 z-40 flex items-stretch justify-start md:hidden">
-            <Drawer.Popup className="h-full w-64 bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl outline-none [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[400ms] ease-(--ease-drawer) data-ending-style:[transform:translateX(-100%)] data-starting-style:[transform:translateX(-100%)] data-ending-style:duration-[calc(var(--drawer-swipe-strength)*300ms)] data-swiping:select-none dark:bg-zinc-950">
-              <Drawer.Title className="sr-only">Folders and accounts</Drawer.Title>
-              <Sidebar
-                scope={scope}
-                folder={folder}
-                dark={dark}
-                onToggleTheme={toggleTheme}
-                onShowShortcuts={() => setShortcutsOpen(true)}
-              />
-            </Drawer.Popup>
-          </Drawer.Viewport>
-        </Drawer.Portal>
-      </Drawer.Root>
+      <NavDrawer
+        scope={scope}
+        folder={folder}
+        threadOpen={Boolean(params.threadId)}
+        dark={dark}
+        onToggleTheme={toggleTheme}
+        onShowShortcuts={() => setShortcutsOpen(true)}
+      />
       <main data-sidebar-content className="flex min-w-0 flex-1">
         <Outlet />
       </main>
@@ -286,5 +247,83 @@ function Shell() {
       <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
       <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
     </div>
+  );
+}
+
+/**
+ * On small screens the sidebar is a drawer. Swipe right from the left edge to
+ * open it. Swipe left to close it. When a conversation is open, the same swipe
+ * goes back to the list, so the swipe area is off. The open state is here and
+ * not in the shell, so an open or a close does not render the message list
+ * again while the drawer moves. The drawer stays mounted for the same reason.
+ */
+function NavDrawer({
+  scope,
+  folder,
+  threadOpen,
+  dark,
+  onToggleTheme,
+  onShowShortcuts,
+}: {
+  scope: string;
+  folder?: Folder;
+  threadOpen: boolean;
+  dark: boolean;
+  onToggleTheme(): void;
+  onShowShortcuts(): void;
+}) {
+  const [navOpen, setNavOpen] = useState(false);
+  const location = useLocation();
+
+  // The list header opens the sidebar drawer on small screens.
+  useEffect(() => {
+    const open = () => setNavOpen(true);
+    window.addEventListener("mail:open-nav", open);
+    return () => window.removeEventListener("mail:open-nav", open);
+  }, []);
+  useEffect(() => setNavOpen(false), [location.pathname]);
+
+  // Safari has its own swipe back from the left edge, and it goes back in the
+  // history. A touch on the swipe area must open the drawer, so the touch
+  // stops the Safari gesture. The drawer ignores a touch that is prevented,
+  // so the touch is prevented on the document, after the React listener
+  // there. The blocking listener is on the swipe area only, so a touch on the
+  // rest of the page does not wait for it.
+  const swipeArea = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    const area = swipeArea.current;
+    if (!area) return;
+    const prevent = (event: TouchEvent) => {
+      if (event.cancelable) event.preventDefault();
+    };
+    const onStart = () => document.addEventListener("touchstart", prevent, { once: true, passive: false });
+    area.addEventListener("touchstart", onStart, { passive: false });
+    return () => area.removeEventListener("touchstart", onStart);
+  }, []);
+
+  return (
+    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
+      <Drawer.SwipeArea
+        ref={swipeArea}
+        disabled={threadOpen}
+        className="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
+      />
+      <Drawer.Portal keepMounted>
+        <Drawer.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
+        <Drawer.Viewport className="fixed inset-0 z-40 flex items-stretch justify-start md:hidden">
+          <Drawer.Popup className="h-full w-64 bg-white pt-[env(safe-area-inset-top)] pb-[env(safe-area-inset-bottom)] shadow-2xl outline-none [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[400ms] ease-(--ease-drawer) data-ending-style:[transform:translateX(-100%)] data-starting-style:[transform:translateX(-100%)] data-ending-style:duration-[calc(var(--drawer-swipe-strength)*300ms)] data-swiping:select-none dark:bg-zinc-950">
+            <Drawer.Title className="sr-only">Folders and accounts</Drawer.Title>
+            <Sidebar
+              drawer
+              scope={scope}
+              folder={folder}
+              dark={dark}
+              onToggleTheme={onToggleTheme}
+              onShowShortcuts={onShowShortcuts}
+            />
+          </Drawer.Popup>
+        </Drawer.Viewport>
+      </Drawer.Portal>
+    </Drawer.Root>
   );
 }
