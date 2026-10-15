@@ -230,20 +230,23 @@ export function Sidebar({
                           className={cx("size-3 shrink-0 text-zinc-400 transition-[rotate] duration-200 ease-out", open && "rotate-90")}
                         />
                         {/* The color dot on the account icon matches the dots in the message list.
+                            The dot shows only when the account has unread messages.
                             The wrapper is flex, so the icon does not sit on the text baseline
                             and the dot stays on the corner of the icon. The ring has the color
                             of the row, so it cuts the icon in each row state. */}
                         <span className="relative flex shrink-0" title={PROVIDER_NAMES[shownProvider(account)]}>
                           <AccountIcon account={account} className="size-3.5 text-zinc-500" />
-                          <span
-                            className={cx(
-                              "absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px]",
-                              current && folder === "inbox"
-                                ? "ring-(--sidebar-selection)"
-                                : "ring-(--sidebar) group-hover:ring-[color-mix(in_oklab,var(--sidebar-selection)_50%,var(--sidebar))]",
-                            )}
-                            style={{ background: account.color }}
-                          />
+                          {!!unreadCounts[account.id] && (
+                            <span
+                              className={cx(
+                                "absolute -right-0.5 -bottom-0.5 size-1.5 rounded-full ring-[1.5px]",
+                                current && folder === "inbox"
+                                  ? "ring-(--sidebar-selection)"
+                                  : "ring-(--sidebar) group-hover:ring-[color-mix(in_oklab,var(--sidebar-selection)_50%,var(--sidebar))]",
+                              )}
+                              style={{ background: account.color }}
+                            />
+                          )}
                         </span>
                         <AccountAddress email={account.email} />
                         {account.status === "reauth_required" ? (
