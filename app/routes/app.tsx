@@ -109,6 +109,19 @@ function Shell() {
   }, []);
   useEffect(() => setNavOpen(false), [location.pathname]);
 
+  // Safari has its own swipe back from the left edge, and it goes back in the
+  // history. A touch on the swipe area must open the drawer, so the touch
+  // stops the Safari gesture. This listener is on the document, so it runs
+  // after the React listener. The drawer ignores a touch that is prevented.
+  useEffect(() => {
+    const onStart = (event: TouchEvent) => {
+      if (!event.cancelable) return;
+      if ((event.target as Element).closest?.("[data-nav-swipe-area]")) event.preventDefault();
+    };
+    document.addEventListener("touchstart", onStart, { passive: false });
+    return () => document.removeEventListener("touchstart", onStart);
+  }, []);
+
   const scope = params.scope ?? "all";
   const folder = isFolder(params.folder) ? params.folder : undefined;
   const go = (name: string) => navigate(`/mail/${scope}/${name}`);
@@ -203,6 +216,10 @@ function Shell() {
 
   return (
     <div className="flex h-dvh overflow-hidden pt-[env(safe-area-inset-top)]">
+      {/* iOS blurs the content under the status bar when no fixed element is
+          at the top edge. This opaque strip is that element, so iOS shows its
+          colour and not a blur. The headers have the page colour too. */}
+      <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top)] bg-white dark:bg-zinc-950" />
       {/* On wide screens the sidebar collapses as in Colima GUI. The space
           it takes changes at once, and the content slides on a spring from
           its old position. The panel slides on the same spring, so its right
@@ -238,9 +255,14 @@ function Shell() {
         </div>
       </div>
       {/* On small screens the sidebar is a drawer. Swipe right from the left
-          edge to open it. Swipe left to close it. */}
+          edge to open it. Swipe left to close it. When a conversation is
+          open, the same swipe goes back to the list, so the area is off. */}
       <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
-        <Drawer.SwipeArea className="fixed inset-y-0 left-0 z-30 w-5 md:hidden" />
+        <Drawer.SwipeArea
+          data-nav-swipe-area
+          disabled={Boolean(params.threadId)}
+          className="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
+        />
         <Drawer.Portal>
           <Drawer.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
           <Drawer.Viewport className="fixed inset-0 z-40 flex items-stretch justify-start md:hidden">
