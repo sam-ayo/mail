@@ -30,7 +30,7 @@ import { LocalDate } from "~/components/local-date";
 import { UnsubscribeDialog, isUnsubscribed } from "~/components/unsubscribe-dialog";
 import { useHotkeys } from "~/components/hotkeys";
 import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
-import { ContextMenu, copyText } from "~/components/menu";
+import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { AccountIcon, Avatar, FileName, Hint, IconButton, cx } from "~/components/ui";
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor } from "~/lib/compose";
@@ -261,12 +261,59 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     list.folder === "archive" || list.folder === "trash" || list.folder === "spam";
   const index = list.threads.findIndex((t) => threadKey(t.accountId, t.id) === key);
 
+  // On a phone, the older closed messages fold into one row above the first
+  // open message. A fold of one message saves no space.
+  const [showEarlier, setShowEarlier] = useState(false);
+  const [showEarlierFor, setShowEarlierFor] = useState(key);
+  if (showEarlierFor !== key) {
+    setShowEarlierFor(key);
+    setShowEarlier(false);
+  }
+  const firstOpen = data.messages.findIndex((m) => expanded.has(m.id));
+  const folded = !showEarlier && firstOpen >= 2 ? firstOpen : 0;
+
+  // On a phone, these actions move from the header to the More menu.
+  const moreMenu = () => [
+    list.folder !== "spam" && {
+      label: "Mark as spam",
+      icon: ShieldWarning,
+      onSelect: () => list.actOnOpenThread("spam"),
+    },
+    { label: "Mark as unread", icon: EnvelopeSimple, onSelect: () => list.actOnOpenThread("unread") },
+    {
+      label: thread.starred ? "Remove star" : "Star",
+      icon: Star,
+      onSelect: () => list.actOnOpenThread(thread.starred ? "unstar" : "star"),
+    },
+    "separator" as const,
+    {
+      label: "Previous conversation",
+      icon: CaretUp,
+      disabled: index <= 0,
+      onSelect: () => list.openRelative(-1),
+    },
+    {
+      label: "Next conversation",
+      icon: CaretDown,
+      disabled: index < 0 || index >= list.threads.length - 1,
+      onSelect: () => list.openRelative(1),
+    },
+  ];
+
   return (
-    <article className="flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
+    <article className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
       {/* Below lg, or with the list collapsed, the thread fills the main area.
           With the sidebar collapsed, the header then moves away from the
           sidebar button. */}
-      <header className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:max-lg:in-[.sidebar-collapsed]:pl-14 lg:in-[.list-collapsed]:in-[.sidebar-collapsed]:pl-14">
+      <header className="flex items-center gap-1 border-b border-zinc-200 px-3 py-2 max-md:px-1 max-md:py-0.5 transition-[padding] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none dark:border-zinc-800 md:max-lg:in-[.sidebar-collapsed]:pl-14 lg:in-[.list-collapsed]:in-[.sidebar-collapsed]:pl-14">
+        <IconButton
+          label="Show message list"
+          className="max-lg:hidden [:root:not(.list-collapsed)_&]:hidden"
+          onClick={() => setListCollapsed(false)}
+        >
+          <SidebarSimple className="size-4" />
+        </IconButton>
+        <div className="mx-1 h-5 w-px bg-zinc-200 max-lg:hidden dark:bg-zinc-800 [:root:not(.list-collapsed)_&]:hidden" />
         {/* Below lg the list is under the conversation. The back button and
             a swipe from the left edge go back to it, as in iOS. */}
         <button
@@ -277,34 +324,28 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
           <CaretLeft className="size-6 shrink-0" />
           <span className="truncate text-[17px]">{FOLDER_LABELS[list.folder]}</span>
         </button>
-        <IconButton
-          label="Show message list"
-          className="max-lg:hidden [:root:not(.list-collapsed)_&]:hidden"
-          onClick={() => setListCollapsed(false)}
-        >
-          <SidebarSimple className="size-4" />
-        </IconButton>
-        <div className="mx-1 h-5 w-px bg-zinc-200 max-lg:hidden dark:bg-zinc-800 [:root:not(.list-collapsed)_&]:hidden" />
+        <div className="mx-1 h-5 w-px bg-zinc-200 max-md:hidden lg:hidden dark:bg-zinc-800" />
+        <div className="flex-1 md:hidden" />
         {removalActions ? (
-          <IconButton className="max-md:hidden" label="Move to Inbox" onClick={() => list.actOnOpenThread("inbox")}>
-            <Tray className="size-4" />
+          <IconButton label="Move to Inbox" className="max-md:size-11" onClick={() => list.actOnOpenThread("inbox")}>
+            <Tray className="size-5 md:size-4" />
           </IconButton>
         ) : (
-          <IconButton className="max-md:hidden" label="Archive" shortcut="E" onClick={() => list.actOnOpenThread("archive")}>
-            <Archive className="size-4" />
+          <IconButton label="Archive" shortcut="E" className="max-md:size-11" onClick={() => list.actOnOpenThread("archive")}>
+            <Archive className="size-5 md:size-4" />
           </IconButton>
         )}
         {list.folder !== "trash" && (
-          <IconButton className="max-md:hidden" label="Move to Trash" shortcut="#" onClick={() => list.actOnOpenThread("trash")}>
-            <Trash className="size-4" />
+          <IconButton label="Move to Trash" shortcut="#" className="max-md:size-11" onClick={() => list.actOnOpenThread("trash")}>
+            <Trash className="size-5 md:size-4" />
           </IconButton>
         )}
         {list.folder !== "spam" && (
-          <IconButton className="max-md:hidden" label="Mark as spam" shortcut="!" onClick={() => list.actOnOpenThread("spam")}>
+          <IconButton label="Mark as spam" shortcut="!" className="max-md:hidden" onClick={() => list.actOnOpenThread("spam")}>
             <ShieldWarning className="size-4" />
           </IconButton>
         )}
-        <IconButton className="max-md:hidden" label="Mark as unread" shortcut="U" onClick={() => list.actOnOpenThread("unread")}>
+        <IconButton label="Mark as unread" shortcut="U" className="max-md:hidden" onClick={() => list.actOnOpenThread("unread")}>
           <EnvelopeSimple className="size-4" />
         </IconButton>
         <IconButton
@@ -315,7 +356,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         >
           <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-4", thread.starred && "text-amber-400")} />
         </IconButton>
-        <div className="flex-1" />
+        <div className="flex-1 max-md:hidden" />
         {index >= 0 && (
           <span className="mr-1 text-xs text-zinc-400 tabular-nums max-md:hidden">
             {index + 1} of {list.threads.length}
@@ -324,35 +365,46 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         <IconButton
           label="Previous conversation"
           shortcut="K"
-          className="max-md:size-10"
+          className="max-md:hidden"
           disabled={index <= 0}
           onClick={() => list.openRelative(-1)}
         >
-          <CaretUp className="size-4 max-md:size-5" />
+          <CaretUp className="size-4" />
         </IconButton>
         <IconButton
           label="Next conversation"
           shortcut="J"
-          className="max-md:size-10"
+          className="max-md:hidden"
           disabled={index < 0 || index >= list.threads.length - 1}
           onClick={() => list.openRelative(1)}
         >
-          <CaretDown className="size-4 max-md:size-5" />
+          <CaretDown className="size-4" />
         </IconButton>
+        <ContextMenu items={moreMenu}>
+          <button
+            type="button"
+            aria-label="More actions"
+            onClick={(event) => openContextMenuAt(event.currentTarget)}
+            className="press grid size-11 shrink-0 place-items-center rounded-lg text-zinc-500 md:hidden dark:text-zinc-400"
+          >
+            <DotsThree className="size-5" />
+          </button>
+        </ContextMenu>
       </header>
 
-      <div className="flex-1 overflow-y-auto overscroll-contain">
-        <div className="mx-auto max-w-6xl px-4 py-4 md:px-6 md:py-6">
+      {/* On a phone, the messages are edge-to-edge cards on a gray page. */}
+      <div className="flex-1 overflow-y-auto overscroll-contain max-md:bg-zinc-100 max-md:dark:bg-zinc-900">
+        <div className="mx-auto max-w-6xl px-6 py-6 max-md:px-0 max-md:pt-4 max-md:pb-28">
           {/* The subject gets the full width. A long subject must not wrap into
               a narrow column next to the account badge. */}
-          <div className="mb-6 space-y-2">
+          <div className="mb-6 space-y-2 max-md:mb-4 max-md:px-4">
             <h1 dir="auto" className="text-xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere]">
               {thread.subject}
             </h1>
             {owner && (
               <span
                 title={owner.email}
-                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 dark:bg-zinc-800 dark:text-zinc-300"
+                className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 max-md:bg-white dark:bg-zinc-800 dark:text-zinc-300 max-md:dark:bg-zinc-950"
               >
                 <AccountIcon account={owner} className="size-3.5" />
                 <span className="min-w-0 truncate">{owner.email}</span>
@@ -360,10 +412,14 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
             )}
           </div>
 
-          <div className="space-y-3">
-            {data.messages.map((message) => (
+          <div className="space-y-3 max-md:space-y-1.5">
+            {folded > 0 && (
+              <EarlierMessages messages={data.messages.slice(0, folded)} onOpen={() => setShowEarlier(true)} />
+            )}
+            {data.messages.map((message, i) => (
               <MessageCard
                 key={message.id}
+                folded={i < folded}
                 accountId={data.accountId}
                 accountEmail={owner?.email}
                 threadId={data.id}
@@ -415,7 +471,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
                 />
               </div>
             ) : (
-              <div className="flex flex-wrap justify-end gap-2">
+              <div className="flex flex-wrap justify-end gap-2 max-md:hidden">
                 <ReplyButton onClick={() => startReply("reply")} shortcut="R">
                   <ArrowBendUpLeft className="size-4" /> Reply
                 </ReplyButton>
@@ -431,42 +487,79 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         </div>
       </div>
 
-      {/* A toolbar at the bottom of the screen on a phone, as in iOS Mail. */}
-      <footer className="flex items-center justify-around border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
-        {removalActions ? (
-          <IconButton label="Move to Inbox" className="size-11" onClick={() => list.actOnOpenThread("inbox")}>
-            <Tray className="size-5" />
-          </IconButton>
-        ) : (
-          <IconButton label="Archive" className="size-11" onClick={() => list.actOnOpenThread("archive")}>
-            <Archive className="size-5" />
-          </IconButton>
-        )}
-        {list.folder !== "trash" && (
-          <IconButton label="Move to Trash" className="size-11" onClick={() => list.actOnOpenThread("trash")}>
-            <Trash className="size-5" />
-          </IconButton>
-        )}
-        {list.folder !== "spam" && (
-          <IconButton label="Mark as spam" className="size-11" onClick={() => list.actOnOpenThread("spam")}>
-            <ShieldWarning className="size-5" />
-          </IconButton>
-        )}
-        <IconButton label="Mark as unread" className="size-11" onClick={() => list.actOnOpenThread("unread")}>
-          <EnvelopeSimple className="size-5" />
-        </IconButton>
-        <IconButton
-          label={thread.starred ? "Remove star" : "Star"}
-          className="size-11"
-          onClick={() => list.actOnOpenThread(thread.starred ? "unstar" : "star")}
-        >
-          <Star weight={thread.starred ? "fill" : "regular"} className={cx("size-5", thread.starred && "text-amber-400")} />
-        </IconButton>
-        <IconButton label="Reply" className="size-11 text-accent-600 dark:text-accent-400" onClick={() => startReply("reply")}>
-          <ArrowBendUpLeft className="size-5" />
-        </IconButton>
-      </footer>
+      {/* On a phone, the reply actions float at the bottom, near the thumb. */}
+      {!draft && (
+        <div className="absolute right-4 bottom-[calc(1rem+env(safe-area-inset-bottom,0px))] flex items-center gap-2.5 md:hidden">
+          <FloatingButton label="Forward" onClick={() => startReply("forward")}>
+            <ArrowBendUpRight className="size-5" />
+          </FloatingButton>
+          <FloatingButton label="Reply all" onClick={() => startReply("replyAll")}>
+            <ArrowBendDoubleUpLeft className="size-5" />
+          </FloatingButton>
+          <button
+            type="button"
+            onClick={() => startReply("reply")}
+            className="press inline-flex h-12 items-center gap-2 rounded-full bg-accent-600 px-5 text-sm font-semibold text-white shadow-lg shadow-accent-600/30"
+          >
+            <ArrowBendUpLeft className="size-5" /> Reply
+          </button>
+        </div>
+      )}
     </article>
+  );
+}
+
+function FloatingButton({ label, onClick, children }: { label: string; onClick(): void; children: React.ReactNode }) {
+  return (
+    <button
+      type="button"
+      aria-label={label}
+      title={label}
+      onClick={onClick}
+      className="press grid size-11 place-items-center rounded-full bg-white text-zinc-700 shadow-md ring-1 ring-zinc-950/5 dark:bg-zinc-800 dark:text-zinc-200 dark:ring-white/10"
+    >
+      {children}
+    </button>
+  );
+}
+
+/** The older closed messages of a conversation as one row, on a phone. A tap shows them. */
+function EarlierMessages({ messages, onOpen }: { messages: RenderedMessage[]; onOpen(): void }) {
+  const senders = [...new Map(messages.map((m) => [m.from.email.toLowerCase(), m.from])).values()];
+  const first = messages[0];
+  const last = messages[messages.length - 1];
+  return (
+    <button
+      type="button"
+      onClick={onOpen}
+      className="press relative isolate mb-4! flex w-full items-center gap-3 bg-white px-4 py-3 text-left md:hidden dark:bg-zinc-950"
+    >
+      {/* Two edges under the row show that it holds more than one message. */}
+      <span className="absolute inset-x-2 -bottom-1 -z-10 h-2 rounded-b-lg bg-white/70 dark:bg-zinc-950/70" />
+      <span className="absolute inset-x-4 -bottom-2 -z-20 h-2 rounded-b-lg bg-white/40 dark:bg-zinc-950/40" />
+      <span className="flex shrink-0">
+        {senders.slice(0, 3).map((sender, i) => (
+          <span key={sender.email} className={cx("rounded-full ring-2 ring-white dark:ring-zinc-950", i > 0 && "-ml-1.5")}>
+            <Avatar name={sender.name} email={sender.email} size="sm" />
+          </span>
+        ))}
+      </span>
+      <span className="min-w-0 flex-1">
+        <span className="block text-sm font-medium">{messages.length} earlier messages</span>
+        <span className="block truncate text-xs text-zinc-500">
+          {senders.map(displayName).join(", ")} ·{" "}
+          <LocalDate
+            iso={first.date}
+            format={(iso) => {
+              const from = formatListDate(iso);
+              const to = formatListDate(last.date);
+              return from === to ? from : `${from} – ${to}`;
+            }}
+          />
+        </span>
+      </span>
+      <CaretDown className="size-4 shrink-0 text-zinc-400" />
+    </button>
   );
 }
 
@@ -497,6 +590,7 @@ function MessageCard({
   threadId,
   message,
   expanded,
+  folded,
   instant,
   onToggle,
   onReply,
@@ -507,6 +601,8 @@ function MessageCard({
   threadId: string;
   message: RenderedMessage;
   expanded: boolean;
+  /** On a phone, the message is in the "earlier messages" row and does not show. */
+  folded: boolean;
   /** Open or close with no animation. */
   instant: boolean;
   onToggle(): void;
@@ -548,13 +644,21 @@ function MessageCard({
   return (
     <Collapsible.Root
       open={expanded}
-      render={<section className="rounded-xl border border-zinc-200 dark:border-zinc-800" />}
+      render={
+        <section
+          className={cx(
+            "rounded-xl border border-zinc-200 dark:border-zinc-800",
+            "max-md:rounded-none max-md:border-0 max-md:bg-white max-md:dark:bg-zinc-950",
+            folded && "max-md:hidden",
+          )}
+        />
+      }
     >
       <ContextMenu items={menu}>
         <div
           onClick={onToggle}
           className={cx(
-            "flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3 transition-colors",
+            "flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3 transition-colors max-md:rounded-none",
             !expanded && "hover:bg-zinc-50 dark:hover:bg-zinc-900",
           )}
         >
@@ -566,7 +670,7 @@ function MessageCard({
                 <span dir="auto" className={cx("max-w-[60%] shrink-0 truncate text-sm", expanded ? "font-semibold" : "font-medium")}>
                   {displayName(message.from)}
                 </span>
-                {expanded && <span className="truncate text-xs text-zinc-500">{message.from.email}</span>}
+                {expanded && <span className="truncate text-xs text-zinc-500 max-md:hidden">{message.from.email}</span>}
               </button>
               {expanded && canUnsubscribe && (
                 <button
@@ -575,7 +679,7 @@ function MessageCard({
                     event.stopPropagation();
                     setUnsubscribeOpen(true);
                   }}
-                  className="shrink-0 text-xs font-medium text-zinc-500 underline decoration-zinc-300 underline-offset-2 hover:text-zinc-900 dark:decoration-zinc-600 dark:hover:text-zinc-100"
+                  className="shrink-0 text-xs font-medium text-zinc-500 underline decoration-zinc-300 max-md:hidden underline-offset-2 hover:text-zinc-900 dark:decoration-zinc-600 dark:hover:text-zinc-100"
                 >
                   Unsubscribe
                 </button>
@@ -599,6 +703,21 @@ function MessageCard({
           </div>
           <LocalDate iso={message.date} format={formatFullDate} className="shrink-0 pt-0.5 text-xs text-zinc-400 max-md:hidden" />
           <LocalDate iso={message.date} format={formatListDate} className="shrink-0 pt-0.5 text-xs text-zinc-400 md:hidden" />
+          {/* On a phone, the reply buttons float at the bottom of the screen.
+              This button opens the message menu. */}
+          {expanded && (
+            <button
+              type="button"
+              aria-label="Message actions"
+              onClick={(event) => {
+                event.stopPropagation();
+                openContextMenuAt(event.currentTarget);
+              }}
+              className="press -my-2 -mr-3 grid size-11 shrink-0 place-items-center rounded-lg text-zinc-500 md:hidden dark:text-zinc-400"
+            >
+              <DotsThree className="size-5" />
+            </button>
+          )}
           {/* The buttons keep their space when the message closes, so the date does not move. */}
           <div
             onClick={(event) => event.stopPropagation()}
