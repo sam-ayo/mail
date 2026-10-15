@@ -1,0 +1,67 @@
+name: Smoke test
+
+# Checks that production works: after each Vercel production deploy, after
+# each CI run on main (it deploys the Worker), and each hour.
+on:
+  deployment_status:
+  workflow_run:
+    workflows: [CI]
+    branches: [main]
+    types: [completed]
+  schedule:
+    - cron: "17 * * * *"
+  workflow_dispatch:
+
+env:
+  APP_URL: https://mail.samayo.me
+  CLOUDFLARE_ACCOUNT_ID: d6741b284ff6ec0caa6d15919dc00294
+  WORKER_NAME: relay-mail-cron
+
+jobs:
+  smoke:
+    if: >-
+      github.event_name != 'deployment_status' ||
+      (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    runs-on: ubuntu-24.04
+    steps:
+      - name: Pages load
+        run: |
+          for path in /welcome /privacy /terms /manifest.webmanifest; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 --retry-all-errors "$APP_URL$path")
+            echo "$path: HTTP $status"
+            [[ "$status" == 200 ]]
+          done
+
+      # Without the secret, the route must answer 401. A 404 or 500 means that the route or the server is broken.
+      - name: Cron routes answer
+        run: |
+          for path in /api/cron/check-mail /api/cron/expire-cache; do
+            status=$(curl -s -o /dev/null -w '%{http_code}' --retry 3 "$APP_URL$path")
+            echo "$path: HTTP $status"
+            [[ "$status" == 401 ]]
+          done
+
+      # The Worker runs each minute. Cloudflare analytics show its runs in the last 15 minutes.
+      - name: Worker cron runs
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+        run: |
+          body=$(jq -n \
+            --arg account "$CLOUDFLARE_ACCOUNT_ID" --arg worker "$WORKER_NAME" \
+            --arg since "$(date -u -d '-15 minutes' +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
+            '{query: "query($account: string!, $worker: string!, $since: Time!, $until: Time!) {
+                viewer { accounts(filter: {accountTag: $account}) {
+                  workersInvocationsAdaptive(limit: 1, filter: {scriptName: $worker, datetime_geq: $since, datetime_leq: $until}) {
+                    sum { requests errors }
+                  }
+                } }
+              }",
+              variables: {account: $account, worker: $worker, since: $since, until: $until}}')
+          result=$(curl -sf https://api.cloudflare.com/client/v4/graphql \
+            -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -d "$body")
+          requests=$(jq '[.data.viewer.accounts[0].workersInvocationsAdaptive[].sum.requests] | add // 0' <<<"$result")
+          errors=$(jq '[.data.viewer.accounts[0].workersInvocationsAdaptive[].sum.errors] | add // 0' <<<"$result")
+          echo "Worker runs in the last 15 minutes: $requests, errors: $errors"
+          [[ "$requests" -gt 0 ]] || { echo "::error::The Worker cron did not run in the last 15 minutes"; exit 1; }
+          [[ "$errors" -le $((requests / 2)) ]] || { echo "::error::Most Worker runs failed. Look at Workers Logs."; exit 1; }
