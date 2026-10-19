@@ -10,6 +10,8 @@ export default [
   route("connect/demo", "routes/connect.demo.tsx"),
   route("connect/hosted", "routes/connect.hosted.tsx"),
   route("logout", "routes/logout.tsx"),
+  route("oauth/login", "routes/oauth.login.tsx"),
+  route("oauth/consent", "routes/oauth.consent.tsx"),
 
   layout("routes/app.tsx", [
     route("mail", "routes/mail.redirect.tsx"),
@@ -31,4 +33,7 @@ export default [
   route("api/cron/expire-cache", "routes/api.cron.expire-cache.ts"),
   route("api/cron/check-mail", "routes/api.cron.check-mail.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
+  route("api/auth/*", "routes/api.auth.ts"),
+  route(".well-known/*", "routes/well-known.ts"),
+  route("mcp", "routes/mcp.ts"),
 ] satisfies RouteConfig;

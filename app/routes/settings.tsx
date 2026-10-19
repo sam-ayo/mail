@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellSlash, CaretLeft, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
@@ -8,6 +8,8 @@ import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } f
 import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
 import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
+import type { MailScope } from "~/lib/agents";
+import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-auth.server";
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
 import { resetDemoAccount } from "~/server/providers/demo.server";
@@ -17,7 +19,8 @@ export const meta: Route.MetaFunction = () => [{ title: "Settings · mail" }];
 
 export async function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
-  return { accounts: (await listAccounts(user.id)).map(toSummary) };
+  const [accounts, agents] = await Promise.all([listAccounts(user.id), listAgentConnections(user.id)]);
+  return { accounts: accounts.map(toSummary), agents, mcpUrl: MCP_RESOURCE };
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -40,6 +43,9 @@ export async function action({ request, context }: Route.ActionArgs) {
       closeImapConnection(accountId);
       resetDemoAccount(accountId);
       return { removed: accountId };
+    case "disconnectAgent":
+      await disconnectAgent(user.id, String(form.get("clientId") ?? ""));
+      return { disconnected: true };
     default:
       throw data("Unknown action", { status: 400 });
   }
@@ -87,6 +93,8 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         <Appearance />
 
         <Notifications />
+
+        <AiAgents agents={loaderData.agents} mcpUrl={loaderData.mcpUrl} />
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -429,5 +437,61 @@ function Notifications() {
         )}
       </div>
     </section>
+  );
+}
+
+const SCOPE_LABELS: Record<MailScope, string> = { "mail:read": "Read", "mail:write": "Organize", "mail:send": "Send" };
+
+function AiAgents({ agents, mcpUrl }: { agents: AgentConnection[]; mcpUrl: string }) {
+  async function copy() {
+    await navigator.clipboard.writeText(mcpUrl);
+    toast.success("Copied the MCP server URL");
+  }
+
+  return (
+    <section className="mt-10">
+      <h2 className="font-semibold">AI agents</h2>
+      <p className="mb-3 text-sm text-zinc-500">
+        Connect Claude, ChatGPT, Cursor, or another MCP client to the email in all your accounts. Add this URL as a
+        custom connector or remote MCP server. The agent asks you to sign in and allow access.
+      </p>
+      <div className="flex items-center gap-2">
+        <input readOnly value={mcpUrl} aria-label="MCP server URL" className={cx(inputClass, "font-mono text-xs")} />
+        <Button className="shrink-0" onClick={copy}>
+          <Copy className="size-4" /> Copy
+        </Button>
+      </div>
+      {agents.length > 0 && (
+        <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          {agents.map((agent) => (
+            <AgentRow key={agent.clientId} agent={agent} />
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
+
+function AgentRow({ agent }: { agent: AgentConnection }) {
+  const fetcher = useFetcher<typeof action>();
+  const scopes = agent.scopes.map((scope) => SCOPE_LABELS[scope]).join(", ");
+  return (
+    <li className="flex items-center gap-3 px-4 py-3">
+      <div className="min-w-0 flex-1">
+        <p className="truncate text-sm font-medium">{agent.name}</p>
+        <p className="truncate text-xs text-zinc-500">
+          {[agent.site, scopes, `Connected ${new Date(agent.connectedAt).toLocaleDateString()}`]
+            .filter(Boolean)
+            .join(" · ")}
+        </p>
+      </div>
+      <Button
+        className="shrink-0"
+        disabled={fetcher.state !== "idle"}
+        onClick={() => fetcher.submit({ intent: "disconnectAgent", clientId: agent.clientId }, { method: "post" })}
+      >
+        Disconnect
+      </Button>
+    </li>
   );
 }
