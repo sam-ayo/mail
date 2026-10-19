@@ -71,8 +71,36 @@ export async function createUser() {
   return id;
 }
 
-export async function userExists(id: string) {
-  return !!(await queryOne("SELECT 1 FROM users WHERE id = $1", [id]));
+/**
+ * Gives the workspace for a session's user ID. A merged workspace gives the
+ * workspace that it joined. An unknown ID gives undefined.
+ */
+export async function resolveUser(id: string | undefined) {
+  if (!id) return undefined;
+  const row = await queryOne<{ id: string }>(
+    "SELECT COALESCE(merged_into, id) AS id FROM users WHERE id = $1",
+    [id],
+  );
+  return row?.id;
+}
+
+/**
+ * Moves the accounts and devices of one workspace into another. This occurs
+ * when a browser connects a mailbox that another workspace has. Before, the
+ * mailbox moved, and the other browser lost it.
+ */
+export async function mergeUsers(from: string, into: string) {
+  const { count } = (await queryOne<{ count: number }>(
+    "SELECT COUNT(*)::int AS count FROM accounts WHERE user_id = $1",
+    [into],
+  ))!;
+  await query("UPDATE accounts SET user_id = $1, position = position + $2 WHERE user_id = $3", [
+    into,
+    count,
+    from,
+  ]);
+  await query("UPDATE push_subscriptions SET user_id = $1 WHERE user_id = $2", [into, from]);
+  await query("UPDATE users SET merged_into = $1 WHERE id = $2 OR merged_into = $2", [into, from]);
 }
 
 export async function listAccounts(userId: string): Promise<Account[]> {

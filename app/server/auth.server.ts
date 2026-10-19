@@ -3,15 +3,14 @@ import type { Session } from "react-router";
 import { redirect } from "react-router";
 import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
-import { createUser, findAccountOwner, upsertAccount, userExists } from "./accounts.server";
+import { createUser, findAccountOwner, mergeUsers, resolveUser, upsertAccount } from "./accounts.server";
 import { env } from "./env.server";
 import { closeImapConnection } from "./providers/imap.server";
 import { getSession, sessionStorage } from "./session.server";
 
 export async function getUserId(request: Request) {
   const session = await getSession(request);
-  const userId = session.get("userId");
-  return userId && (await userExists(userId)) ? userId : null;
+  return (await resolveUser(session.get("userId"))) ?? null;
 }
 
 /** For resource routes that the layout middleware does not cover. */
@@ -39,10 +38,12 @@ export async function connectAccount(
   input: { provider: ProviderKind; email: string; name: string; credentials: Credentials },
   returnTo = "/mail",
 ) {
-  let userId = session.get("userId");
-  if (!userId || !(await userExists(userId))) {
-    userId = (await findAccountOwner(input.provider, input.email)) ?? (await createUser());
-  }
+  const current = await resolveUser(session.get("userId"));
+  const owner = await findAccountOwner(input.provider, input.email);
+  // The mailbox is in another workspace. Join the two, so that each browser
+  // keeps all its accounts.
+  if (current && owner && current !== owner) await mergeUsers(current, owner);
+  const userId = owner ?? current ?? (await createUser());
   const accountId = await upsertAccount({ userId, ...input });
   // Drop a pooled connection that still uses an old password.
   if (input.provider === "imap") closeImapConnection(accountId);
