@@ -117,10 +117,24 @@ function rememberList(key: string, data: ListData, at: number) {
   if (listCache.size > LIST_CACHE_LIMIT) listCache.delete(listCache.keys().next().value!);
 }
 
+/**
+ * Keeps the rows of each account that failed to load. A short error, such as
+ * a Gmail rate limit during a check for new mail, then does not empty its list.
+ */
+function keepFailedRows(data: ListData, previous: ListData | undefined): ListData {
+  if (!previous || data.errors.length === 0) return data;
+  const failed = new Set(data.errors.map((error) => error.accountId));
+  const kept = previous.threads.filter((thread) => failed.has(thread.accountId));
+  if (kept.length === 0) return data;
+  const threads = [...data.threads, ...kept].sort((a, b) => b.date.localeCompare(a.date));
+  return { ...data, threads };
+}
+
 function fetchList(key: string, serverLoader: () => Promise<ListData>) {
   const previous = listCache.get(key);
   const pending = serverLoader().then(
-    (data) => {
+    (loaded) => {
+      const data = keepFailedRows(loaded, previous?.data);
       rememberList(key, data, Date.now());
       return data;
     },
