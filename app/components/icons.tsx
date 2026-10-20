@@ -49,6 +49,7 @@ import {
   SpamIcon,
   StarIcon,
   Sun03Icon,
+  Tick02Icon,
   UnfoldLessIcon,
   ViewIcon,
 } from "@hugeicons/core-free-icons";
@@ -88,6 +89,7 @@ export const CaretDown = icon(ArrowDown01Icon);
 export const CaretLeft = icon(ArrowLeft01Icon);
 export const CaretRight = icon(ArrowRight01Icon);
 export const CaretUp = icon(ArrowUp01Icon);
+export const Check = icon(Tick02Icon);
 export const CheckSquare = icon(CheckmarkSquare02Icon);
 export const CircleNotch = icon(Loading03Icon);
 export const Copy = icon(Copy01Icon);

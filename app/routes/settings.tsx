@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellSlash, CaretLeft, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
 import { data, Form, Link, useFetcher } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
@@ -54,7 +54,7 @@ export async function action({ request, context }: Route.ActionArgs) {
 export default function Settings({ loaderData }: Route.ComponentProps) {
   return (
     <div className="flex-1 overflow-y-auto">
-      <div className="mx-auto max-w-2xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
+      <div className="mx-auto max-w-4xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
         {/* On a phone, a back button as in iOS. */}
         <Link
           to="/mail"
@@ -443,9 +443,16 @@ function Notifications() {
 const SCOPE_LABELS: Record<MailScope, string> = { "mail:read": "Read", "mail:write": "Organize", "mail:send": "Send" };
 
 function AiAgents({ agents, mcpUrl }: { agents: AgentConnection[]; mcpUrl: string }) {
+  const [copied, setCopied] = useState(false);
+  const copiedTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(copiedTimer.current), []);
+
   async function copy() {
     await navigator.clipboard.writeText(mcpUrl);
     toast.success("Copied the MCP server URL");
+    setCopied(true);
+    clearTimeout(copiedTimer.current);
+    copiedTimer.current = setTimeout(() => setCopied(false), 2000);
   }
 
   return (
@@ -458,7 +465,7 @@ function AiAgents({ agents, mcpUrl }: { agents: AgentConnection[]; mcpUrl: strin
       <div className="flex items-center gap-2">
         <input readOnly value={mcpUrl} aria-label="MCP server URL" className={cx(inputClass, "font-mono text-xs")} />
         <Button className="shrink-0" onClick={copy}>
-          <Copy className="size-4" /> Copy
+          <CopyState copied={copied} />
         </Button>
       </div>
       {agents.length > 0 && (
@@ -469,6 +476,27 @@ function AiAgents({ agents, mcpUrl }: { agents: AgentConnection[]; mcpUrl: strin
         </ul>
       )}
     </section>
+  );
+}
+
+// Both states stay in the same grid cell, so the button keeps its width.
+// The blur blends the two icons into one change.
+const SWAP = "[grid-area:1/1] transition-[opacity,scale,filter] duration-200 ease-out motion-reduce:scale-100! motion-reduce:blur-none!";
+
+function CopyState({ copied }: { copied: boolean }) {
+  const shown = "opacity-100 scale-100 blur-none";
+  const hidden = "opacity-0 scale-[0.6] blur-[2px]";
+  return (
+    <>
+      <span className="grid size-4 place-items-center" aria-hidden>
+        <Copy className={cx("size-4", SWAP, copied ? hidden : shown)} />
+        <Check className={cx("size-4", SWAP, copied ? shown : hidden)} />
+      </span>
+      <span className="grid">
+        <span className={cx(SWAP, copied ? "opacity-0" : "opacity-100")} aria-hidden={copied}>Copy</span>
+        <span className={cx(SWAP, copied ? "opacity-100" : "opacity-0")} aria-hidden={!copied}>Copied</span>
+      </span>
+    </>
   );
 }
 

@@ -41,15 +41,11 @@
     0.9967 91.7%, 0.9976 95.8%, 1);
 }
 
-/* Press feedback for anything a person can press. "scale" is separate from
-   "transform", so it does not fight other transforms on the element. */
+/* Color transitions for anything a person can press. A press does not scale. */
 @utility press {
-  transition-property: scale, color, background-color, border-color, box-shadow, opacity;
+  transition-property: color, background-color, border-color, box-shadow, opacity;
   transition-duration: 160ms;
   transition-timing-function: var(--ease-out);
-  &:active:not(:disabled, [data-disabled]) {
-    scale: 0.97;
-  }
 }
 
 html,
@@ -330,7 +326,6 @@ button,
 /* Reduced motion: keep fades, remove movement and scale. Popups and drawers
    in this app do not use translate to center, so this is safe. */
 @media (prefers-reduced-motion: reduce) {
-  .press:active,
   [data-starting-style],
   [data-ending-style] {
     scale: none !important;
