@@ -21,7 +21,13 @@ jobs:
           cache: pnpm
       - run: pnpm install --frozen-lockfile
       - run: pnpm run typecheck
+      # mcp-use loads the built MCP server to check it, and env.server.ts
+      # needs these values when it loads. The build connects to nothing.
       - run: pnpm run build
+        env:
+          DATABASE_URL: postgresql://build:build@localhost/build
+          SESSION_SECRET: build
+          ENCRYPTION_KEY: build
 
   # The Worker in worker/ has its own package.json and lockfile.
   worker:
