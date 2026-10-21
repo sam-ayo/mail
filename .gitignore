@@ -4,6 +4,7 @@
 /build/
 .env
 /.data/
+/.mcp-use/
 
 .env.production
 .vercel

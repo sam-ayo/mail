@@ -1,0 +1,33 @@
+@import "tailwindcss" source("./");
+
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/* The host sets these variables, so the view looks like the chat around it.
+   The fallbacks are the colors of the mail app. */
+@theme inline {
+  --color-surface: var(--color-background-primary, light-dark(#fbfbfe, #111118));
+  --color-field: var(--color-background-secondary, light-dark(#f3f3f9, #1c1c25));
+  --color-ink: var(--color-text-primary, light-dark(#1c1c27, #ececf3));
+  --color-muted: var(--color-text-secondary, light-dark(#6b6b80, #9a9aae));
+  --color-line: var(--color-border-primary, light-dark(#e3e3ee, #2c2c38));
+  --color-danger: var(--color-text-danger, #dc2626);
+  --color-success: var(--color-text-success, #16a34a);
+  --color-accent: #6366f1;
+  --radius-box: var(--border-radius-lg, 12px);
+}
+
+:root {
+  color-scheme: light dark;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+}
+
+[data-theme="dark"] {
+  color-scheme: dark;
+}
+
+body {
+  @apply bg-transparent font-sans text-sm text-ink antialiased;
+}

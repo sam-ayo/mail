@@ -35,5 +35,6 @@ export default [
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
   route("api/auth/*", "routes/api.auth.ts"),
   route(".well-known/*", "routes/well-known.ts"),
-  route("mcp", "routes/mcp.ts"),
+  route("mcp", "routes/mcp.ts", { id: "mcp" }),
+  route("mcp/*", "routes/mcp.ts", { id: "mcp-assets" }),
 ] satisfies RouteConfig;
