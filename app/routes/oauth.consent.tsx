@@ -6,7 +6,7 @@ import { listAccounts, resolveUser, toSummary } from "~/server/accounts.server";
 import { env } from "~/server/env.server";
 import type { Route } from "./+types/oauth.consent";
 
-export const meta: Route.MetaFunction = () => [{ title: "Allow access · mail" }];
+export const meta: Route.MetaFunction = () => [{ title: "Allow access · mail by samayo" }];
 
 // Another site must not show this page in a frame and trick a click on Allow.
 export const headers: Route.HeadersFunction = () => ({

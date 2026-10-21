@@ -135,7 +135,7 @@ async function loadCached({ params, request, serverLoader }: Route.ClientLoaderA
 }
 
 export const meta: Route.MetaFunction = ({ loaderData }) => [
-  { title: `${loaderData?.thread.subject ?? "Conversation"} · mail` },
+  { title: `${loaderData?.thread.subject ?? "Conversation"} · mail by samayo` },
 ];
 
 type ReplyMode = "reply" | "replyAll" | "forward";

@@ -5,7 +5,7 @@ import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
 import type { Route } from "./+types/oauth.login";
 
-export const meta: Route.MetaFunction = () => [{ title: "Connect an AI agent · mail" }];
+export const meta: Route.MetaFunction = () => [{ title: "Connect an AI agent · mail by samayo" }];
 
 // Parameters that Better Auth adds when it signs the query. The authorize
 // endpoint must not get them again. "prompt" goes too: "prompt=login" sends
@@ -46,7 +46,7 @@ export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
         <Logo className="text-lg" />
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">Sign in to connect an AI agent</h1>
         <p className="mt-2 text-sm text-zinc-500">
-          This browser is not signed in to mail. Sign in with an account of your workspace. Then you can give the
+          This browser is not signed in to mail by samayo. Sign in with an account of your workspace. Then you can give the
           agent access.
         </p>
         <div className="mt-6 flex flex-col gap-2.5">
@@ -68,7 +68,7 @@ export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
           )}
         </div>
         <p className="mt-4 text-center text-xs text-zinc-400">
-          For an IMAP or hosted address, open mail in this browser and sign in. Then connect the agent again.
+          For an IMAP or hosted address, open mail by samayo in this browser and sign in. Then connect the agent again.
         </p>
       </div>
     </main>

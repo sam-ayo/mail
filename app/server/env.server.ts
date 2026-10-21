@@ -28,7 +28,7 @@ export const env = {
     tenant: process.env.MICROSOFT_TENANT || "common",
   },
   hosted: {
-    /** The addresses that mail hosts. The first one also gets mail for unknown addresses at its domain. */
+    /** The addresses that mail by samayo hosts. The first one also gets mail for unknown addresses at its domain. */
     mailboxes: (process.env.HOSTED_MAILBOXES || "")
       .split(",")
       .map((address) => address.trim().toLowerCase())

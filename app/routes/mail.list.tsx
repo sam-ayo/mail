@@ -207,7 +207,7 @@ export function shouldRevalidate({
 }
 
 export const meta: Route.MetaFunction = ({ params }) => [
-  { title: `${isFolder(params.folder) ? FOLDER_LABELS[params.folder] : "Mail"} · mail` },
+  { title: `${isFolder(params.folder) ? FOLDER_LABELS[params.folder] : "Mail"} · mail by samayo` },
 ];
 
 export interface ListOutletContext {

@@ -1,33 +1,33 @@
 import { CONTACT_EMAIL, LegalPage } from "~/components/legal";
 import type { Route } from "./+types/privacy";
 
-export const meta: Route.MetaFunction = () => [{ title: "Privacy policy · mail" }];
+export const meta: Route.MetaFunction = () => [{ title: "Privacy policy · mail by samayo" }];
 
 export default function Privacy() {
   return (
     <LegalPage title="Privacy policy">
       <p>
-        mail is an email client at mail.samayo.me. It shows your Gmail, Outlook, and
-        Microsoft 365 accounts in one inbox. This policy tells you which data mail uses, and how.
+        mail by samayo is an email client at mail.samayo.me. It shows your Gmail, Outlook, and
+        Microsoft 365 accounts in one inbox. This policy tells you which data mail by samayo uses, and how.
       </p>
 
-      <h2>Data that mail uses</h2>
+      <h2>Data that mail by samayo uses</h2>
       <ul>
         <li>
           <strong>Your account profile:</strong> the email address and name of each account that you connect.
         </li>
         <li>
-          <strong>OAuth tokens:</strong> the access and refresh tokens that Google or Microsoft give to mail when you
+          <strong>OAuth tokens:</strong> the access and refresh tokens that Google or Microsoft give to mail by samayo when you
           sign in.
         </li>
         <li>
-          <strong>Your email:</strong> messages, labels, folders, and attachments. mail reads them from Google or
+          <strong>Your email:</strong> messages, labels, folders, and attachments. mail by samayo reads them from Google or
           Microsoft when you open the app.
         </li>
       </ul>
 
-      <h2>How mail uses your data</h2>
-      <p>mail uses your data only to give you the features that you see in the app:</p>
+      <h2>How mail by samayo uses your data</h2>
+      <p>mail by samayo uses your data only to give you the features that you see in the app:</p>
       <ul>
         <li>Show your messages and threads.</li>
         <li>Search your mail.</li>
@@ -38,47 +38,47 @@ export default function Privacy() {
 
       <h2>Storage</h2>
       <p>
-        mail keeps your account profiles and your OAuth tokens in its database. It encrypts the tokens before it
+        mail by samayo keeps your account profiles and your OAuth tokens in its database. It encrypts the tokens before it
         stores them.
       </p>
       <p>
-        To show your message lists quickly, mail also keeps a cache of each conversation in the list: the subject,
-        the senders and recipients, the date, and a short snippet of the text. mail encrypts this cache, and deletes
-        each entry after 60 days. When you remove an account, mail deletes its cache at once.
+        To show your message lists quickly, mail by samayo also keeps a cache of each conversation in the list: the subject,
+        the senders and recipients, the date, and a short snippet of the text. mail by samayo encrypts this cache, and deletes
+        each entry after 60 days. When you remove an account, mail by samayo deletes its cache at once.
       </p>
       <p>
-        For Gmail and Outlook accounts, mail does not keep a copy of the full messages or of the attachments. It
+        For Gmail and Outlook accounts, mail by samayo does not keep a copy of the full messages or of the attachments. It
         gets them from Google or Microsoft each time and sends them directly to your browser over HTTPS.
       </p>
       <p>
-        For an address that mail hosts, mail is the mail server. It keeps the full messages and their attachments
-        in its database until you delete them. Resend receives and sends this mail for mail.
+        For an address that mail by samayo hosts, mail by samayo is the mail server. It keeps the full messages and their attachments
+        in its database until you delete them. Resend receives and sends this mail for mail by samayo.
       </p>
-      <p>mail uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
+      <p>mail by samayo uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
 
       <h2>Sharing</h2>
       <p>
-        mail does not sell your data. mail does not share your data with third parties, and does not use it for
+        mail by samayo does not sell your data. mail by samayo does not share your data with third parties, and does not use it for
         advertisements. People do not read your email, unless you give permission for a specific message, or the
         law requires it, or it is necessary for security.
       </p>
 
       <h2>Google user data</h2>
       <p>
-        mail's use and transfer of information received from Google APIs to any other app will adhere to the{" "}
+        mail by samayo's use and transfer of information received from Google APIs to any other app will adhere to the{" "}
         <a href="https://developers.google.com/terms/api-services-user-data-policy">
           Google API Services User Data Policy
         </a>
         , including the Limited Use requirements.
       </p>
       <p>
-        mail does not use Gmail data to train artificial intelligence (AI) or machine learning models.
+        mail by samayo does not use Gmail data to train artificial intelligence (AI) or machine learning models.
       </p>
 
       <h2>Remove your data</h2>
       <p>
-        To remove an account, open Settings and click Remove. mail then deletes the profile, the tokens, and the cache of
-        that account. Your mail stays with Google or Microsoft. You can also revoke the access of mail at{" "}
+        To remove an account, open Settings and click Remove. mail by samayo then deletes the profile, the tokens, and the cache of
+        that account. Your mail stays with Google or Microsoft. You can also revoke the access of mail by samayo at{" "}
         <a href="https://myaccount.google.com/permissions">myaccount.google.com/permissions</a> or{" "}
         <a href="https://account.microsoft.com/privacy/app-access">account.microsoft.com/privacy/app-access</a>.
       </p>

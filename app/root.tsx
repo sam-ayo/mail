@@ -29,7 +29,7 @@ export const links: Route.LinksFunction = () => [
   { rel: "apple-touch-icon", href: "/apple-touch-icon.png" },
 ];
 
-export const meta: Route.MetaFunction = () => [{ title: "mail" }];
+export const meta: Route.MetaFunction = () => [{ title: "mail by samayo" }];
 
 // Set the theme before the first paint, so the page does not flash.
 const themeScript = `(() => {
@@ -90,7 +90,7 @@ export function Layout({ children }: { children: React.ReactNode }) {
             env(safe-area-inset-top). */}
         <meta name="mobile-web-app-capable" content="yes" />
         <meta name="apple-mobile-web-app-capable" content="yes" />
-        <meta name="apple-mobile-web-app-title" content="mail" />
+        <meta name="apple-mobile-web-app-title" content="mail by samayo" />
         <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
         <script dangerouslySetInnerHTML={{ __html: themeScript }} />
         <Meta />

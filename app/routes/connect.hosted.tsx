@@ -7,7 +7,7 @@ import type { Route } from "./+types/connect.hosted";
 
 export const loader = () => redirect("/welcome");
 
-/** Connects an address that mail hosts. The person must know the hosted mail password. */
+/** Connects an address that mail by samayo hosts. The person must know the hosted mail password. */
 export async function action({ request }: Route.ActionArgs) {
   const session = await getSession(request);
   if (!oauthConfigured.hosted) return redirectWithError(session, "/welcome", "Hosted mail is not set up on this server.");

@@ -9,7 +9,7 @@ import { fromParsed, messageFromParsed } from "./imap.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
 import { ProviderError } from "./types";
 
-// Mail for the addresses that mail hosts, in the hosted_messages table.
+// Mail for the addresses that mail by samayo hosts, in the hosted_messages table.
 // A thread ID is the thread_id column. A message ID is the row ID.
 
 type StoredFolder = "inbox" | "sent" | "archive" | "spam" | "trash";
@@ -18,7 +18,7 @@ const FOLDER_FILTER: Record<Folder, string> = {
   inbox: "folder = 'inbox'",
   starred: "starred AND folder NOT IN ('spam', 'trash')",
   sent: "folder = 'sent'",
-  // mail does not save drafts for hosted addresses.
+  // mail by samayo does not save drafts for hosted addresses.
   drafts: "false",
   archive: "folder = 'archive'",
   spam: "folder = 'spam'",

@@ -9,8 +9,8 @@ import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Sign in · mail" },
-  { name: "description", content: "mail is an email client. It shows your Gmail and Outlook accounts in one inbox." },
+  { title: "Sign in · mail by samayo" },
+  { name: "description", content: "mail by samayo is an email client. It shows your Gmail and Outlook accounts in one inbox." },
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
@@ -53,7 +53,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           ) : (
             // Google compares this name with the app name on the OAuth consent screen.
             <p className="mt-2 text-sm text-zinc-500">
-              mail is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
+              mail by samayo is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
               write, and sort your email.
             </p>
           )}

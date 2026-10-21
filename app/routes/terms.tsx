@@ -2,44 +2,44 @@ import { Link } from "react-router";
 import { CONTACT_EMAIL, LegalPage } from "~/components/legal";
 import type { Route } from "./+types/terms";
 
-export const meta: Route.MetaFunction = () => [{ title: "Terms of service · mail" }];
+export const meta: Route.MetaFunction = () => [{ title: "Terms of service · mail by samayo" }];
 
 export default function Terms() {
   return (
     <LegalPage title="Terms of service">
       <p>
-        These terms apply when you use mail at mail.samayo.me. When you use mail, you agree
+        These terms apply when you use mail by samayo at mail.samayo.me. When you use mail by samayo, you agree
         to these terms.
       </p>
 
       <h2>The service</h2>
       <p>
-        mail is an email client. It connects to your Gmail, Outlook, or Microsoft 365 account with OAuth, and shows
+        mail by samayo is an email client. It connects to your Gmail, Outlook, or Microsoft 365 account with OAuth, and shows
         your mail in one inbox. Your mail stays with Google or Microsoft.
       </p>
 
       <h2>Your account</h2>
       <ul>
         <li>Connect only email accounts that you own or that you have permission to use.</li>
-        <li>Do not use mail to send spam, or for illegal activity.</li>
+        <li>Do not use mail by samayo to send spam, or for illegal activity.</li>
         <li>Obey the terms of Google and Microsoft for your email accounts.</li>
       </ul>
 
       <h2>Your data</h2>
       <p>
-        You own your data. The <Link to="/privacy">privacy policy</Link> tells you how mail uses it.
+        You own your data. The <Link to="/privacy">privacy policy</Link> tells you how mail by samayo uses it.
       </p>
 
       <h2>No warranty</h2>
       <p>
-        mail is free and comes "as is", without a warranty of any kind. mail is not responsible for lost mail, lost
-        data, or a stop in the service. To the maximum extent that the law permits, mail is not liable for damages
+        mail by samayo is free and comes "as is", without a warranty of any kind. mail by samayo is not responsible for lost mail, lost
+        data, or a stop in the service. To the maximum extent that the law permits, mail by samayo is not liable for damages
         that come from your use of the service.
       </p>
 
       <h2>End of use</h2>
       <p>
-        You can stop the use of mail at any time. To do this, remove your accounts in Settings. mail can stop or
+        You can stop the use of mail by samayo at any time. To do this, remove your accounts in Settings. mail by samayo can stop or
         change the service at any time.
       </p>
 
