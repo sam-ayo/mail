@@ -307,7 +307,28 @@ function AccountDetail({
     colorSaver.submit({ intent: "update", accountId: account.id, color: value }, { method: "post" });
   }
 
-  useEffect(() => () => clearTimeout(timer.current), []);
+  // iOS Safari sends the native change event on each move in the picker, not only when the picker closes.
+  // The color saves after a short pause, and one picker session keeps one added color, not one for each pause.
+  const pickTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  const pickedColor = useRef<string>(undefined);
+  const commitPick = useRef<(value: string) => void>(undefined);
+  commitPick.current = (value) => {
+    if (pickedColor.current && pickedColor.current !== value) {
+      onRemoveColor(pickedColor.current);
+      pickedColor.current = undefined;
+    }
+    if (!swatches.includes(value)) pickedColor.current = value;
+    onAddColor(value);
+    saveColor(value);
+  };
+
+  useEffect(
+    () => () => {
+      clearTimeout(timer.current);
+      clearTimeout(pickTimer.current);
+    },
+    [],
+  );
 
   useEffect(() => {
     if (saving || (nameSaver.data == null && colorSaver.data == null)) return;
@@ -356,7 +377,7 @@ function AccountDetail({
 
       <fieldset className="flex flex-col gap-2">
         <legend className="mb-2 text-sm font-medium">Color</legend>
-        <div className="flex flex-wrap items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2 pointer-coarse:gap-3">
           {swatches.map((swatch) => (
             <span key={swatch} className="group/swatch relative flex">
               <label title={swatch} className="cursor-pointer">
@@ -379,7 +400,8 @@ function AccountDetail({
                   aria-label={`Remove the color ${swatch}`}
                   title="Remove the color"
                   onClick={() => onRemoveColor(swatch)}
-                  className="absolute -top-1.5 -right-1.5 grid size-3.5 place-items-center rounded-full bg-zinc-700 text-white opacity-0 group-hover/swatch:opacity-100 focus-visible:opacity-100 dark:bg-zinc-300 dark:text-zinc-900"
+                  // A touch screen has no hover, so the button always shows there, with a larger area to tap.
+                  className="absolute -top-1.5 -right-1.5 grid size-3.5 place-items-center rounded-full bg-zinc-700 text-white opacity-0 group-hover/swatch:opacity-100 focus-visible:opacity-100 pointer-coarse:opacity-100 pointer-coarse:after:absolute pointer-coarse:after:-inset-1.5 pointer-coarse:after:content-[''] dark:bg-zinc-300 dark:text-zinc-900"
                 >
                   <X className="size-2.5" />
                 </button>
@@ -396,13 +418,17 @@ function AccountDetail({
               aria-label="Add a color"
               value={color}
               onChange={(event) => setPreviewColor(event.target.value)}
-              // React's onChange runs on each move in the picker. The native change event runs once, when the picker closes.
+              // A new picker session starts with no added color.
+              onClick={() => (pickedColor.current = undefined)}
+              // React's onChange runs on each move in the picker. The native change event runs when the picker closes,
+              // and on iOS also on each move.
               ref={(input) => {
                 if (!input) return;
                 input.onchange = () => {
                   const value = input.value.toLowerCase();
-                  onAddColor(value);
-                  saveColor(value);
+                  setPreviewColor(value);
+                  clearTimeout(pickTimer.current);
+                  pickTimer.current = setTimeout(() => commitPick.current?.(value), 700);
                 };
               }}
               className="absolute inset-0 size-full cursor-pointer opacity-0"
