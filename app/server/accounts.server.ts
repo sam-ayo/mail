@@ -65,10 +65,26 @@ export function toSummary(account: Account): AccountSummary {
   return { id, provider, email, name, color, status, ...(look && { look }) };
 }
 
-export async function createUser() {
+export async function createUser({ demo = false } = {}) {
   const id = randomUUID();
-  await query("INSERT INTO users (id) VALUES ($1)", [id]);
+  await query("INSERT INTO users (id, demo) VALUES ($1, $2)", [id, demo]);
   return id;
+}
+
+/** True for a workspace of the public demo or of the reviewer sign-in. */
+export async function isDemoUser(id: string) {
+  const row = await queryOne<{ demo: boolean }>("SELECT demo FROM users WHERE id = $1", [id]);
+  return row?.demo ?? false;
+}
+
+/** Deletes the demo workspaces that are older than a week. A workspace with a real mailbox stays. */
+export async function deleteExpiredDemoUsers() {
+  const rows = await query<{ id: string }>(
+    `DELETE FROM users u WHERE u.demo AND u.created_at < now() - interval '7 days'
+       AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.user_id = u.id AND a.provider <> 'demo')
+     RETURNING u.id`,
+  );
+  return rows.length;
 }
 
 /**
@@ -163,7 +179,19 @@ export async function upsertAccount(input: {
     );
     return existing.id;
   }
+  return insertAccount({ ...input, email });
+}
 
+/** Adds the account to the workspace. Demo addresses can be in more than one workspace. */
+export async function insertAccount(input: {
+  userId: string;
+  provider: ProviderKind;
+  email: string;
+  name: string;
+  credentials: Credentials;
+}): Promise<string> {
+  const email = input.email.toLowerCase();
+  const credentials = encrypt(JSON.stringify(input.credentials));
   const { count } = (await queryOne<{ count: number }>(
     "SELECT COUNT(*)::int AS count FROM accounts WHERE user_id = $1",
     [input.userId],

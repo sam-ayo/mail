@@ -1,9 +1,10 @@
 import { ArrowLeft, EnvelopeSimple, Sparkle } from "~/components/icons";
-import { data, Form, Link } from "react-router";
+import { data, Form, Link, redirect } from "react-router";
 import { LegalLinks } from "~/components/legal";
 import { GoogleIcon, Logo, MicrosoftIcon, ProviderIcon, cx, inputClass } from "~/components/ui";
 import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
+import { isDemoHost } from "~/server/demo-accounts.server";
 import { DEMO_PERSONAS } from "~/server/providers/demo.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
@@ -14,6 +15,8 @@ export const meta: Route.MetaFunction = () => [
 ];
 
 export async function loader({ request }: Route.LoaderArgs) {
+  // OAuth sign-in does not work on the demo host. The demo page has a link to the app's own host.
+  if (isDemoHost(request)) throw redirect("/demo");
   const session = await getSession(request);
   const error = session.get("error");
   return data(

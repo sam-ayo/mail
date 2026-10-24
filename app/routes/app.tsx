@@ -32,7 +32,7 @@ import { useTheme, useThemeMode } from "~/components/theme";
 import { cx } from "~/components/ui";
 import type { Folder } from "~/lib/mail";
 import { FOLDER_LABELS, FOLDERS, isFolder } from "~/lib/mail";
-import { listAccounts, toSummary } from "~/server/accounts.server";
+import { isDemoUser, listAccounts, toSummary } from "~/server/accounts.server";
 import { getUserId } from "~/server/auth.server";
 import { userContext } from "~/server/context";
 import { getDemoDataset } from "~/server/providers/demo.server";
@@ -55,7 +55,8 @@ export async function loader({ context }: Route.LoaderArgs) {
   const demo = accounts.find((a) => a.provider === "demo");
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;
-  return { accounts, devDataset };
+  // A demo workspace shows the demo company in the sidebar.
+  return { accounts, devDataset, demo: await isDemoUser(user.id) };
 }
 
 export function shouldRevalidate({
@@ -302,7 +303,7 @@ function NavDrawer({
   }, []);
 
   return (
-    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
+    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left" disablePointerDismissal>
       <Drawer.SwipeArea
         ref={swipeArea}
         disabled={threadOpen}

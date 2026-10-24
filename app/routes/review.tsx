@@ -2,7 +2,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 import { data, Form, redirect } from "react-router";
 import { Logo, inputClass } from "~/components/ui";
 import { redirectWithError } from "~/server/auth.server";
-import { createReviewWorkspace } from "~/server/demo-accounts.server";
+import { createDemoWorkspace } from "~/server/demo-accounts.server";
 import { env } from "~/server/env.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/review";
@@ -46,7 +46,7 @@ export async function action({ request }: Route.ActionArgs) {
   // A new session, not the session of this browser: connectAccount would join
   // a signed-in workspace to the review workspace.
   const session = await sessionStorage.getSession();
-  session.set("userId", await createReviewWorkspace());
+  session.set("userId", await createDemoWorkspace());
   return redirect(returnTo, { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
 }
 

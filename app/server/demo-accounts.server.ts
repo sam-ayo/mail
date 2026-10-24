@@ -1,4 +1,4 @@
-import { createUser, findAccountOwner, upsertAccount } from "./accounts.server";
+import { createUser, findAccountOwner, insertAccount } from "./accounts.server";
 import { randomToken } from "./crypto.server";
 import { DEMO_PERSONAS } from "./providers/demo.server";
 
@@ -25,17 +25,25 @@ async function freeEmail(email: string) {
 }
 
 // The work, Gmail, and Outlook personas. They look like real accounts.
-const REVIEW_PERSONAS = [0, 1, 3];
+const WORKSPACE_PERSONAS = [0, 1, 3];
 
 /**
- * A new workspace with sample mail for a directory reviewer. Each sign-in gets
- * its own workspace, so reviewers never see each other's accounts. Demo
- * accounts send nothing: a sent message only goes to their Sent folder.
+ * A new workspace with sample mail, for a visitor of the public demo or a
+ * directory reviewer. Each visitor gets a workspace, so visitors never see
+ * each other's mail. All workspaces have the same addresses, such as
+ * alex@northwind.io. Demo accounts send nothing: a sent message only goes
+ * to their Sent folder. The daily cron job deletes the workspace after a week.
  */
-export async function createReviewWorkspace() {
-  const userId = await createUser();
-  for (const persona of REVIEW_PERSONAS) {
-    await upsertAccount({ userId, ...(await demoAccount(persona)) });
+export async function createDemoWorkspace() {
+  const userId = await createUser({ demo: true });
+  for (const persona of WORKSPACE_PERSONAS) {
+    const { name, email, look } = DEMO_PERSONAS[persona];
+    await insertAccount({ userId, provider: "demo", email: email!, name, credentials: { persona, look } });
   }
   return userId;
+}
+
+/** True on demo.samayo.me. There, the home page and the sign-in page open the demo. */
+export function isDemoHost(request: Request) {
+  return new URL(request.url).hostname.startsWith("demo.");
 }

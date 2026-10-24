@@ -2,6 +2,7 @@ import { createHash } from "node:crypto";
 import { lookup, resolveTxt } from "node:dns/promises";
 import { isIP } from "node:net";
 import { getDomain, getPublicSuffix } from "tldts";
+import { DEMO_COMPANY } from "~/lib/demo-company";
 
 export interface AvatarImage {
   data: Uint8Array<ArrayBuffer>;
@@ -380,12 +381,18 @@ const emailLogo = cached(async (email: string): Promise<AvatarImage | null> => {
 });
 
 export function avatarFor(email: string) {
-  return emailLogo(email.trim().toLowerCase());
+  const address = email.trim().toLowerCase();
+  if (address.endsWith(`@${DEMO_COMPANY.domain}`)) return Promise.resolve(DEMO_LOGO);
+  return emailLogo(address);
 }
+
+// The logo of the demo company. Its domain has no site.
+const DEMO_LOGO: AvatarImage = { data: new TextEncoder().encode(DEMO_COMPANY.logo), contentType: "image/svg+xml" };
 
 /** The logo of the company that owns a custom mail domain. A personal mail service has no logo. */
 export async function companyLogoFor(value: string) {
   const domain = toAsciiDomain(value.trim().toLowerCase());
+  if (domain === DEMO_COMPANY.domain) return DEMO_LOGO;
   if (!domain || PERSONAL_DOMAINS.has(getDomain(domain) ?? domain)) return null;
   return domainLogo(domain);
 }

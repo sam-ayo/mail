@@ -3,7 +3,7 @@ import type { Session } from "react-router";
 import { redirect } from "react-router";
 import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
-import { createUser, findAccountOwner, mergeUsers, resolveUser, upsertAccount } from "./accounts.server";
+import { createUser, findAccountOwner, isDemoUser, mergeUsers, resolveUser, upsertAccount } from "./accounts.server";
 import { env } from "./env.server";
 import { closeImapConnection } from "./providers/imap.server";
 import { getSession, sessionStorage } from "./session.server";
@@ -38,7 +38,9 @@ export async function connectAccount(
   input: { provider: ProviderKind; email: string; name: string; credentials: Credentials },
   returnTo = "/mail",
 ) {
-  const current = await resolveUser(session.get("userId"));
+  let current = await resolveUser(session.get("userId"));
+  // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.
+  if (current && input.provider !== "demo" && (await isDemoUser(current))) current = undefined;
   const owner = await findAccountOwner(input.provider, input.email);
   // The mailbox is in another workspace. Join the two, so that each browser
   // keeps all its accounts.
