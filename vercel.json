@@ -1,4 +1,5 @@
 {
+  "git": { "deploymentEnabled": { "main": true, "**": false } },
   "crons": [{ "path": "/api/cron/expire-cache", "schedule": "0 4 * * *" }],
   "headers": [
     {
