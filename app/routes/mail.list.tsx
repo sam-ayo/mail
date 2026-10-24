@@ -867,10 +867,12 @@ function ThreadList({
           {/* On a phone, "New message" floats above the list, near the thumb, as the reply actions do. */}
           <button
             type="button"
+            aria-label="New message"
+            title="New message"
             onClick={() => openCompose()}
-            className="press absolute right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] inline-flex h-12 items-center gap-2 rounded-full bg-accent-600 px-5 text-sm font-semibold text-white shadow-lg shadow-accent-600/30 md:hidden"
+            className="press absolute right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] inline-flex size-14 items-center justify-center rounded-full bg-accent-600 text-white shadow-lg shadow-accent-600/30 md:hidden"
           >
-            <NotePencil className="size-5" /> New message
+            <NotePencil className="size-6" />
           </button>
         </div>
 
