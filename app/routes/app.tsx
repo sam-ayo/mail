@@ -268,7 +268,7 @@ function Shell() {
 /**
  * On small screens the sidebar is a drawer. Swipe right from the left edge to
  * open it. Swipe left or tap outside it to close it. A tap on a row in the
- * drawer does not close it. When a conversation is open, the same swipe
+ * drawer does not close it. A tap on "New message" closes it. When a conversation is open, the same swipe
  * goes back to the list, so the swipe area is off. The open state is here and
  * not in the shell, so an open or a close does not render the message list
  * again while the drawer moves. The drawer stays mounted for the same reason.
@@ -289,6 +289,20 @@ function NavDrawer({
   onShowShortcuts(): void;
 }) {
   const [navOpen, setNavOpen] = useState(false);
+  const { openCompose } = useMail();
+
+  // "New message" in the drawer closes the drawer first. The composer opens
+  // after the drawer is closed, so the keyboard does not show over the drawer.
+  const composeAfterClose = useRef(false);
+  function compose() {
+    composeAfterClose.current = true;
+    setNavOpen(false);
+  }
+  function onOpenChangeComplete(open: boolean) {
+    if (open || !composeAfterClose.current) return;
+    composeAfterClose.current = false;
+    openCompose();
+  }
 
   // The list header opens the sidebar drawer on small screens.
   useEffect(() => {
@@ -316,7 +330,12 @@ function NavDrawer({
   }, []);
 
   return (
-    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
+    <Drawer.Root
+      open={navOpen}
+      onOpenChange={setNavOpen}
+      onOpenChangeComplete={onOpenChangeComplete}
+      swipeDirection="left"
+    >
       <Drawer.SwipeArea
         ref={swipeArea}
         disabled={threadOpen}
@@ -329,6 +348,7 @@ function NavDrawer({
             <Drawer.Title className="sr-only">Folders and accounts</Drawer.Title>
             <Sidebar
               drawer
+              onCompose={compose}
               scope={scope}
               folder={folder}
               dark={dark}

@@ -87,6 +87,7 @@ export function Sidebar({
   dark,
   resizable,
   drawer,
+  onCompose,
 }: {
   scope?: string;
   folder?: Folder;
@@ -97,6 +98,8 @@ export function Sidebar({
   resizable?: boolean;
   /** The panel is in the drawer on a small screen. */
   drawer?: boolean;
+  /** Replaces the default action of the "New message" button. */
+  onCompose?(): void;
 }) {
   const { accounts, unreadCounts, openCompose } = useMail();
   const demo = useRouteLoaderData<typeof appLoader>("routes/app")?.demo;
@@ -138,7 +141,7 @@ export function Sidebar({
             The shortcut is plain text, as the counts are. */}
         <button
           type="button"
-          onClick={() => openCompose()}
+          onClick={() => (onCompose ? onCompose() : openCompose())}
           aria-keyshortcuts="c"
           className="tappable press flex h-7 w-full items-center gap-2.5 rounded-[7px] px-2 text-[13px] font-medium pointer-coarse:h-11 pointer-coarse:text-base text-accent-600 hover:bg-(--sidebar-hover) dark:text-accent-400"
         >
