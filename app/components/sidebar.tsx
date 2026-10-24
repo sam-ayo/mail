@@ -21,10 +21,8 @@ import {
   Warning,
 } from "./icons";
 import { type ComponentProps, createContext, useContext, useEffect, useRef, useState, useSyncExternalStore } from "react";
-import { Link, NavLink, matchPath, useFetcher, useNavigate, useNavigation, useRouteLoaderData } from "react-router";
-import { DEMO_COMPANY, DEMO_COMPANY_LOGO_URL } from "~/lib/demo-company";
+import { Link, NavLink, matchPath, useFetcher, useNavigate, useNavigation } from "react-router";
 import type { AccountSummary, Folder } from "~/lib/mail";
-import type { loader as appLoader } from "~/routes/app";
 import { FOLDER_LABELS, FOLDERS, formatCount, isFolder, PREFETCH_PARAM, shownProvider } from "~/lib/mail";
 import { removeAccountPrompt, useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
@@ -102,7 +100,6 @@ export function Sidebar({
   onCompose?(): void;
 }) {
   const { accounts, unreadCounts, openCompose } = useMail();
-  const demo = useRouteLoaderData<typeof appLoader>("routes/app")?.demo;
   const { scope, folder } = usePendingFolder(shownScope, shownFolder);
   const navigate = useNavigate();
   const remover = useFetcher();
@@ -133,7 +130,7 @@ export function Sidebar({
       {/* The sidebar button sits at the left of the logo. It is not in the
           panel, so it stays in place when the panel goes. */}
       <div className={cx("flex items-center justify-between px-4 pb-3", resizable ? "pt-[11px] pl-11" : "pt-4")}>
-        {demo ? <DemoCompany /> : <Logo />}
+        <Logo />
       </div>
 
       <div className="px-2.5 pb-1">
@@ -464,19 +461,6 @@ export function useSidebarCollapsed() {
 
 /** The sidebar button stays at the top left, as in Colima GUI. A pointer on
     it brings a collapsed panel out, and a click docks the panel again. */
-/** The company of a demo workspace, in the place of the app's logo. */
-function DemoCompany() {
-  return (
-    <div className="flex min-w-0 items-center gap-2">
-      <img src={DEMO_COMPANY_LOGO_URL} alt="" className="size-6 shrink-0 rounded-[6px]" />
-      <div className="min-w-0 leading-tight">
-        <div className="truncate text-[14px] font-semibold tracking-[-0.01em]">{DEMO_COMPANY.name}</div>
-        <div className="truncate text-[11px] text-zinc-500 dark:text-zinc-400">Demo workspace</div>
-      </div>
-    </div>
-  );
-}
-
 export function SidebarButton() {
   const collapsed = useSidebarCollapsed();
   return (

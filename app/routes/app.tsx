@@ -69,8 +69,7 @@ export function loader({ context }: Route.LoaderArgs) {
   const demo = accounts.find((a) => a.provider === "demo");
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;
-  // A demo workspace shows the demo company in the sidebar.
-  return { accounts, devDataset, demo: user.demo };
+  return { accounts, devDataset };
 }
 
 export function shouldRevalidate({
