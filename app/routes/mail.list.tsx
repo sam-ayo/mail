@@ -868,16 +868,12 @@ function ThreadList({
           <button
             type="button"
             onClick={() => openCompose()}
-            className="press absolute right-4 bottom-4 inline-flex h-12 items-center gap-2 rounded-full bg-accent-600 px-5 text-sm font-semibold text-white shadow-lg shadow-accent-600/30 md:hidden"
+            className="press absolute right-4 bottom-[calc(1rem+env(safe-area-inset-bottom))] inline-flex h-12 items-center gap-2 rounded-full bg-accent-600 px-5 text-sm font-semibold text-white shadow-lg shadow-accent-600/30 md:hidden"
           >
             <NotePencil className="size-5" /> New message
           </button>
         </div>
 
-        {/* A status line at the bottom of the screen on a phone, as in iOS Mail. */}
-        <footer className="flex min-h-12 items-center border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
-          <UpdatedAt loadedAt={loadedAt} refreshing={refreshing} />
-        </footer>
       </section>
 
       {(openKey || loadingThread) && <ListExpandHandle />}
@@ -1038,33 +1034,6 @@ function ListFooter({ context }: { context?: ListContext }) {
         </button>
       )}
     </div>
-  );
-}
-
-/** The status in the bottom toolbar on a phone, as "Updated Just Now" in iOS Mail. */
-function UpdatedAt({ loadedAt, refreshing }: { loadedAt: number; refreshing: boolean }) {
-  // The server does not know the time on the device, so the text shows after hydration.
-  const [now, setNow] = useState<number | null>(null);
-  useEffect(() => {
-    setNow(Date.now());
-    const timer = setInterval(() => setNow(Date.now()), 30_000);
-    return () => clearInterval(timer);
-  }, [loadedAt]);
-  let text = "";
-  if (refreshing) text = "Checking for mail…";
-  else if (now !== null) {
-    const minutes = Math.floor((now - loadedAt) / 60_000);
-    text =
-      minutes < 1
-        ? "Updated just now"
-        : minutes < 60
-          ? `Updated ${minutes} min ago`
-          : `Updated at ${new Date(loadedAt).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" })}`;
-  }
-  return (
-    <p aria-live="polite" className="min-w-0 flex-1 truncate text-center text-xs text-zinc-500">
-      {text}
-    </p>
   );
 }
 
