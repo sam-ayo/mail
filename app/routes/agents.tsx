@@ -1,8 +1,10 @@
-import { CONTACT_EMAIL, LegalPage } from "~/components/legal";
+import { LegalPage } from "~/components/legal";
 import type { Route } from "./+types/agents";
 
 // The public documentation of the MCP server. The Claude and ChatGPT directory
 // listings link to this page. Keep the tool list the same as app/mcp/server.ts.
+
+const SUPPORT_EMAIL = "mail@samayo.me";
 
 export const meta: Route.MetaFunction = () => [
   { title: "AI agents · mail by samayo" },
@@ -126,7 +128,7 @@ export default function Agents() {
 
       <h2>Support</h2>
       <p>
-        If you have a question or a problem, send an email to <a href={`mailto:${CONTACT_EMAIL}`}>{CONTACT_EMAIL}</a>.
+        If you have a question or a problem, send an email to <a href={`mailto:${SUPPORT_EMAIL}`}>{SUPPORT_EMAIL}</a>.
       </p>
     </LegalPage>
   );

@@ -36,7 +36,7 @@ The tools sync from the server. Each tool has a title and all three hints.
 - Categories: Productivity, Communication
 - Documentation URL: `https://mail.samayo.me/agents`
 - Privacy policy URL: `https://mail.samayo.me/privacy`
-- Support contact: samuelayomideadeoye@gmail.com
+- Support contact: mail@samayo.me
 - Icon: `public/icon-512.png`
 - Slug: `mail-by-samayo` (permanent after publication)
 
