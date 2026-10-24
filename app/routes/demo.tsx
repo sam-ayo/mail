@@ -2,7 +2,6 @@ import { Sparkle } from "~/components/icons";
 import { Form, Link, redirect } from "react-router";
 import { LegalLinks } from "~/components/legal";
 import { Logo } from "~/components/ui";
-import { DEMO_COMPANY_LOGO_URL } from "~/lib/demo-company";
 import { isDemoUser } from "~/server/accounts.server";
 import { getUserId } from "~/server/auth.server";
 import { createDemoWorkspace, isDemoHost } from "~/server/demo-accounts.server";
@@ -59,7 +58,7 @@ export default function Demo({ loaderData }: Route.ComponentProps) {
                 to="/mail/all/inbox"
                 className="flex h-11 items-center justify-center gap-2 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
               >
-                <img src={DEMO_COMPANY_LOGO_URL} alt="" className="size-5 rounded-[5px]" /> Open my demo workspace
+                Open my demo workspace
               </Link>
             )}
             <Form method="post">
