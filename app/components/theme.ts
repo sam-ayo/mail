@@ -76,16 +76,22 @@ export function useTheme() {
   return { dark, toggle };
 }
 
-// The themes. The CSS for each is in app.css. The script in root.tsx always
-// sets data-palette on <html>. Without it, the indigo values in @theme apply.
+// The themes. They are the themes of Colima GUI, in the same order. The CSS
+// for each is in app.css. The script in root.tsx always sets data-palette on
+// <html>. Without it, the indigo values in @theme apply.
 // The accent is --color-accent-500 of the theme as hex, for the favicon.
 export const PALETTES = [
-  { id: "rose", label: "Rosé", description: "Soft, with a berry accent", font: "DM+Sans:opsz,wght@9..40,100..1000", accent: "#d8488c" },
+  { id: "rose", label: "Rose", description: "Soft, with a rose accent", font: "DM+Sans:opsz,wght@9..40,100..1000", accent: "#d0395e" },
+  { id: "forest", label: "Forest", description: "Calm green-grey", font: "Figtree:wght@300..900", accent: "#307e57" },
+  { id: "paper", label: "Paper", description: "Warm, with a brown accent", font: "Instrument+Sans:wght@400..700", accent: "#9b673a" },
+  { id: "graphite", label: "Graphite", description: "Neutral grey", font: "Geist:wght@100..900", accent: "#737373" },
   { id: "indigo", label: "Indigo", description: "Cool and quiet", font: null, accent: "#6366f1" },
-  { id: "paper", label: "Paper", description: "Warm, with a clay accent", font: "Instrument+Sans:wght@400..700", accent: "#d6673f" },
-  { id: "sage", label: "Sage", description: "Calm green-grey", font: "Figtree:wght@300..900", accent: "#3f9b65" },
-  { id: "swiss", label: "Swiss", description: "Neutral grey, signal red", font: "Geist:wght@100..900", accent: "#f13936" },
+  { id: "teal", label: "Teal", description: "Cool, with a teal accent", font: "Manrope:wght@200..800", accent: "#00a0ab" },
+  { id: "lavender", label: "Lavender", description: "Soft violet", font: "Nunito+Sans:opsz,wght@6..12,200..1000", accent: "#855ccb" },
 ] as const;
+
+// The old theme ids, and the themes that replace them.
+export const RENAMED_PALETTES: Record<string, PaletteId> = { sage: "forest", swiss: "graphite" };
 
 export type PaletteId = (typeof PALETTES)[number]["id"];
 

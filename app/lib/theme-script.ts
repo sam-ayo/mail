@@ -1,4 +1,4 @@
-import { DEFAULT_PALETTE, PALETTES, THEME_COLORS, paletteFavicon } from "~/components/theme";
+import { DEFAULT_PALETTE, PALETTES, RENAMED_PALETTES, THEME_COLORS, paletteFavicon } from "~/components/theme";
 
 // Set the theme before the first paint, so the page does not flash.
 export const themeScript = `(() => {
@@ -29,7 +29,9 @@ export const themeScript = `(() => {
     if (localStorage.getItem("sidebar-collapsed") === "1") document.documentElement.classList.add("sidebar-collapsed");
     if (localStorage.getItem("list-collapsed") === "1") document.documentElement.classList.add("list-collapsed");
     const palettes = ${JSON.stringify(PALETTES.map(({ id, font }) => ({ id, font, icon: paletteFavicon(id) })))};
-    const palette = palettes.find((p) => p.id === localStorage.getItem("palette"))
+    const stored = localStorage.getItem("palette");
+    const renamed = ${JSON.stringify(RENAMED_PALETTES)};
+    const palette = palettes.find((p) => p.id === (renamed[stored] || stored))
       || palettes.find((p) => p.id === "${DEFAULT_PALETTE}");
     document.documentElement.setAttribute("data-palette", palette.id);
     icon.href = palette.icon;

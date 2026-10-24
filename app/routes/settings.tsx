@@ -263,11 +263,11 @@ function Appearance() {
         </div>
       </div>
 
-      <fieldset className="grid grid-cols-2 gap-3 sm:grid-cols-3" aria-label="Theme">
+      <fieldset className="grid grid-cols-4 gap-3 sm:grid-cols-7" aria-label="Theme">
         {PALETTES.map((p) => (
           // "relative" keeps the sr-only radio inside the scroll area. Without
           // it, the focus scrolls the overflow-hidden app frame and shows a gap.
-          <label key={p.id} className="relative cursor-pointer">
+          <label key={p.id} title={p.description} className="group relative flex cursor-pointer flex-col items-center gap-1.5 text-xs">
             <input
               type="radio"
               name="palette"
@@ -276,33 +276,24 @@ function Appearance() {
               onChange={() => setPalette(p.id)}
               className="peer sr-only"
             />
-            {/* data-palette gives the preview the colors and the font of its theme. */}
+            {/* data-palette gives the tile the sidebar fill, the accent, and the font of its theme. */}
             <span
               data-palette={p.id}
-              className="press block overflow-hidden rounded-xl bg-white font-sans text-zinc-900 ring-1 ring-zinc-200 peer-checked:ring-2 peer-checked:ring-accent-500 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 dark:bg-zinc-950 dark:text-zinc-100 dark:ring-zinc-800"
+              className={cx(
+                "press relative grid aspect-square w-full place-items-center rounded-xl bg-(--sidebar) font-sans text-zinc-900 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 dark:text-zinc-100",
+                palette === p.id
+                  ? "ring-2 ring-accent-500"
+                  : "ring-1 ring-(--sidebar-border) group-hover:ring-zinc-300 dark:group-hover:ring-zinc-700",
+              )}
+              aria-hidden
             >
-              <span className="flex h-20 gap-1.5 p-1.5" aria-hidden>
-                <span className="flex w-1/3 flex-col gap-1 rounded-md border border-(--sidebar-border) bg-(--sidebar) p-1">
-                  <span className="h-1.5 w-3/4 rounded-full bg-accent-500" />
-                  <span className="h-2.5 rounded bg-(--sidebar-selection)" />
-                  <span className="h-1.5 w-2/3 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                  <span className="h-1.5 w-1/2 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                </span>
-                <span className="flex flex-1 flex-col gap-1 py-1">
-                  <span className="rounded bg-accent-50 p-1 ring-1 ring-accent-500/60 ring-inset dark:bg-accent-500/10">
-                    <span className="block h-1.5 w-3/4 rounded-full bg-zinc-800 dark:bg-zinc-200" />
-                  </span>
-                  <span className="px-1">
-                    <span className="block h-1.5 w-2/3 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                  </span>
-                  <span className="mt-auto ml-auto h-3 w-8 rounded bg-accent-600" />
-                </span>
-              </span>
-              <span className="block border-t border-zinc-200 px-3 py-2 dark:border-zinc-800">
-                <span className="block text-sm font-medium">{p.label}</span>
-                <span className="block truncate text-xs text-zinc-500">{p.description}</span>
+              <span className="text-2xl font-medium tracking-tight">Aa</span>
+              <span className="absolute inset-x-3 bottom-2.5 flex gap-1">
+                <span className="h-1.5 flex-1 rounded-full bg-accent-500" />
+                <span className="h-1.5 w-1/4 rounded-full bg-zinc-300 dark:bg-zinc-700" />
               </span>
             </span>
+            <span className="text-zinc-500 peer-checked:font-medium peer-checked:text-zinc-900 dark:peer-checked:text-zinc-100">{p.label}</span>
           </label>
         ))}
       </fieldset>

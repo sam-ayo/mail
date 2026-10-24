@@ -116,81 +116,114 @@ html.dark {
   --sidebar-selection: oklch(28.5% 0.026 277);
   --sidebar-hover: oklch(28.5% 0.026 277 / 0.5);
 }
-/* Warm paper neutrals and a clay accent. */
+/* Soft rose neutrals and a rose accent. */
+[data-palette="rose"] {
+  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-accent-50: oklch(97% 0.018 11);
+  --color-accent-100: oklch(93.5% 0.047 11);
+  --color-accent-400: oklch(70% 0.1504 11);
+  --color-accent-500: oklch(58% 0.188 11);
+  --color-accent-600: oklch(50% 0.1786 11);
+  --color-accent-700: oklch(42% 0.1598 11);
+  --color-white: oklch(98.5% 0.0044 11);
+  --color-zinc-50: oklch(97.6% 0.0055 11);
+  --color-zinc-100: oklch(95.8% 0.0066 11);
+  --color-zinc-200: oklch(91.5% 0.0088 11);
+  --color-zinc-300: oklch(86.5% 0.011 11);
+  --color-zinc-400: oklch(70.5% 0.0143 11);
+  --color-zinc-500: oklch(55.5% 0.0154 11);
+  --color-zinc-600: oklch(44.5% 0.0154 11);
+  --color-zinc-700: oklch(37% 0.0143 11);
+  --color-zinc-800: oklch(28% 0.0132 11);
+  --color-zinc-900: oklch(22% 0.0121 11);
+  --color-zinc-950: oklch(17% 0.011 11);
+  --sidebar: oklch(94% 0.011 11);
+  --sidebar-border: oklch(89.5% 0.0132 11);
+  --sidebar-selection: oklch(88.5% 0.0165 11);
+  --sidebar-hover: oklch(88.5% 0.0165 11 / 0.5);
+}
+.dark[data-palette="rose"],
+.dark [data-palette="rose"] {
+  --sidebar: oklch(21% 0.0121 11);
+  --sidebar-border: oklch(26.5% 0.0132 11);
+  --sidebar-selection: oklch(28.5% 0.0143 11);
+  --sidebar-hover: oklch(28.5% 0.0143 11 / 0.5);
+}
+/* Green-grey neutrals and a forest accent. */
+[data-palette="forest"] {
+  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
+  --color-accent-50: oklch(97% 0.012 158);
+  --color-accent-100: oklch(93.5% 0.025 158);
+  --color-accent-400: oklch(65.5% 0.08 158);
+  --color-accent-500: oklch(53.5% 0.1 158);
+  --color-accent-600: oklch(45.5% 0.095 158);
+  --color-accent-700: oklch(37.5% 0.085 158);
+  --color-white: oklch(98.5% 0.0048 158);
+  --color-zinc-50: oklch(97.6% 0.006 158);
+  --color-zinc-100: oklch(95.8% 0.0072 158);
+  --color-zinc-200: oklch(91.5% 0.0096 158);
+  --color-zinc-300: oklch(86.5% 0.012 158);
+  --color-zinc-400: oklch(70.5% 0.0156 158);
+  --color-zinc-500: oklch(55.5% 0.0168 158);
+  --color-zinc-600: oklch(44.5% 0.0168 158);
+  --color-zinc-700: oklch(37% 0.0156 158);
+  --color-zinc-800: oklch(28% 0.0144 158);
+  --color-zinc-900: oklch(22% 0.0132 158);
+  --color-zinc-950: oklch(17% 0.012 158);
+  --sidebar: oklch(94% 0.012 158);
+  --sidebar-border: oklch(89.5% 0.0144 158);
+  --sidebar-selection: oklch(88.5% 0.018 158);
+  --sidebar-hover: oklch(88.5% 0.018 158 / 0.5);
+}
+.dark[data-palette="forest"],
+.dark [data-palette="forest"] {
+  --sidebar: oklch(21% 0.0132 158);
+  --sidebar-border: oklch(26.5% 0.0144 158);
+  --sidebar-selection: oklch(28.5% 0.0156 158);
+  --sidebar-hover: oklch(28.5% 0.0156 158 / 0.5);
+}
+/* Warm paper neutrals and a brown accent. */
 [data-palette="paper"] {
   --font-sans: "Instrument Sans", ui-sans-serif, system-ui, sans-serif;
-  --color-accent-50: oklch(97% 0.018 45);
-  --color-accent-100: oklch(93.5% 0.04 45);
-  --color-accent-400: oklch(72% 0.12 42);
-  --color-accent-500: oklch(64% 0.15 40);
-  --color-accent-600: oklch(56% 0.15 38);
-  --color-accent-700: oklch(48% 0.13 36);
-  --color-white: oklch(98.5% 0.006 75);
-  --color-zinc-50: oklch(97.6% 0.0075 75);
-  --color-zinc-100: oklch(95.8% 0.009 75);
-  --color-zinc-200: oklch(91.5% 0.012 75);
-  --color-zinc-300: oklch(86.5% 0.015 75);
-  --color-zinc-400: oklch(70.5% 0.0195 75);
-  --color-zinc-500: oklch(55.5% 0.021 75);
-  --color-zinc-600: oklch(44.5% 0.021 75);
-  --color-zinc-700: oklch(37% 0.0195 75);
-  --color-zinc-800: oklch(28% 0.018 75);
-  --color-zinc-900: oklch(22% 0.0165 75);
-  --color-zinc-950: oklch(17% 0.015 75);
-  --sidebar: oklch(94% 0.015 75);
-  --sidebar-border: oklch(89.5% 0.018 75);
-  --sidebar-selection: oklch(88.5% 0.0225 75);
-  --sidebar-hover: oklch(88.5% 0.0225 75 / 0.5);
+  --color-accent-50: oklch(97% 0.0108 61);
+  --color-accent-100: oklch(93.5% 0.0225 61);
+  --color-accent-400: oklch(68% 0.072 61);
+  --color-accent-500: oklch(56% 0.09 61);
+  --color-accent-600: oklch(48% 0.0855 61);
+  --color-accent-700: oklch(40% 0.0765 61);
+  --color-white: oklch(98.5% 0.006 85);
+  --color-zinc-50: oklch(97.6% 0.0075 85);
+  --color-zinc-100: oklch(95.8% 0.009 85);
+  --color-zinc-200: oklch(91.5% 0.012 85);
+  --color-zinc-300: oklch(86.5% 0.015 85);
+  --color-zinc-400: oklch(70.5% 0.0195 85);
+  --color-zinc-500: oklch(55.5% 0.021 85);
+  --color-zinc-600: oklch(44.5% 0.021 85);
+  --color-zinc-700: oklch(37% 0.0195 85);
+  --color-zinc-800: oklch(28% 0.018 85);
+  --color-zinc-900: oklch(22% 0.0165 85);
+  --color-zinc-950: oklch(17% 0.015 85);
+  --sidebar: oklch(94% 0.015 85);
+  --sidebar-border: oklch(89.5% 0.018 85);
+  --sidebar-selection: oklch(88.5% 0.0225 85);
+  --sidebar-hover: oklch(88.5% 0.0225 85 / 0.5);
 }
 .dark[data-palette="paper"],
 .dark [data-palette="paper"] {
-  --sidebar: oklch(21% 0.0165 75);
-  --sidebar-border: oklch(26.5% 0.018 75);
-  --sidebar-selection: oklch(28.5% 0.0195 75);
-  --sidebar-hover: oklch(28.5% 0.0195 75 / 0.5);
+  --sidebar: oklch(21% 0.0165 85);
+  --sidebar-border: oklch(26.5% 0.018 85);
+  --sidebar-selection: oklch(28.5% 0.0195 85);
+  --sidebar-hover: oklch(28.5% 0.0195 85 / 0.5);
 }
-/* Green-grey neutrals and a forest accent. */
-[data-palette="sage"] {
-  --font-sans: "Figtree", ui-sans-serif, system-ui, sans-serif;
-  --color-accent-50: oklch(97% 0.02 155);
-  --color-accent-100: oklch(93% 0.045 155);
-  --color-accent-400: oklch(74% 0.11 155);
-  --color-accent-500: oklch(62% 0.12 155);
-  --color-accent-600: oklch(51% 0.11 157);
-  --color-accent-700: oklch(43% 0.09 158);
-  --color-white: oklch(98.5% 0.0048 150);
-  --color-zinc-50: oklch(97.6% 0.006 150);
-  --color-zinc-100: oklch(95.8% 0.0072 150);
-  --color-zinc-200: oklch(91.5% 0.0096 150);
-  --color-zinc-300: oklch(86.5% 0.012 150);
-  --color-zinc-400: oklch(70.5% 0.0156 150);
-  --color-zinc-500: oklch(55.5% 0.0168 150);
-  --color-zinc-600: oklch(44.5% 0.0168 150);
-  --color-zinc-700: oklch(37% 0.0156 150);
-  --color-zinc-800: oklch(28% 0.0144 150);
-  --color-zinc-900: oklch(22% 0.0132 150);
-  --color-zinc-950: oklch(17% 0.012 150);
-  --sidebar: oklch(94% 0.012 150);
-  --sidebar-border: oklch(89.5% 0.0144 150);
-  --sidebar-selection: oklch(88.5% 0.018 150);
-  --sidebar-hover: oklch(88.5% 0.018 150 / 0.5);
-}
-.dark[data-palette="sage"],
-.dark [data-palette="sage"] {
-  --sidebar: oklch(21% 0.0132 150);
-  --sidebar-border: oklch(26.5% 0.0144 150);
-  --sidebar-selection: oklch(28.5% 0.0156 150);
-  --sidebar-hover: oklch(28.5% 0.0156 150 / 0.5);
-}
-/* Pure grey neutrals and a signal red accent. */
-[data-palette="swiss"] {
+/* Pure grey neutrals and a graphite accent. */
+[data-palette="graphite"] {
   --font-sans: "Geist", ui-sans-serif, system-ui, sans-serif;
-  --color-accent-50: oklch(97% 0.015 27);
-  --color-accent-100: oklch(93% 0.035 27);
-  --color-accent-400: oklch(71% 0.17 27);
-  --color-accent-500: oklch(63% 0.22 27);
-  --color-accent-600: oklch(56% 0.21 27);
-  --color-accent-700: oklch(48% 0.18 27);
+  --color-accent-50: oklch(97% 0 0);
+  --color-accent-100: oklch(93.5% 0 0);
+  --color-accent-400: oklch(67.5% 0 0);
+  --color-accent-500: oklch(55.5% 0 0);
+  --color-accent-600: oklch(47.5% 0 0);
+  --color-accent-700: oklch(39.5% 0 0);
   --color-white: oklch(98.5% 0 0);
   --color-zinc-50: oklch(97.6% 0 0);
   --color-zinc-100: oklch(95.8% 0 0);
@@ -208,45 +241,79 @@ html.dark {
   --sidebar-selection: oklch(88.5% 0 0);
   --sidebar-hover: oklch(88.5% 0 0 / 0.5);
 }
-.dark[data-palette="swiss"],
-.dark [data-palette="swiss"] {
+.dark[data-palette="graphite"],
+.dark [data-palette="graphite"] {
   --sidebar: oklch(21% 0 0);
   --sidebar-border: oklch(26.5% 0 0);
   --sidebar-selection: oklch(28.5% 0 0);
   --sidebar-hover: oklch(28.5% 0 0 / 0.5);
 }
-/* Soft rose neutrals and a berry accent. */
-[data-palette="rose"] {
-  --font-sans: "DM Sans", ui-sans-serif, system-ui, sans-serif;
-  --color-accent-50: oklch(97% 0.015 355);
-  --color-accent-100: oklch(93.5% 0.035 355);
-  --color-accent-400: oklch(72% 0.14 355);
-  --color-accent-500: oklch(62% 0.19 355);
-  --color-accent-600: oklch(54% 0.19 355);
-  --color-accent-700: oklch(46% 0.17 355);
-  --color-white: oklch(98.5% 0.0044 350);
-  --color-zinc-50: oklch(97.6% 0.0055 350);
-  --color-zinc-100: oklch(95.8% 0.0066 350);
-  --color-zinc-200: oklch(91.5% 0.0088 350);
-  --color-zinc-300: oklch(86.5% 0.011 350);
-  --color-zinc-400: oklch(70.5% 0.0143 350);
-  --color-zinc-500: oklch(55.5% 0.0154 350);
-  --color-zinc-600: oklch(44.5% 0.0154 350);
-  --color-zinc-700: oklch(37% 0.0143 350);
-  --color-zinc-800: oklch(28% 0.0132 350);
-  --color-zinc-900: oklch(22% 0.0121 350);
-  --color-zinc-950: oklch(17% 0.011 350);
-  --sidebar: oklch(94% 0.011 350);
-  --sidebar-border: oklch(89.5% 0.0132 350);
-  --sidebar-selection: oklch(88.5% 0.0165 350);
-  --sidebar-hover: oklch(88.5% 0.0165 350 / 0.5);
+/* Cool teal neutrals and a teal accent. The accent is darker than the
+   system teal, so white text on a button stays legible. */
+[data-palette="teal"] {
+  --font-sans: "Manrope", ui-sans-serif, system-ui, sans-serif;
+  --color-accent-50: oklch(97% 0.0138 203);
+  --color-accent-100: oklch(93.5% 0.0288 203);
+  --color-accent-400: oklch(76% 0.092 203);
+  --color-accent-500: oklch(64% 0.115 203);
+  --color-accent-600: oklch(56% 0.1092 203);
+  --color-accent-700: oklch(48% 0.0978 203);
+  --color-white: oklch(98.5% 0.0056 203);
+  --color-zinc-50: oklch(97.6% 0.007 203);
+  --color-zinc-100: oklch(95.8% 0.0084 203);
+  --color-zinc-200: oklch(91.5% 0.0112 203);
+  --color-zinc-300: oklch(86.5% 0.014 203);
+  --color-zinc-400: oklch(70.5% 0.0182 203);
+  --color-zinc-500: oklch(55.5% 0.0196 203);
+  --color-zinc-600: oklch(44.5% 0.0196 203);
+  --color-zinc-700: oklch(37% 0.0182 203);
+  --color-zinc-800: oklch(28% 0.0168 203);
+  --color-zinc-900: oklch(22% 0.0154 203);
+  --color-zinc-950: oklch(17% 0.014 203);
+  --sidebar: oklch(94% 0.014 203);
+  --sidebar-border: oklch(89.5% 0.0168 203);
+  --sidebar-selection: oklch(88.5% 0.021 203);
+  --sidebar-hover: oklch(88.5% 0.021 203 / 0.5);
 }
-.dark[data-palette="rose"],
-.dark [data-palette="rose"] {
-  --sidebar: oklch(21% 0.0121 350);
-  --sidebar-border: oklch(26.5% 0.0132 350);
-  --sidebar-selection: oklch(28.5% 0.0143 350);
-  --sidebar-hover: oklch(28.5% 0.0143 350 / 0.5);
+.dark[data-palette="teal"],
+.dark [data-palette="teal"] {
+  --sidebar: oklch(21% 0.0154 203);
+  --sidebar-border: oklch(26.5% 0.0168 203);
+  --sidebar-selection: oklch(28.5% 0.0182 203);
+  --sidebar-hover: oklch(28.5% 0.0182 203 / 0.5);
+}
+/* Soft violet neutrals and a lavender accent. */
+[data-palette="lavender"] {
+  --font-sans: "Nunito Sans", ui-sans-serif, system-ui, sans-serif;
+  --color-accent-50: oklch(97% 0.018 298);
+  --color-accent-100: oklch(93.5% 0.0418 298);
+  --color-accent-400: oklch(69% 0.1336 298);
+  --color-accent-500: oklch(57% 0.167 298);
+  --color-accent-600: oklch(49% 0.1587 298);
+  --color-accent-700: oklch(41% 0.1419 298);
+  --color-white: oklch(98.5% 0.0064 298);
+  --color-zinc-50: oklch(97.6% 0.008 298);
+  --color-zinc-100: oklch(95.8% 0.0096 298);
+  --color-zinc-200: oklch(91.5% 0.0128 298);
+  --color-zinc-300: oklch(86.5% 0.016 298);
+  --color-zinc-400: oklch(70.5% 0.0208 298);
+  --color-zinc-500: oklch(55.5% 0.0224 298);
+  --color-zinc-600: oklch(44.5% 0.0224 298);
+  --color-zinc-700: oklch(37% 0.0208 298);
+  --color-zinc-800: oklch(28% 0.0192 298);
+  --color-zinc-900: oklch(22% 0.0176 298);
+  --color-zinc-950: oklch(17% 0.016 298);
+  --sidebar: oklch(94% 0.016 298);
+  --sidebar-border: oklch(89.5% 0.0192 298);
+  --sidebar-selection: oklch(88.5% 0.024 298);
+  --sidebar-hover: oklch(88.5% 0.024 298 / 0.5);
+}
+.dark[data-palette="lavender"],
+.dark [data-palette="lavender"] {
+  --sidebar: oklch(21% 0.0176 298);
+  --sidebar-border: oklch(26.5% 0.0192 298);
+  --sidebar-selection: oklch(28.5% 0.0208 298);
+  --sidebar-hover: oklch(28.5% 0.0208 298 / 0.5);
 }
 
 
