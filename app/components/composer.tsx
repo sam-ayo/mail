@@ -289,7 +289,7 @@ export function Composer({
           tabIndex={-1}
           className={cx(
             "px-4 py-3 text-sm leading-relaxed break-words outline-none",
-            fill ? "min-h-48 flex-1" : variant === "inline" ? "min-h-30" : "min-h-85",
+            fill ? "min-h-24 flex-1 sm:min-h-48" : variant === "inline" ? "min-h-30" : "min-h-85",
           )}
           // The Markdown renderer escapes raw HTML and removes unsafe links.
           dangerouslySetInnerHTML={{
@@ -306,7 +306,7 @@ export function Composer({
         onChange={(event) => set({ body: event.target.value })}
         className={cx(
           "w-full resize-none bg-transparent px-4 py-3 text-sm leading-relaxed outline-none",
-          fill && "min-h-48 flex-1",
+          fill && "min-h-24 flex-1 sm:min-h-48",
         )}
         placeholder={draft.reply ? "Write your reply…" : "Write your message…"}
       />
@@ -350,7 +350,14 @@ export function Composer({
 
       {error && <p className="px-4 pb-2 text-xs text-red-600">{error}</p>}
 
-      <div className="flex items-center gap-1 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800">
+      {/* In a window with a fixed height, the actions stay at the bottom while the fields scroll.
+          On a phone, the keyboard leaves little height, and the Send button must stay above it. */}
+      <div
+        className={cx(
+          "flex items-center gap-1 border-t border-zinc-100 px-3 py-2 dark:border-zinc-800",
+          fill && "sticky bottom-0 bg-white dark:bg-zinc-900",
+        )}
+      >
         <IconButton label="Discard draft" onClick={onDiscard}>
           <Trash className="size-4" />
         </IconButton>
