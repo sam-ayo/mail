@@ -79,6 +79,23 @@ html.dark {
   --sidebar-hover: oklch(28.5% 0.026 277 / 0.5);
 }
 
+/* The toasts use the page fill of the theme, not the pure white and black
+   of Sonner. The html prefix makes these rules stronger than the Sonner rules. */
+html [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--color-white);
+  --normal-bg-hover: var(--color-zinc-50);
+  --normal-border: var(--color-zinc-200);
+  --normal-border-hover: var(--color-zinc-300);
+  --normal-text: var(--color-zinc-900);
+}
+html.dark [data-sonner-toaster][data-sonner-theme] {
+  --normal-bg: var(--color-zinc-950);
+  --normal-bg-hover: var(--color-zinc-900);
+  --normal-border: var(--color-zinc-800);
+  --normal-border-hover: var(--color-zinc-700);
+  --normal-text: var(--color-zinc-100);
+}
+
 /* The themes. Settings sets data-palette on <html>. Each theme replaces the
    accent, the neutrals, the sidebar fills, and the font. The selectors also
    match an element, so the theme previews in Settings show each theme. */
