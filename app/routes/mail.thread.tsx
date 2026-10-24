@@ -23,6 +23,7 @@ import {
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useEffect, useMemo, useState } from "react";
 import { data, isRouteErrorResponse, useOutletContext, useRouteError } from "react-router";
+import { AttachmentViewer, type ViewedAttachment } from "~/components/attachment-viewer";
 import { Composer, formatSize } from "~/components/composer";
 import { EmailFrame } from "~/components/email-frame";
 import { setListCollapsed } from "~/components/list-panel";
@@ -612,6 +613,7 @@ function MessageCard({
   const [showQuotes, setShowQuotes] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
   const [unsubscribeOpen, setUnsubscribeOpen] = useState(false);
+  const [viewed, setViewed] = useState<ViewedAttachment | null>(null);
   const [left, setLeft] = useState(() => isUnsubscribed(accountId, message.from));
   const canUnsubscribe = !!message.unsubscribe && !left;
   const recipients = [...message.to, ...message.cc];
@@ -807,12 +809,19 @@ function MessageCard({
                 const preview = attachmentUrl(accountId, message.id, attachment.id);
                 const download = attachmentUrl(accountId, message.id, attachment.id, true);
                 const isImage = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/.test(attachment.mimeType);
+                const canView = isImage || /^(application\/pdf|text\/plain)$/.test(attachment.mimeType);
                 return (
                   <li key={attachment.id}>
                     <a
-                      href={isImage || attachment.mimeType === "application/pdf" ? preview : download}
+                      href={canView ? preview : download}
+                      // Before the page is interactive, a new tab is the fallback. A new tab has its own way back.
                       target="_blank"
                       rel="noreferrer"
+                      onClick={(event) => {
+                        if (!canView || event.metaKey || event.ctrlKey || event.shiftKey) return;
+                        event.preventDefault();
+                        setViewed({ filename: attachment.filename, mimeType: attachment.mimeType, preview, download });
+                      }}
                       className="group flex flex-col overflow-hidden rounded-lg border border-zinc-200 transition-[border-color,box-shadow] hover:border-zinc-300 hover:shadow-sm dark:border-zinc-800 dark:hover:border-zinc-700"
                     >
                       {isImage && (
@@ -828,6 +837,7 @@ function MessageCard({
                           className="size-3.5 text-zinc-400 opacity-0 transition-opacity group-hover:opacity-100"
                           onClick={(event) => {
                             event.preventDefault();
+                            event.stopPropagation();
                             window.location.href = download;
                           }}
                         />
@@ -838,6 +848,7 @@ function MessageCard({
               })}
             </ul>
           )}
+          <AttachmentViewer attachment={viewed} onClose={() => setViewed(null)} />
         </div>
       </Collapsible.Panel>
     </Collapsible.Root>
