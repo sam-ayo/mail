@@ -63,11 +63,11 @@ export default function Demo({ loaderData }: Route.ComponentProps) {
               <button
                 className={
                   hasDemo
-                    ? "flex h-11 w-full items-center justify-center gap-1 rounded-xl border border-zinc-200 text-sm font-medium press hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    : "flex h-11 w-full items-center justify-center gap-1 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
+                    ? "group flex h-11 w-full items-center justify-center gap-1 rounded-xl border border-zinc-200 text-sm font-medium press hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    : "group flex h-11 w-full items-center justify-center gap-1 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
                 }
               >
-                {hasDemo ? "Start a new demo" : "Open the demo"} <CaretRight className="size-4" />
+                {hasDemo ? "Start a new demo" : "Open the demo"} <CaretRight className="size-4 transition-[translate] duration-200 ease-out motion-safe:group-hover:translate-x-0.5" />
               </button>
             </Form>
           </div>
