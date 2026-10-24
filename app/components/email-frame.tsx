@@ -50,9 +50,17 @@ export function EmailFrame({
     function measure() {
       const doc = frame?.contentDocument;
       if (!doc?.body) return;
+      // Some emails have a fixed width, often 600px. Scale them down to the
+      // frame width, so they do not scroll horizontally. A transform does
+      // not change the layout size of the body, so the sizes below are the
+      // unscaled sizes.
+      const body = doc.body;
+      const scale = Math.min(1, doc.documentElement.clientWidth / body.scrollWidth);
+      body.style.transformOrigin = "0 0";
+      body.style.transform = scale < 1 ? `scale(${scale})` : "";
       // Measure the body, not the document. The document is never shorter
       // than the frame, so the frame could only grow and never shrink.
-      const next = Math.ceil(doc.body.scrollHeight) + 2;
+      const next = Math.ceil(body.scrollHeight * scale) + 2;
       frame!.style.height = `${next}px`;
       rememberHeight(html, next);
     }
