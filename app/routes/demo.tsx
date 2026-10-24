@@ -1,5 +1,5 @@
-import { Sparkle } from "~/components/icons";
 import { Form, Link, redirect } from "react-router";
+import { CaretRight } from "~/components/icons";
 import { LegalLinks } from "~/components/legal";
 import { Logo } from "~/components/ui";
 import { isDemoUser } from "~/server/accounts.server";
@@ -50,13 +50,11 @@ export default function Demo({ loaderData }: Route.ComponentProps) {
       <div className="w-full max-w-md">
         <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
           <Logo className="text-lg" />
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Try mail</h1>
-
           <div className="mt-6 flex flex-col gap-2">
             {hasDemo && (
               <Link
                 to="/mail/all/inbox"
-                className="flex h-11 items-center justify-center gap-2 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
+                className="flex h-11 items-center justify-center rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
               >
                 Open my demo workspace
               </Link>
@@ -65,19 +63,18 @@ export default function Demo({ loaderData }: Route.ComponentProps) {
               <button
                 className={
                   hasDemo
-                    ? "flex h-11 w-full items-center justify-center gap-2 rounded-xl border border-zinc-200 text-sm font-medium press hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
-                    : "flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
+                    ? "flex h-11 w-full items-center justify-center gap-1 rounded-xl border border-zinc-200 text-sm font-medium press hover:bg-zinc-50 dark:border-zinc-700 dark:hover:bg-zinc-800"
+                    : "flex h-11 w-full items-center justify-center gap-1 rounded-xl bg-accent-600 text-sm font-medium text-white press hover:bg-accent-700"
                 }
               >
-                <Sparkle className="size-4" /> {hasDemo ? "Start a new demo" : "Open the demo"}
+                {hasDemo ? "Start a new demo" : "Open the demo"} <CaretRight className="size-4" />
               </button>
             </Form>
           </div>
         </div>
-        <p className="mt-6 text-center text-sm text-zinc-500">
-          Want your own inbox?{" "}
+        <p className="mt-6 text-center text-sm">
           <a href={realAppUrl} className="font-medium text-accent-600 hover:underline dark:text-accent-400">
-            Connect Gmail or Outlook
+            Try Mail
           </a>
         </p>
         <LegalLinks className="mt-3" />
