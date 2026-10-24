@@ -1,12 +1,22 @@
 name: CI
 
+# Checks the app. A change to only the Worker, the migrations, the docs, or
+# other workflows skips this workflow. Those files have their own workflows.
 on:
   push:
     branches: [main]
+    paths: &paths
+      - "**"
+      - "!worker/**"
+      - "!migrations/**"
+      - "!docs/**"
+      - "!directory/**"
+      - "!.agents/**"
+      - "!**/*.md"
+      - "!.github/**"
+      - .github/workflows/ci.yml
   pull_request:
-
-env:
-  CLOUDFLARE_ACCOUNT_ID: d6741b284ff6ec0caa6d15919dc00294
+    paths: *paths
 
 jobs:
   check:
@@ -27,43 +37,3 @@ jobs:
           DATABASE_URL: postgresql://build:build@localhost/build
           SESSION_SECRET: build
           ENCRYPTION_KEY: build
-
-  # The Worker in worker/ has its own package.json and lockfile.
-  worker:
-    runs-on: ubuntu-24.04
-    defaults:
-      run:
-        working-directory: worker
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: worker/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      - run: pnpm run typecheck
-      - run: pnpm run build
-
-  deploy-worker:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-    needs: worker
-    runs-on: ubuntu-24.04
-    concurrency: deploy-worker
-    defaults:
-      run:
-        working-directory: worker
-    steps:
-      - uses: actions/checkout@v7
-      - uses: pnpm/action-setup@v4
-      - uses: actions/setup-node@v7
-        with:
-          node-version: 24
-          cache: pnpm
-          cache-dependency-path: worker/pnpm-lock.yaml
-      - run: pnpm install --frozen-lockfile
-      # The CRON_SECRET secret stays on the Worker. Change it with: cf workers secrets update
-      - run: pnpm run deploy
-        env:
-          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}

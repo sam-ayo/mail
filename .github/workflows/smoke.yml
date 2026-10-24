@@ -1,11 +1,11 @@
 name: Smoke test
 
 # Checks that production works: after each Vercel production deploy, after
-# each CI run on main (it deploys the Worker), and each hour.
+# each Worker run on main (it deploys the Worker), and each hour.
 on:
   deployment_status:
   workflow_run:
-    workflows: [CI]
+    workflows: [Worker]
     branches: [main]
     types: [completed]
   schedule:

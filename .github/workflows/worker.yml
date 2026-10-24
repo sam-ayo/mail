@@ -1,0 +1,55 @@
+name: Worker
+
+# Checks the Worker in worker/, and deploys it from main.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - worker/**
+      - .github/workflows/worker.yml
+  pull_request:
+    paths: *paths
+
+env:
+  CLOUDFLARE_ACCOUNT_ID: d6741b284ff6ec0caa6d15919dc00294
+
+jobs:
+  # The Worker has its own package.json and lockfile.
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: worker/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm run typecheck
+      - run: pnpm run build
+
+  deploy:
+    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    needs: check
+    runs-on: ubuntu-24.04
+    concurrency: deploy-worker
+    defaults:
+      run:
+        working-directory: worker
+    steps:
+      - uses: actions/checkout@v7
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: pnpm
+          cache-dependency-path: worker/pnpm-lock.yaml
+      - run: pnpm install --frozen-lockfile
+      # The CRON_SECRET secret stays on the Worker. Change it with: cf workers secrets update
+      - run: pnpm run deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
