@@ -34,12 +34,30 @@ const viewRefreshPreamble: Plugin = {
   },
 };
 
-export default defineConfig(({ command }) => ({
+/**
+ * Bundle all server dependencies. sanitize-html uses require() to load
+ * htmlparser2, which is ES module only, and Vercel's runtime rejects that.
+ * Do this only for the build. The dev module runner cannot run CommonJS
+ * packages such as react when it inlines them. On Vercel, the Vercel preset
+ * builds the server in "ssrBundle_*" environments and not in "ssr", so the
+ * `ssr` option does not apply there.
+ */
+const bundleServerDependencies: Plugin = {
+  name: "bundle-server-dependencies",
+  apply: "build",
+  configEnvironment(name) {
+    if (name === "ssr" || name.startsWith("ssrBundle_")) return { resolve: { noExternal: true } };
+  },
+};
+
+export default defineConfig({
   // mcpUse() must come before the framework plugins. See app/mcp/server.ts.
   plugins: [
     notInChildCompiler(mcpUse({ entry: "app/mcp/server.ts", viewsDir: "app/mcp/views" })),
     viewRefreshPreamble,
     tailwindcss(),
+    // This must come before reactRouter(), which reads `resolve.noExternal`.
+    bundleServerDependencies,
     reactRouter(),
   ],
   // The OAuth redirect URIs use this port, so do not fall back to another one.
@@ -47,11 +65,6 @@ export default defineConfig(({ command }) => ({
   resolve: {
     tsconfigPaths: true,
   },
-  // Bundle all server dependencies. sanitize-html uses require() to load
-  // htmlparser2, which is ES module only, and Vercel's runtime rejects that.
-  // Do this only for the build. The dev module runner cannot run CommonJS
-  // packages such as react when it inlines them.
-  ssr: command === "build" ? { noExternal: true } : {},
   optimizeDeps: {
     include: [
       "lucide-react",
@@ -68,4 +81,4 @@ export default defineConfig(({ command }) => ({
     // dependency scan bundles them for the browser and reloads the page.
     exclude: ["imapflow", "mailparser", "nodemailer", "sanitize-html"],
   },
-}));
+});
