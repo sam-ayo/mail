@@ -23,6 +23,8 @@ interface PushPayload {
   body: string;
   url: string;
   tag: string;
+  /** The sender's address. The service worker shows the sender's logo as the icon. */
+  sender?: string;
 }
 
 /** A thread gets one notification. More new threads than this get one summary notification. */
@@ -92,6 +94,7 @@ function threadPayloads(account: AccountRef, threads: ThreadSummary[]): PushPayl
       body: [thread.subject, thread.snippet].filter(Boolean).join("\n"),
       url: `${inbox}/${account.id}/${encodeURIComponent(thread.id)}`,
       tag: `thread:${account.id}:${thread.id}`,
+      sender: sender?.email,
     };
   });
 }

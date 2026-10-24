@@ -117,17 +117,44 @@ self.addEventListener("message", (event) => {
   );
 });
 
+// The types that the browser can show in a notification. It cannot show an SVG.
+const ICON_TYPES = /^image\/(png|jpeg|gif|webp|x-icon|vnd\.microsoft\.icon)$/;
+
+/**
+ * The logo of the sender's company, or of the sender, as a data URL. The
+ * browser loads a notification icon without the session cookie, so the
+ * service worker loads the image. Gives the app icon when there is no logo.
+ */
+async function senderIcon(email) {
+  if (!email) return "/icon-192.png";
+  try {
+    const response = await fetch(`/api/avatar?email=${encodeURIComponent(email)}`, {
+      credentials: "same-origin",
+      signal: AbortSignal.timeout(4000),
+    });
+    const type = response.headers.get("content-type")?.split(";")[0] ?? "";
+    if (!response.ok || !ICON_TYPES.test(type)) return "/icon-192.png";
+    let binary = "";
+    for (const byte of new Uint8Array(await response.arrayBuffer())) binary += String.fromCharCode(byte);
+    return `data:${type};base64,${btoa(binary)}`;
+  } catch {
+    return "/icon-192.png";
+  }
+}
+
 // The payload comes from app/server/push.server.ts.
 self.addEventListener("push", (event) => {
   const payload = event.data?.json() ?? {};
   event.waitUntil(
-    self.registration.showNotification(payload.title || "New mail", {
-      body: payload.body || "",
-      tag: payload.tag,
-      icon: "/icon-192.png",
-      badge: "/icon-192.png",
-      data: { url: payload.url || "/mail" },
-    }),
+    (async () => {
+      await self.registration.showNotification(payload.title || "New mail", {
+        body: payload.body || "",
+        tag: payload.tag,
+        icon: await senderIcon(payload.sender),
+        badge: "/icon-192.png",
+        data: { url: payload.url || "/mail" },
+      });
+    })(),
   );
 });
 
