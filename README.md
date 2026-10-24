@@ -8,7 +8,7 @@ A keyboard-first email client with one inbox for all your accounts.
 
 ![The light theme](docs/screenshots/light.jpg)
 
-![The color themes in Settings](docs/screenshots/themes.jpg)
+![The email accounts and the color themes in Settings](docs/screenshots/themes.jpg)
 
 ```sh
 pnpm install
