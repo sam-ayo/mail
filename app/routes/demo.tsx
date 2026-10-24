@@ -12,7 +12,7 @@ import type { Route } from "./+types/demo";
 
 /**
  * The public demo. Each visitor gets a new workspace with three accounts of
- * sample mail. demo.samayo.me opens this page.
+ * sample mail. mail.demo.samayo.me opens this page.
  */
 
 const TITLE = "Try mail by samayo";

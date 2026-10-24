@@ -43,7 +43,7 @@ export async function createDemoWorkspace() {
   return userId;
 }
 
-/** True on demo.samayo.me. There, the home page and the sign-in page open the demo. */
+/** True on a host with a "demo" label, such as mail.demo.samayo.me. There, the home page and the sign-in page open the demo. */
 export function isDemoHost(request: Request) {
-  return new URL(request.url).hostname.startsWith("demo.");
+  return new URL(request.url).hostname.split(".").includes("demo");
 }
