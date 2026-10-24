@@ -104,6 +104,8 @@ const LIST_CACHE_LIMIT = 30;
 const LIST_FRESH_MS = 10_000;
 /** A hover prefetch skips cached data newer than this. Each Gmail list load uses quota. */
 const PREFETCH_FRESH_MS = 60_000;
+/** The pause in typing before a search runs. Each search asks the mail servers. */
+const SEARCH_DELAY_MS = 400;
 /** The list on the screen. A reload of it always asks the server. */
 let shownListKey: string | null = null;
 
@@ -395,6 +397,26 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
     moreFetcher.load(`${base}?${params}`);
   }
 
+  // A search runs after a short pause in the typing. Enter runs it at once.
+  const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
+  useEffect(() => () => clearTimeout(searchTimer.current), []);
+  function searchSoon(value: string) {
+    clearTimeout(searchTimer.current);
+    searchTimer.current = setTimeout(() => {
+      const query = value.trim();
+      if (query === loaderData.query) return;
+      // Each new search replaces the last one in the history, so Back leaves the search.
+      navigate(query ? `${base}?q=${encodeURIComponent(query)}` : base, {
+        replace: Boolean(loaderData.query),
+      });
+    }, SEARCH_DELAY_MS);
+  }
+  // A search from a menu changes the text in the box. The text that you type stays.
+  useEffect(() => {
+    const input = searchRef.current;
+    if (input && document.activeElement !== input) input.value = loaderData.query;
+  }, [loaderData.query]);
+
   function targetThreads(): ThreadSummary[] {
     if (selected.size > 0) return threads.filter((t) => selected.has(threadKey(t.accountId, t.id)));
     const thread = openIndex >= 0 ? threads[openIndex] : focused;
@@ -656,18 +678,25 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
               </IconButton>
             )}
           </div>
-          <Form method="get" action={base} className="relative">
+          <Form
+            method="get"
+            action={base}
+            className="relative"
+            onSubmit={() => clearTimeout(searchTimer.current)}
+          >
             <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400" />
             <input
               ref={searchRef}
-              key={`${base}-${loaderData.query}`}
+              key={base}
               name="q"
               type="search"
               enterKeyHint="search"
               defaultValue={loaderData.query}
               placeholder={`Search ${scopeAccount ? scopeAccount.email : "all mail"}`}
+              onChange={(event) => searchSoon(event.currentTarget.value)}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
+                  clearTimeout(searchTimer.current);
                   event.currentTarget.blur();
                   if (loaderData.query) navigate(base);
                 }
