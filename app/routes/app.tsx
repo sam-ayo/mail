@@ -32,31 +32,45 @@ import { useTheme, useThemeMode } from "~/components/theme";
 import { cx } from "~/components/ui";
 import type { Folder } from "~/lib/mail";
 import { FOLDER_LABELS, FOLDERS, isFolder } from "~/lib/mail";
-import { isDemoUser, listAccounts, toSummary } from "~/server/accounts.server";
-import { getUserId } from "~/server/auth.server";
+import { toSummary } from "~/server/accounts.server";
+import { getUser } from "~/server/auth.server";
 import { userContext } from "~/server/context";
+import { ServerTiming, timingContext } from "~/server/timing.server";
 import { getDemoDataset } from "~/server/providers/demo.server";
 import { DevDataToggle } from "~/components/dev-data-toggle";
 import type { ShouldRevalidateFunctionArgs } from "react-router";
 import type { Route } from "./+types/app";
 
 export const middleware: Route.MiddlewareFunction[] = [
+  async ({ context }, next) => {
+    const timing = new ServerTiming();
+    context.set(timingContext, timing);
+    const start = performance.now();
+    const response = (await next()) as Response;
+    // A streamed page ends later. This time is until the first byte.
+    response.headers.append(
+      "Server-Timing",
+      [timing.header(), `response;dur=${(performance.now() - start).toFixed(1)}`].filter(Boolean).join(", "),
+    );
+    return response;
+  },
   async ({ request, context }) => {
-    const userId = await getUserId(request);
-    if (!userId) throw redirect("/welcome");
-    context.set(userContext, { id: userId });
+    // One query gives the user and the accounts, so the loaders do not ask again.
+    const user = await context.get(timingContext)!.measure("user", () => getUser(request));
+    if (!user) throw redirect("/welcome");
+    context.set(userContext, user);
   },
 ];
 
-export async function loader({ context }: Route.LoaderArgs) {
+export function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
-  const accounts = (await listAccounts(user.id)).map(toSummary);
+  const accounts = user.accounts.map(toSummary);
   if (accounts.length === 0) throw redirect("/welcome");
   const demo = accounts.find((a) => a.provider === "demo");
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;
   // A demo workspace shows the demo company in the sidebar.
-  return { accounts, devDataset, demo: await isDemoUser(user.id) };
+  return { accounts, devDataset, demo: user.demo };
 }
 
 export function shouldRevalidate({

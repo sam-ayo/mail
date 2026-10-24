@@ -27,7 +27,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const verifier = randomToken(48);
   session.flash("oauthState", state);
   session.flash("oauthVerifier", verifier);
-  session.flash("oauthReturnTo", url.searchParams.get("returnTo") ?? "/mail");
+  session.flash("oauthReturnTo", url.searchParams.get("returnTo") ?? "/mail/all/inbox");
 
   const hint = url.searchParams.get("hint") ?? undefined;
   const challenge = sha256Base64Url(verifier);

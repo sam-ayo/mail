@@ -35,7 +35,7 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
       <div className="w-full max-w-md">
         {signedIn && (
           <Link
-            to="/mail"
+            to="/mail/all/inbox"
             className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100"
           >
             <ArrowLeft className="size-4" /> Back to mail

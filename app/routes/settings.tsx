@@ -82,7 +82,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
       <div className="mx-auto max-w-4xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
         {/* On a phone, a back button as in iOS. */}
         <Link
-          to="/mail"
+          to="/mail/all/inbox"
           className="mb-6 inline-flex items-center gap-1.5 text-sm text-zinc-500 hover:text-zinc-900 max-md:press max-md:-ml-1.5 max-md:mb-2 max-md:gap-0 max-md:py-1.5 max-md:text-[17px] max-md:text-accent-600 dark:hover:text-zinc-100 max-md:dark:text-accent-400"
         >
           <ArrowLeft className="size-4 max-md:hidden" />

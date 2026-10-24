@@ -9,7 +9,10 @@ import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { themeScript } from "./lib/theme-script";
 
-export const streamTimeout = 5_000;
+// React Router rejects a streamed promise after this time, in pages and in data
+// requests. The message list streams, and a slow mail server can take more
+// than a few seconds. Before the list streamed, the page waited for it.
+export const streamTimeout = 30_000;
 
 // The theme script is the same on each page, so a hash allows it. The scripts
 // that React Router writes change on each page, so they get the nonce.

@@ -22,10 +22,11 @@ import {
   Warning,
   X,
 } from "~/components/icons";
-import { forwardRef, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { forwardRef, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
 import {
+  Await,
   data,
   Form,
   Link,
@@ -64,31 +65,32 @@ import {
 } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { listThreads } from "~/server/mail.server";
-import { ProviderError } from "~/server/providers/types";
 import type { Route } from "./+types/mail.list";
 
-export async function loader({ params, request, context }: Route.LoaderArgs) {
+export function loader({ params, request, context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
   if (!isFolder(params.folder)) throw data("Folder not found", { status: 404 });
+  if (params.scope !== "all" && !user.accounts.some((a) => a.id === params.scope)) {
+    throw data("Account not found", { status: 404 });
+  }
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
-  try {
-    const result = await listThreads(user.id, {
-      scope: params.scope,
-      folder: params.folder,
-      query,
-      cursor: url.searchParams.get("cursor"),
-    });
-    return { ...result, query };
-  } catch (error) {
-    if (error instanceof ProviderError && error.status === 404) {
-      throw data("Account not found", { status: 404 });
-    }
-    throw error;
-  }
+  // The mail servers can take a few seconds. The loader does not wait for
+  // them, so the page streams: its frame shows first, and the rows follow.
+  const list = listThreads(
+    user.id,
+    { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
+    user.accounts,
+  ).then((result) => ({ ...result, query }));
+  return { list };
 }
 
-type ListData = Awaited<ReturnType<typeof loader>>;
+type ListData = Awaited<ReturnType<typeof loader>["list"]>;
+
+/** Loads the list from the server, and waits for the streamed rows. */
+async function loadList(serverLoader: Route.ClientLoaderArgs["serverLoader"]): Promise<ListData> {
+  return (await serverLoader()).list;
+}
 interface ListCacheEntry {
   data?: ListData;
   /** Time the data loaded. */
@@ -155,7 +157,7 @@ function fetchList(key: string, serverLoader: () => Promise<ListData>) {
 export async function clientLoader({ params, request, serverLoader }: Route.ClientLoaderArgs) {
   const url = new URL(request.url);
   // Later pages from infinite scroll do not use the cache.
-  if (url.searchParams.has("cursor")) return { ...(await serverLoader()), loadedAt: Date.now() };
+  if (url.searchParams.has("cursor")) return { ...(await loadList(serverLoader)), loadedAt: Date.now() };
   const key = listKey(params.scope, params.folder, url.searchParams.get("q")?.trim() ?? "");
   const prefetch = url.searchParams.has(PREFETCH_PARAM);
   const entry = listCache.get(key);
@@ -163,7 +165,7 @@ export async function clientLoader({ params, request, serverLoader }: Route.Clie
   if (entry?.data && key !== shownListKey) {
     const refresh =
       Date.now() - entry.at > (prefetch ? PREFETCH_FRESH_MS : LIST_FRESH_MS)
-        ? (entry.pending ?? fetchList(key, serverLoader)).then(
+        ? (entry.pending ?? fetchList(key, () => loadList(serverLoader))).then(
             (data) => ({ ...data, loadedAt: Date.now() }),
             () => null,
           )
@@ -185,7 +187,7 @@ export async function clientLoader({ params, request, serverLoader }: Route.Clie
     // lists may be out of date too, so they reload when you open them.
     for (const other of listCache.values()) other.at = 0;
   }
-  const load = fetchList(key, serverLoader).then((data) => ({ ...data, loadedAt: Date.now() }));
+  const load = fetchList(key, () => loadList(serverLoader)).then((data) => ({ ...data, loadedAt: Date.now() }));
   // An error from a fetcher replaces the full page, so a failed prefetch
   // stays silent. If you open the folder, the error shows then.
   return prefetch ? load.catch(() => null as never) : load;
@@ -221,14 +223,76 @@ export interface ListOutletContext {
   closeThread(): void;
 }
 
-function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
+/** The list data after the client loader, or the streamed list of the server render. */
+type ShownListData = ListData & {
+  loadedAt?: number;
+  refresh?: Promise<(ListData & { loadedAt: number }) | null>;
+};
+
+function ThreadListRoute({ loaderData, params }: Route.ComponentProps) {
+  // Only the server render has the list as a promise. In the browser, the
+  // client loader waits for it, so the Await below renders at once.
+  const list = "list" in loaderData ? loaderData.list : loaderData;
+  const folder = params.folder as Folder;
+  return (
+    <Suspense fallback={<ListSkeleton folder={folder} />}>
+      <Await resolve={list}>
+        {(resolved: ShownListData) => <ThreadList loaderData={resolved} params={params} />}
+      </Await>
+    </Suspense>
+  );
+}
+
+/**
+ * The frame of the list, while the rows stream from the server. It has the
+ * size of the real list, so the page does not move when the rows arrive.
+ */
+function ListSkeleton({ folder }: { folder: Folder }) {
+  const bar = "animate-pulse rounded bg-zinc-100 dark:bg-zinc-800";
+  return (
+    <div aria-busy="true" className="relative flex min-w-0 flex-1 overflow-hidden">
+      <section className="relative flex w-full min-w-0 flex-col border-zinc-200 lg:w-[var(--list-width,420px)] lg:shrink-0 lg:border-r xl:w-[var(--list-width,460px)] dark:border-zinc-800">
+        <header className="flex flex-col gap-3 border-b border-zinc-200 px-4 pt-4 pb-3 dark:border-zinc-800 md:in-[.sidebar-collapsed]:pl-14">
+          <div className="flex h-8 items-center gap-2">
+            <span className="size-8 md:hidden" />
+            <h1 className="truncate text-lg font-semibold tracking-tight max-md:text-2xl max-md:font-bold">
+              {FOLDER_LABELS[folder]}
+            </h1>
+          </div>
+          <div className="h-[34px] rounded-lg bg-zinc-100 dark:bg-zinc-900" />
+        </header>
+        <ul className="flex-1 overflow-hidden bg-white dark:bg-zinc-950">
+          {Array.from({ length: 12 }, (_, i) => (
+            <li key={i} className="flex gap-3 border-b border-zinc-100 px-4 py-3 dark:border-zinc-900">
+              <div className={cx("size-8 shrink-0 rounded-full", bar)} />
+              <div className="min-w-0 flex-1 space-y-2 pt-0.5">
+                <div className={cx("h-3.5 w-1/3", bar)} />
+                <div className={cx("h-3 w-3/4", bar)} />
+                <div className={cx("h-3 w-1/2", bar)} />
+              </div>
+            </li>
+          ))}
+        </ul>
+      </section>
+      <div className="hidden min-w-0 flex-1 bg-zinc-50/50 lg:flex dark:bg-zinc-950" />
+    </div>
+  );
+}
+
+function ThreadList({
+  loaderData: routeData,
+  params,
+}: {
+  loaderData: ShownListData;
+  params: Route.ComponentProps["params"];
+}) {
   const { scope } = params;
   const folder = params.folder as Folder;
 
   // A cached list shows first. Newer data from the server replaces it when it arrives.
   const [fresh, setFresh] = useState<{ from: typeof routeData; data: ListData; loadedAt: number }>();
   useEffect(() => {
-    if (!("refresh" in routeData) || !routeData.refresh) return;
+    if (!routeData.refresh) return;
     let live = true;
     routeData.refresh.then((result) => {
       if (live && result) setFresh({ from: routeData, data: result, loadedAt: result.loadedAt });
@@ -241,7 +305,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const loaderData: ListData = current?.data ?? routeData;
   // The first page from the server render has no load time.
   const renderedAt = useMemo(() => Date.now(), [routeData]);
-  const loadedAt = current?.loadedAt ?? ("loadedAt" in routeData ? routeData.loadedAt : renderedAt);
+  const loadedAt = current?.loadedAt ?? routeData.loadedAt ?? renderedAt;
 
   const shownKey = listKey(scope, folder, loaderData.query);
   useEffect(() => {
@@ -259,7 +323,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const navigation = useNavigation();
   const revalidator = useRevalidator();
   const childParams = useParams();
-  const moreFetcher = useFetcher<typeof loader>();
+  const moreFetcher = useFetcher<typeof clientLoader>();
   const searchRef = useRef<HTMLInputElement>(null);
   const virtuosoRef = useRef<VirtuosoHandle>(null);
   const listRef = useRef<HTMLElement>(null);
@@ -867,7 +931,7 @@ function ThreadPlaceholder({ thread }: { thread: ThreadSummary }) {
 
 // Keep this export apart from the declaration. The route chunk split fails on an
 // inline default export that uses the list cache and has a renamed prop.
-export default ThreadList;
+export default ThreadListRoute;
 
 const LIST_WIDTH_KEY = "list-width";
 const LIST_MIN_WIDTH = 300;

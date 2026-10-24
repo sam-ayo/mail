@@ -38,6 +38,7 @@ import { draftFor } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
 import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
+import { timed } from "~/server/timing.server";
 import { loadThread } from "~/server/mail.server";
 import { ProviderAuthError, ProviderError } from "~/server/providers/types";
 import { errorMessage } from "~/server/util.server";
@@ -47,7 +48,9 @@ import type { ListOutletContext } from "./mail.list";
 export async function loader({ params, context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
   try {
-    const thread = await loadThread(user.id, params.accountId, params.threadId);
+    const thread = await timed(context, "thread", () =>
+      loadThread(user.id, params.accountId, params.threadId, user.accounts),
+    );
     return { thread };
   } catch (error) {
     if (error instanceof ProviderError && error.status === 404) {

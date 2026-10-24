@@ -15,7 +15,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const session = await getSession(request);
   const expectedState = session.get("oauthState");
   const verifier = session.get("oauthVerifier");
-  const returnTo = session.get("oauthReturnTo") ?? "/mail";
+  const returnTo = session.get("oauthReturnTo") ?? "/mail/all/inbox";
   const url = new URL(request.url);
 
   const providerError = url.searchParams.get("error");
@@ -40,7 +40,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
         ? await googleExchangeCode(code, verifier)
         : await microsoftExchangeCode(code, verifier);
     // Allow only paths in this app. "//host" and "/\\host" go to other sites.
-    const safeReturnTo = /^\/(?![/\\])/.test(returnTo) ? returnTo : "/mail";
+    const safeReturnTo = /^\/(?![/\\])/.test(returnTo) ? returnTo : "/mail/all/inbox";
     return connectAccount(session, { provider, ...profile }, safeReturnTo);
   } catch (error) {
     return redirectWithError(session, "/welcome", errorMessage(error));

@@ -3,7 +3,15 @@ import type { Session } from "react-router";
 import { redirect } from "react-router";
 import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
-import { createUser, findAccountOwner, isDemoUser, mergeUsers, resolveUser, upsertAccount } from "./accounts.server";
+import {
+  createUser,
+  findAccountOwner,
+  isDemoUser,
+  mergeUsers,
+  resolveUser,
+  resolveUserAccounts,
+  upsertAccount,
+} from "./accounts.server";
 import { env } from "./env.server";
 import { closeImapConnection } from "./providers/imap.server";
 import { getSession, sessionStorage } from "./session.server";
@@ -11,6 +19,12 @@ import { getSession, sessionStorage } from "./session.server";
 export async function getUserId(request: Request) {
   const session = await getSession(request);
   return (await resolveUser(session.get("userId"))) ?? null;
+}
+
+/** The signed-in user and the user's accounts, or null. */
+export async function getUser(request: Request) {
+  const session = await getSession(request);
+  return (await resolveUserAccounts(session.get("userId"))) ?? null;
 }
 
 /** For resource routes that the layout middleware does not cover. */
@@ -36,7 +50,7 @@ export function requireCronSecret(request: Request) {
 export async function connectAccount(
   session: Session,
   input: { provider: ProviderKind; email: string; name: string; credentials: Credentials },
-  returnTo = "/mail",
+  returnTo = "/mail/all/inbox",
 ) {
   let current = await resolveUser(session.get("userId"));
   // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.

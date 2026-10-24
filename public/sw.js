@@ -50,10 +50,13 @@ async function cacheFirst(request) {
 }
 
 // Pages and their data come from the network when it is there. The saved copy is for offline use.
-async function networkFirst(request, fallback) {
+async function networkFirst(event, fallback) {
+  const { request } = event;
   try {
     const response = await fetch(request);
-    if (response.ok && response.type === "basic") await put(PAGES_CACHE, request, response.clone());
+    // Save the copy in the background. A save reads the full body, and the
+    // page streams, so a wait here would show nothing until the page ends.
+    if (response.ok && response.type === "basic") event.waitUntil(put(PAGES_CACHE, request, response.clone()));
     return response;
   } catch (error) {
     const cached = await caches.match(request, { cacheName: PAGES_CACHE });
@@ -85,11 +88,11 @@ self.addEventListener("fetch", (event) => {
     event.respondWith(cacheFirst(request));
   } else if (request.mode === "navigate") {
     event.respondWith(
-      networkFirst(request, () => new Response(OFFLINE_PAGE, { headers: { "Content-Type": "text/html" } })),
+      networkFirst(event, () => new Response(OFFLINE_PAGE, { headers: { "Content-Type": "text/html" } })),
     );
   } else if (url.pathname.endsWith(".data")) {
     // The route data that React Router loads when you move between pages.
-    event.respondWith(networkFirst(request));
+    event.respondWith(networkFirst(event));
   }
 });
 

@@ -1,3 +1,4 @@
+import { waitUntil } from "@vercel/functions";
 import type {
   Address,
   Attachment,
@@ -264,7 +265,9 @@ export function createGmailProvider(account: Account): MailProvider {
         fetched.push({ historyId, summary });
         return summary;
       });
-      await saveSummaries(account.id, people, fetched);
+      // The list does not need the write, so the response does not wait for it.
+      // On Vercel, waitUntil keeps the function alive until the write ends.
+      waitUntil(saveSummaries(account.id, people, fetched));
 
       return { threads, nextCursor: list.nextPageToken };
     },

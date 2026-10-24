@@ -101,6 +101,28 @@ export async function resolveUser(id: string | undefined) {
 }
 
 /**
+ * Resolves the user as resolveUser does. The same query gives the user's
+ * accounts and the demo flag of isDemoUser. Each page load needs all three,
+ * and each query is a round trip.
+ */
+export async function resolveUserAccounts(id: string | undefined) {
+  if (!id) return undefined;
+  const rows = await query<{ resolved_id: string; user_demo: boolean } & Partial<AccountRow>>(
+    `SELECT r.id AS resolved_id, r.demo AS user_demo, a.*
+     FROM users s
+     JOIN users r ON r.id = COALESCE(s.merged_into, s.id)
+     LEFT JOIN accounts a ON a.user_id = r.id
+     WHERE s.id = $1
+     ORDER BY a.position, a.created_at`,
+    [id],
+  );
+  if (rows.length === 0) return undefined;
+  // A user with no accounts gives one row with no account columns.
+  const accounts = rows.filter((row) => row.id).map((row) => toAccount(row as AccountRow));
+  return { id: rows[0].resolved_id, demo: rows[0].user_demo, accounts };
+}
+
+/**
  * Moves the accounts and devices of one workspace into another. This occurs
  * when a browser connects a mailbox that another workspace has. Before, the
  * mailbox moved, and the other browser lost it.

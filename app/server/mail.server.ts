@@ -79,8 +79,10 @@ export interface ThreadListResult {
 export async function listThreads(
   userId: string,
   options: { scope: string; folder: Folder; query?: string; cursor: string | null },
+  /** The user's accounts, if the caller has them. Then no query is necessary. */
+  userAccounts?: Account[],
 ): Promise<ThreadListResult> {
-  const all = await listAccounts(userId);
+  const all = userAccounts ?? (await listAccounts(userId));
   const accounts = options.scope === "all" ? all : all.filter((a) => a.id === options.scope);
   if (options.scope !== "all" && accounts.length === 0) {
     throw new ProviderError("Account not found", 404);
@@ -146,8 +148,13 @@ export async function loadThread(
   userId: string,
   accountId: string,
   threadId: string,
+  /** The user's accounts, if the caller has them. Then no query is necessary. */
+  userAccounts?: Account[],
 ): Promise<RenderedThread> {
-  const account = await requireAccount(userId, accountId);
+  const account = userAccounts
+    ? userAccounts.find((a) => a.id === accountId)
+    : await requireAccount(userId, accountId);
+  if (!account) throw new ProviderError("Account not found", 404);
   const thread = await providerFor(account).getThread(threadId);
   return { ...thread, messages: thread.messages.map((m) => renderMessage(account.id, m)) };
 }
