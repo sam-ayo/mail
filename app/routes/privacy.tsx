@@ -56,11 +56,40 @@ export default function Privacy() {
       </p>
       <p>mail by samayo uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
 
+      <h2>AI agents</h2>
+      <p>
+        You can connect an AI agent, such as Claude or ChatGPT, to your workspace through the MCP server at
+        mail.samayo.me/mcp. The agent connects only after you sign in and allow it on a consent page. The consent page
+        shows the permissions and the accounts.
+      </p>
+      <ul>
+        <li>
+          <strong>Permissions:</strong> read and search your mail; archive, delete, star, and mark mail as read; and send
+          mail. The consent page shows the permissions that the agent asks for, before you allow it.
+        </li>
+        <li>
+          <strong>Data that the agent gets:</strong> only the data of the tools that it calls, such as a list of
+          conversations, the text of a conversation, or an attachment. mail by samayo sends this data to the agent's
+          service, where the agent's provider keeps it under its own privacy policy.
+        </li>
+        <li>
+          <strong>Data that mail by samayo keeps:</strong> the agent's name and address, your consent, and the access and
+          refresh tokens. mail by samayo does not keep the conversations or the prompts of the agent.
+        </li>
+        <li>
+          <strong>Retention:</strong> an access token expires after one hour, and a refresh token after 90 days.
+        </li>
+        <li>
+          <strong>Your control:</strong> Settings › AI agents lists the agents that you allowed. Disconnect removes your
+          consent and blocks the agent at once.
+        </li>
+      </ul>
+
       <h2>Sharing</h2>
       <p>
-        mail by samayo does not sell your data. mail by samayo does not share your data with third parties, and does not use it for
-        advertisements. People do not read your email, unless you give permission for a specific message, or the
-        law requires it, or it is necessary for security.
+        mail by samayo does not sell your data, and does not use it for advertisements. mail by samayo shares your data only
+        with an AI agent that you connect and allow, as the section above tells. People do not read your email, unless you
+        give permission for a specific message, or the law requires it, or it is necessary for security.
       </p>
 
       <h2>Google user data</h2>

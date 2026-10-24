@@ -28,3 +28,6 @@ pnpm dev
 - A workspace has no password. The login step (`/oauth/login`) uses the mail session of the browser. The consent step is `/oauth/consent`.
 - The scopes are `mail:read`, `mail:write`, and `mail:send`. `offline_access` gives a refresh token.
 - Settings › AI agents lists the connected agents. Disconnect takes effect at once.
+- `/agents` is the public documentation of the connector. The Claude and ChatGPT directory listings link to it.
+- `/review` is the sign-in for directory reviewers. `REVIEW_PASSWORD` turns it on. Each sign-in gets a new workspace with three demo accounts, so reviewers never share a workspace. Demo accounts send nothing.
+- `OPENAI_APPS_CHALLENGE` is the domain token for ChatGPT, at `/.well-known/openai-apps-challenge`.

@@ -11,3 +11,6 @@
 .env*
 *.bak
 !.env.example
+
+# The ChatGPT plugin ZIP. Make it from directory/chatgpt when you submit.
+/directory/*.zip

@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { Logo } from "./ui";
 
 export const CONTACT_EMAIL = "samuelayomideadeoye@gmail.com";
-export const UPDATED = "14 October 2026";
+export const UPDATED = "24 October 2026";
 
 /** The layout for the public privacy policy and terms of service pages. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {
@@ -29,6 +29,9 @@ export function LegalLinks({ className }: { className?: string }) {
       </Link>
       <Link to="/terms" className="hover:text-zinc-700 dark:hover:text-zinc-200">
         Terms of service
+      </Link>
+      <Link to="/agents" className="hover:text-zinc-700 dark:hover:text-zinc-200">
+        AI agents
       </Link>
     </nav>
   );

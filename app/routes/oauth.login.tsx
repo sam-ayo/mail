@@ -2,7 +2,7 @@ import { redirect } from "react-router";
 import { GoogleIcon, Logo, MicrosoftIcon } from "~/components/ui";
 import { agentAuth } from "~/server/agent-auth.server";
 import { getUserId } from "~/server/auth.server";
-import { oauthConfigured } from "~/server/env.server";
+import { env, oauthConfigured } from "~/server/env.server";
 import type { Route } from "./+types/oauth.login";
 
 export const meta: Route.MetaFunction = () => [{ title: "Connect an AI agent · mail by samayo" }];
@@ -21,7 +21,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const workspaceId = await getUserId(request);
   if (!workspaceId) {
-    return { returnTo: url.pathname + url.search, configured: oauthConfigured };
+    return { returnTo: url.pathname + url.search, configured: oauthConfigured, review: !!env.reviewPassword };
   }
 
   const { headers } = await agentAuth.api.workspaceSignIn({
@@ -38,7 +38,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 }
 
 export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
-  const { returnTo, configured } = loaderData;
+  const { returnTo, configured, review } = loaderData;
   const link = (provider: string) => `/auth/${provider}?returnTo=${encodeURIComponent(returnTo)}`;
   return (
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
@@ -70,6 +70,14 @@ export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
         <p className="mt-4 text-center text-xs text-zinc-400">
           For an IMAP or hosted address, open mail by samayo in this browser and sign in. Then connect the agent again.
         </p>
+        {review && (
+          <p className="mt-2 text-center text-xs text-zinc-400">
+            Directory reviewer?{" "}
+            <a href={`/review?returnTo=${encodeURIComponent(returnTo)}`} className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
+              Sign in with the review password
+            </a>
+          </p>
+        )}
       </div>
     </main>
   );

@@ -33,6 +33,8 @@ export default [
   route("api/cron/expire-cache", "routes/api.cron.expire-cache.ts"),
   route("api/cron/check-mail", "routes/api.cron.check-mail.ts"),
   route("api/dev/demo-data", "routes/api.dev.demo-data.ts"),
+  route("review", "routes/review.tsx"),
+  route("agents", "routes/agents.tsx"),
   route("api/auth/*", "routes/api.auth.ts"),
   route(".well-known/*", "routes/well-known.ts"),
   route("mcp", "routes/mcp.ts", { id: "mcp" }),

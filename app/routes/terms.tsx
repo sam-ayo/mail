@@ -23,6 +23,9 @@ export default function Terms() {
         <li>Connect only email accounts that you own or that you have permission to use.</li>
         <li>Do not use mail by samayo to send spam, or for illegal activity.</li>
         <li>Obey the terms of Google and Microsoft for your email accounts.</li>
+        <li>
+          If you connect an AI agent, you are responsible for what it does with your mail. Allow only agents that you trust.
+        </li>
       </ul>
 
       <h2>Your data</h2>

@@ -38,6 +38,14 @@ export const env = {
     resendApiKey: process.env.RESEND_API_KEY || "",
     resendWebhookSecret: process.env.RESEND_WEBHOOK_SECRET || "",
   },
+  /**
+   * The password of the reviewer sign-in at /review. Directory reviewers of
+   * Claude and ChatGPT use it to get a workspace with sample mail. Empty turns
+   * the sign-in off.
+   */
+  reviewPassword: process.env.REVIEW_PASSWORD || "",
+  /** The token that ChatGPT asks for at /.well-known/openai-apps-challenge to verify the domain. */
+  openaiAppsChallenge: process.env.OPENAI_APPS_CHALLENGE || "",
   /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
   push: {
     publicKey: process.env.VAPID_PUBLIC_KEY || "",
