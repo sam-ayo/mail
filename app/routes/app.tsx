@@ -11,7 +11,7 @@ import {
 } from "~/components/icons";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { Drawer } from "@base-ui/react/drawer";
-import { Outlet, redirect, useLocation, useNavigate, useParams, useSubmit } from "react-router";
+import { Outlet, redirect, useNavigate, useParams, useSubmit } from "react-router";
 import type { Command } from "~/components/command-palette";
 import { CommandPalette } from "~/components/command-palette";
 import { ComposeWindow } from "~/components/composer";
@@ -253,7 +253,8 @@ function Shell() {
 
 /**
  * On small screens the sidebar is a drawer. Swipe right from the left edge to
- * open it. Swipe left to close it. When a conversation is open, the same swipe
+ * open it. Swipe left or tap outside it to close it. A tap on a row in the
+ * drawer does not close it. When a conversation is open, the same swipe
  * goes back to the list, so the swipe area is off. The open state is here and
  * not in the shell, so an open or a close does not render the message list
  * again while the drawer moves. The drawer stays mounted for the same reason.
@@ -274,7 +275,6 @@ function NavDrawer({
   onShowShortcuts(): void;
 }) {
   const [navOpen, setNavOpen] = useState(false);
-  const location = useLocation();
 
   // The list header opens the sidebar drawer on small screens.
   useEffect(() => {
@@ -282,7 +282,6 @@ function NavDrawer({
     window.addEventListener("mail:open-nav", open);
     return () => window.removeEventListener("mail:open-nav", open);
   }, []);
-  useEffect(() => setNavOpen(false), [location.pathname]);
 
   // Safari has its own swipe back from the left edge, and it goes back in the
   // history. A touch on the swipe area must open the drawer, so the touch
@@ -303,7 +302,7 @@ function NavDrawer({
   }, []);
 
   return (
-    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left" disablePointerDismissal>
+    <Drawer.Root open={navOpen} onOpenChange={setNavOpen} swipeDirection="left">
       <Drawer.SwipeArea
         ref={swipeArea}
         disabled={threadOpen}
