@@ -126,7 +126,7 @@ export function Sidebar({
         resizable ? "w-[calc(var(--sidebar-width)+1rem)]" : "w-64",
       )}
     >
-    <nav className="flex h-full flex-col rounded-[18px] border border-(--sidebar-border) bg-(--sidebar)">
+    <nav className={cx("flex h-full flex-col rounded-[18px] border border-(--sidebar-border) bg-(--sidebar)", drawer && "shadow-2xl")}>
       {/* The sidebar button sits at the left of the logo. It is not in the
           panel, so it stays in place when the panel goes. */}
       <div className={cx("flex items-center justify-between px-4 pb-3", resizable ? "pt-[11px] pl-11" : "pt-4")}>
