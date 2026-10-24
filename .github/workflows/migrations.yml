@@ -1,9 +1,17 @@
 name: Migrations
 
+# Runs only when a migration or the migration runner changes. Run it by hand
+# (workflow_dispatch) on main to apply migrations again after a failed run.
 on:
   push:
     branches: [main]
+    paths: &paths
+      - migrations/**
+      - scripts/migrate.sh
+      - .github/workflows/migrations.yml
   pull_request:
+    paths: *paths
+  workflow_dispatch:
 
 env:
   NEON_PROJECT_ID: morning-pond-76593373
@@ -46,7 +54,7 @@ jobs:
   # Vercel deploys main from GitHub by itself. Write migrations that the code
   # in production now can still use, because the new code can go live first.
   migrate:
-    if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-24.04
     concurrency: migrate-production
     steps:
