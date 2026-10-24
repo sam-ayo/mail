@@ -606,7 +606,7 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
         ref={listRef}
         data-list
         className={cx(
-          "relative flex min-w-0 flex-col border-r border-zinc-200 dark:border-zinc-800",
+          "relative flex min-w-0 flex-col border-zinc-200 lg:border-r dark:border-zinc-800",
           // The resize handle sets --list-width. Without it, the default width applies.
           "w-full lg:w-[var(--list-width,420px)] lg:shrink-0 xl:w-[var(--list-width,460px)]",
           paneOpen && "lg:in-[.list-collapsed]:hidden",

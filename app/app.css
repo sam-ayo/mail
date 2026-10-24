@@ -406,6 +406,16 @@ button,
   scrollbar-color: rgb(161 161 170 / 0.35) transparent;
 }
 
+/* A touch screen scrolls with the finger, so the scroll bars only take space. */
+@media (pointer: coarse) {
+  * {
+    scrollbar-width: none;
+  }
+  *::-webkit-scrollbar {
+    display: none;
+  }
+}
+
 /* The base layer lets utility classes on a kbd override these colors. */
 @layer base {
   kbd {
