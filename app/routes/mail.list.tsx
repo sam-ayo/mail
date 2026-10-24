@@ -618,6 +618,11 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
   const loading =
     navigation.state === "loading" &&
     navigation.location.pathname.split("/").slice(0, 4).join("/") !== base;
+  // A search goes to the same list with a new query.
+  const searching =
+    navigation.state === "loading" &&
+    navigation.location.pathname === base &&
+    (new URLSearchParams(navigation.location.search).get("q") ?? "") !== loaderData.query;
   const refreshing = revalidator.state === "loading";
   usePullToRefresh({ scroller, indicator: pullIndicator, refreshing, onRefresh: () => revalidator.revalidate() });
 
@@ -684,7 +689,14 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
             className="relative"
             onSubmit={() => clearTimeout(searchTimer.current)}
           >
-            <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400" />
+            {searching ? (
+              <CircleNotch
+                aria-label="Searching"
+                className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 animate-spin text-zinc-400"
+              />
+            ) : (
+              <MagnifyingGlass className="pointer-events-none absolute top-1/2 left-3 size-4 -translate-y-1/2 text-zinc-400" />
+            )}
             <input
               ref={searchRef}
               key={base}
@@ -736,7 +748,14 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
             <ArrowClockwise className="size-5 rotate-(--pull-turn) text-zinc-400 in-[[data-refreshing]]:animate-spin" />
           </div>
           {threads.length === 0 ? (
-            <ul ref={setScroller} className="flex-1 overflow-y-auto overscroll-contain bg-white dark:bg-zinc-950">
+            <ul
+              ref={setScroller}
+              aria-busy={searching}
+              className={cx(
+                "flex-1 overflow-y-auto overscroll-contain bg-white transition-opacity dark:bg-zinc-950",
+                searching && "opacity-50",
+              )}
+            >
               <EmptyList folder={folder} query={loaderData.query} />
             </ul>
           ) : (
@@ -749,7 +768,11 @@ function ThreadList({ loaderData: routeData, params }: Route.ComponentProps) {
               computeItemKey={(_, thread) => threadKey(thread.accountId, thread.id)}
               endReached={loadMore}
               increaseViewportBy={400}
-              className={cx("flex-1 overscroll-contain bg-white transition-opacity dark:bg-zinc-950", loading && "opacity-50")}
+              aria-busy={loading || searching}
+              className={cx(
+                "flex-1 overscroll-contain bg-white transition-opacity dark:bg-zinc-950",
+                (loading || searching) && "opacity-50",
+              )}
               components={{ List: ThreadListElement, Item: ThreadListItem, Footer: cursor ? ListFooter : undefined }}
               context={{ loading: moreFetcher.state !== "idle", loadMore }}
               itemContent={(index, thread) => {
