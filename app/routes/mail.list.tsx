@@ -864,19 +864,19 @@ function ThreadList({
               }}
             />
           )}
+          {/* On a phone, "New message" floats above the list, near the thumb, as the reply actions do. */}
+          <button
+            type="button"
+            onClick={() => openCompose()}
+            className="press absolute right-4 bottom-4 inline-flex h-12 items-center gap-2 rounded-full bg-accent-600 px-5 text-sm font-semibold text-white shadow-lg shadow-accent-600/30 md:hidden"
+          >
+            <NotePencil className="size-5" /> New message
+          </button>
         </div>
 
-        {/* A toolbar at the bottom of the screen on a phone, as in iOS Mail. */}
-        <footer className="flex items-center border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
-          <span className="size-11" />
+        {/* A status line at the bottom of the screen on a phone, as in iOS Mail. */}
+        <footer className="flex min-h-12 items-center border-t border-zinc-200 px-2 pt-1 pb-[max(env(safe-area-inset-bottom),0.25rem)] md:hidden dark:border-zinc-800">
           <UpdatedAt loadedAt={loadedAt} refreshing={refreshing} />
-          <IconButton
-            label="New message"
-            className="size-11 text-accent-600 dark:text-accent-400"
-            onClick={() => openCompose()}
-          >
-            <NotePencil className="size-6" />
-          </IconButton>
         </footer>
       </section>
 
