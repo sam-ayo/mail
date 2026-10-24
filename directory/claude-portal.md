@@ -42,14 +42,13 @@ The tools sync from the server. Each tool has a title and all three hints.
 
 ### Carousel screenshots
 
-3–5 PNG images, at least 1000 px wide, cropped to the app response without the prompt. Make them in Claude with the reviewer workspace, so that they show only sample mail.
+The images are in `directory/screenshots/`. They come from Claude desktop with the reviewer workspace, so they show only sample mail. Each is a PNG, at least 1000 px wide, cropped to the app response.
 
-| Screenshot | Prompt |
+| File | Prompt |
 | --- | --- |
-| The reply to Maya in the compose view | Reply to Maya that Thursday works and that I'll take the inbox section. |
-| A new email with the From menu open | Write an email from my Gmail to Sam that asks for the brand colours. |
-| The view after Send ("Sent from …") | (The same reply, after Send.) |
-| The compose view in the light theme | Write an email to Nora that confirms coffee on Wednesday at 9:30. |
+| `1-reply-draft.png` | Reply to Maya's email about the Q4 roadmap. Say that Thursday works and that I'll take the inbox section. |
+| `2-reply-sent.png` | The same reply, after the user pressed Send in the view. |
+| `3-new-email-from-menu.png` | Write a new email from my Gmail account to Sam Lee that asks for the brand colours for the new icon set. |
 
 ## 4. Use cases
 

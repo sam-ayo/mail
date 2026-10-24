@@ -11,7 +11,7 @@ Do not put the review password in this folder. Enter it only in the portals.
 
 1. Set `REVIEW_PASSWORD` in the Vercel production environment, as a Sensitive variable. Use a long random value: `openssl rand -base64 24`. Then redeploy.
 2. Open `https://mail.samayo.me/review` and sign in with the password. Check that the workspace has three demo accounts.
-3. Make the screenshots (see `claude-portal.md`).
+3. The screenshots are in `screenshots/`. `claude-portal.md` has their prompts.
 
 ## Claude
 
