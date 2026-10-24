@@ -1,8 +1,8 @@
-import { Keyboard, MagnifyingGlass, Sparkle, Tray } from "~/components/icons";
+import { Sparkle } from "~/components/icons";
 import { Form, Link, redirect } from "react-router";
 import { LegalLinks } from "~/components/legal";
 import { Logo } from "~/components/ui";
-import { DEMO_COMPANY, DEMO_COMPANY_LOGO_URL } from "~/lib/demo-company";
+import { DEMO_COMPANY_LOGO_URL } from "~/lib/demo-company";
 import { isDemoUser } from "~/server/accounts.server";
 import { getUserId } from "~/server/auth.server";
 import { createDemoWorkspace, isDemoHost } from "~/server/demo-accounts.server";
@@ -44,38 +44,14 @@ export async function action() {
   return redirect("/mail/all/inbox", { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
 }
 
-const FEATURES = [
-  { icon: Tray, text: "A work, a Gmail, and an Outlook account in one unified inbox" },
-  { icon: Keyboard, text: "Keyboard shortcuts for all actions. Push ? to see them." },
-  { icon: MagnifyingGlass, text: "Search, and a command palette on ⌘K" },
-];
-
 export default function Demo({ loaderData }: Route.ComponentProps) {
   const { hasDemo, realAppUrl } = loaderData;
   return (
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
         <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="flex items-center justify-between">
-            <Logo className="text-lg" />
-            <span className="rounded-full bg-accent-50 px-2.5 py-1 text-xs font-medium text-accent-700 dark:bg-accent-950 dark:text-accent-300">
-              Live demo
-            </span>
-          </div>
-          <h1 className="mt-6 text-2xl font-semibold tracking-tight">{TITLE}</h1>
-          <p className="mt-2 text-sm text-zinc-500">
-            You get your own workspace at {DEMO_COMPANY.name}, a sample company, with sample mail. Read, reply, archive,
-            and sort as you like. No sign-in.
-          </p>
-
-          <ul className="mt-5 space-y-2.5 text-sm text-zinc-700 dark:text-zinc-300">
-            {FEATURES.map(({ icon: Icon, text }) => (
-              <li key={text} className="flex items-start gap-2.5">
-                <Icon className="mt-0.5 size-4 shrink-0 text-accent-600 dark:text-accent-400" />
-                {text}
-              </li>
-            ))}
-          </ul>
+          <Logo className="text-lg" />
+          <h1 className="mt-6 text-2xl font-semibold tracking-tight">Try mail</h1>
 
           <div className="mt-6 flex flex-col gap-2">
             {hasDemo && (
@@ -98,11 +74,6 @@ export default function Demo({ loaderData }: Route.ComponentProps) {
               </button>
             </Form>
           </div>
-
-          <p className="mt-5 text-xs text-zinc-400">
-            Demo accounts send no mail. A message that you send goes only to the Sent folder. We delete each demo
-            workspace after a week.
-          </p>
         </div>
         <p className="mt-6 text-center text-sm text-zinc-500">
           Want your own inbox?{" "}

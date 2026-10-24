@@ -1,11 +1,10 @@
-import { ArrowLeft, EnvelopeSimple, Sparkle } from "~/components/icons";
+import { ArrowLeft, EnvelopeSimple } from "~/components/icons";
 import { data, Form, Link, redirect } from "react-router";
 import { LegalLinks } from "~/components/legal";
-import { GoogleIcon, Logo, MicrosoftIcon, ProviderIcon, cx, inputClass } from "~/components/ui";
+import { GoogleIcon, Logo, MicrosoftIcon, cx, inputClass } from "~/components/ui";
 import { getUserId } from "~/server/auth.server";
 import { oauthConfigured } from "~/server/env.server";
 import { isDemoHost } from "~/server/demo-accounts.server";
-import { DEMO_PERSONAS } from "~/server/providers/demo.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/welcome";
 
@@ -24,15 +23,13 @@ export async function loader({ request }: Route.LoaderArgs) {
       configured: oauthConfigured,
       signedIn: !!(await getUserId(request)),
       error,
-      // Development only. A button for each demo persona.
-      demos: import.meta.env.DEV ? DEMO_PERSONAS.map(({ title, look }) => ({ title, look: look ?? "demo" })) : [],
     },
     { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } },
   );
 }
 
 export default function Welcome({ loaderData }: Route.ComponentProps) {
-  const { configured, signedIn, error, demos } = loaderData;
+  const { configured, signedIn, error } = loaderData;
   return (
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
@@ -49,16 +46,9 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
           <h1 className="mt-6 text-2xl font-semibold tracking-tight">
             {signedIn ? "Add another account" : "All your email, one fast inbox"}
           </h1>
-          {signedIn ? (
-            <p className="mt-2 text-sm text-zinc-500">
-              Connect as many accounts as you like. They all show in your unified inbox.
-            </p>
-          ) : (
+          {!signedIn && (
             // Google compares this name with the app name on the OAuth consent screen.
-            <p className="mt-2 text-sm text-zinc-500">
-              mail by samayo is an email client. It shows your Gmail and Outlook accounts in one inbox, where you can read,
-              write, and sort your email.
-            </p>
+            <p className="mt-2 text-sm text-zinc-500">mail by samayo shows your Gmail and Outlook in one inbox.</p>
           )}
 
           {error && (
@@ -101,37 +91,8 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
             </details>
           )}
 
-          {demos.length > 0 && (
-            <>
-              <div className="my-6 flex items-center gap-3 text-xs text-zinc-400">
-                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" /> or{" "}
-                <span className="h-px flex-1 bg-zinc-200 dark:bg-zinc-800" />
-              </div>
-
-              <Form method="post" action="/connect/demo">
-                <button className="flex h-11 w-full items-center justify-center gap-2 rounded-xl bg-zinc-900 text-sm font-medium text-white press hover:bg-zinc-800 dark:bg-white dark:text-zinc-900 dark:hover:bg-zinc-200">
-                  <Sparkle className="size-4" /> {signedIn ? "Add a demo account" : "Try a demo inbox"}
-                </button>
-              </Form>
-              <Form method="post" action="/connect/demo" className="mt-2 grid grid-cols-2 gap-2">
-                {demos.map(({ title, look }, persona) => (
-                  <button
-                    key={title}
-                    name="persona"
-                    value={persona}
-                    className="flex h-9 items-center justify-center gap-1.5 rounded-lg border border-zinc-200 text-xs font-medium text-zinc-700 press hover:bg-zinc-50 dark:border-zinc-800 dark:text-zinc-300 dark:hover:bg-zinc-800"
-                  >
-                    <ProviderIcon provider={look} className="size-3.5 shrink-0" /> {title}
-                  </button>
-                ))}
-              </Form>
-            </>
-          )}
         </div>
-        <p className="mt-6 text-center text-xs text-zinc-400">
-          We encrypt your sign-in tokens before we store them.
-        </p>
-        <LegalLinks className="mt-3" />
+        <LegalLinks className="mt-6" />
       </div>
     </main>
   );
