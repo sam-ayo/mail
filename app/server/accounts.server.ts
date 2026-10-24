@@ -100,6 +100,15 @@ export async function mergeUsers(from: string, into: string) {
     from,
   ]);
   await query("UPDATE push_subscriptions SET user_id = $1 WHERE user_id = $2", [into, from]);
+  // The added colors of the two workspaces join, in their order and without duplicates.
+  await query(
+    `UPDATE users SET custom_colors = ARRAY(
+       SELECT color FROM unnest(custom_colors || (SELECT custom_colors FROM users WHERE id = $2))
+         WITH ORDINALITY AS added(color, position)
+       GROUP BY color ORDER BY min(position)
+     ) WHERE id = $1`,
+    [into, from],
+  );
   await query("UPDATE users SET merged_into = $1 WHERE id = $2 OR merged_into = $2", [into, from]);
 }
 
@@ -200,6 +209,31 @@ export async function updateAccountProfile(
     profile.color ?? account.color,
     accountId,
   ]);
+}
+
+/** The most colors that a person can add. When a person adds more, the oldest color goes. */
+const MAX_CUSTOM_COLORS = 16;
+
+/** The colors that the person added to the default colors, oldest first. */
+export async function listCustomColors(userId: string): Promise<string[]> {
+  const row = await queryOne<{ custom_colors: string[] }>("SELECT custom_colors FROM users WHERE id = $1", [userId]);
+  return row?.custom_colors ?? [];
+}
+
+/** Adds a color to the colors of the person. A default color or a color that is in the list does not change it. */
+export async function addCustomColor(userId: string, color: string) {
+  if (ACCOUNT_COLORS.includes(color)) return;
+  await query(
+    `UPDATE users
+     SET custom_colors = (array_append(custom_colors, $2::text))[greatest(1, cardinality(custom_colors) + 2 - $3):]
+     WHERE id = $1 AND NOT ($2 = ANY(custom_colors))`,
+    [userId, color, MAX_CUSTOM_COLORS],
+  );
+}
+
+/** Removes a color from the colors of the person. The accounts that have the color keep it. */
+export async function removeCustomColor(userId: string, color: string) {
+  await query("UPDATE users SET custom_colors = array_remove(custom_colors, $2) WHERE id = $1", [userId, color]);
 }
 
 export async function deleteAccount(userId: string, accountId: string) {

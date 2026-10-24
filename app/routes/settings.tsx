@@ -1,13 +1,21 @@
 import { useEffect, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellSlash, CaretLeft, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning } from "~/components/icons";
-import { data, Form, Link, useFetcher } from "react-router";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning, X } from "~/components/icons";
+import { data, Form, Link, useFetcher, useFetchers, useSubmit } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
 import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
-import { deleteAccount, listAccounts, toSummary, updateAccountProfile } from "~/server/accounts.server";
+import {
+  addCustomColor,
+  deleteAccount,
+  listAccounts,
+  listCustomColors,
+  removeCustomColor,
+  toSummary,
+  updateAccountProfile,
+} from "~/server/accounts.server";
 import type { MailScope } from "~/lib/agents";
 import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-auth.server";
 import { userContext } from "~/server/context";
@@ -19,8 +27,18 @@ export const meta: Route.MetaFunction = () => [{ title: "Settings · mail" }];
 
 export async function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
-  const [accounts, agents] = await Promise.all([listAccounts(user.id), listAgentConnections(user.id)]);
-  return { accounts: accounts.map(toSummary), agents, mcpUrl: MCP_RESOURCE };
+  const [accounts, customColors, agents] = await Promise.all([
+    listAccounts(user.id),
+    listCustomColors(user.id),
+    listAgentConnections(user.id),
+  ]);
+  return { accounts: accounts.map(toSummary), customColors, agents, mcpUrl: MCP_RESOURCE };
+}
+
+/** Any color from the picker is valid, not only the default colors. */
+function validColor(value: FormDataEntryValue | null) {
+  const color = String(value ?? "");
+  return /^#[0-9a-f]{6}$/i.test(color) ? color.toLowerCase() : undefined;
 }
 
 export async function action({ request, context }: Route.ActionArgs) {
@@ -31,12 +49,19 @@ export async function action({ request, context }: Route.ActionArgs) {
     case "update": {
       // Each autosave sends only the field that changed.
       const name = form.get("name");
-      const color = String(form.get("color") ?? "");
+      const color = validColor(form.get("color"));
       await updateAccountProfile(user.id, accountId, {
         name: name == null ? undefined : String(name).trim(),
-        color: ACCOUNT_COLORS.includes(color) ? color : undefined,
+        color,
       });
+      // A color from the picker becomes a swatch for all accounts.
+      if (color) await addCustomColor(user.id, color);
       return { saved: accountId };
+    }
+    case "removeColor": {
+      const color = validColor(form.get("color"));
+      if (color) await removeCustomColor(user.id, color);
+      return { removedColor: color };
     }
     case "remove":
       await deleteAccount(user.id, accountId);
@@ -83,11 +108,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
             </Link>
           </div>
 
-          <ul className="divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-            {loaderData.accounts.map((account) => (
-              <AccountRow key={account.id} account={account} />
-            ))}
-          </ul>
+          <Accounts accounts={loaderData.accounts} customColors={loaderData.customColors} />
         </section>
 
         <Appearance />
@@ -112,28 +133,178 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   );
 }
 
-function AccountRow({ account }: { account: AccountSummary }) {
+/** The fetcher key of the color save of an account. The list reads it to show a new color before the save ends. */
+const colorKey = (accountId: string) => `account-color-${accountId}`;
+
+/** A list of the accounts, and the settings of the selected account next to it. */
+function Accounts({ accounts, customColors }: { accounts: AccountSummary[]; customColors: string[] }) {
+  const [selectedId, setSelectedId] = useState(accounts[0]?.id);
+  // A new color shows at once, before the save ends and the loader has it.
+  const [addedColors, setAddedColors] = useState<string[]>([]);
+  const submit = useSubmit();
+  const removingColors = useFetchers()
+    .filter((fetcher) => fetcher.formData?.get("intent") === "removeColor")
+    .map((fetcher) => String(fetcher.formData!.get("color")));
+  const selected = accounts.find((account) => account.id === selectedId) ?? accounts[0];
+
+  if (!selected) {
+    return (
+      <p className="rounded-xl border border-dashed border-zinc-200 px-4 py-8 text-center text-sm text-zinc-500 dark:border-zinc-800">
+        No accounts are connected.
+      </p>
+    );
+  }
+
+  const savedColors = [...new Set([...customColors, ...addedColors])].filter(
+    (color) => !ACCOUNT_COLORS.includes(color) && !removingColors.includes(color),
+  );
+
+  function removeColor(color: string) {
+    setAddedColors((colors) => colors.filter((c) => c !== color));
+    // Each removal has its own fetcher, so a second removal does not cancel the first.
+    submit(
+      { intent: "removeColor", color },
+      { method: "post", navigate: false, fetcherKey: `remove-color-${color}` },
+    );
+  }
+
+  return (
+    <div className="grid overflow-hidden rounded-xl border border-zinc-200 sm:grid-cols-[16rem_1fr] dark:border-zinc-800">
+      <ul className="border-b border-zinc-200 bg-(--sidebar) p-1.5 sm:border-r sm:border-b-0 dark:border-zinc-800">
+        {accounts.map((account) => (
+          <AccountListItem
+            key={account.id}
+            account={account}
+            selected={account.id === selected.id}
+            onSelect={() => setSelectedId(account.id)}
+          />
+        ))}
+      </ul>
+      {/* The key gives each account its own name field and its own fetchers. */}
+      <AccountDetail
+        key={selected.id}
+        account={selected}
+        savedColors={savedColors}
+        onAddColor={(color) => setAddedColors((colors) => (colors.includes(color) ? colors : [...colors, color]))}
+        onRemoveColor={removeColor}
+      />
+    </div>
+  );
+}
+
+function AccountListItem({
+  account,
+  selected,
+  onSelect,
+}: {
+  account: AccountSummary;
+  selected: boolean;
+  onSelect: () => void;
+}) {
+  const colorSaver = useFetcher<typeof action>({ key: colorKey(account.id) });
+  const color = String(colorSaver.formData?.get("color") ?? account.color);
+  return (
+    <li>
+      <button
+        type="button"
+        aria-current={selected}
+        onClick={onSelect}
+        className={cx(
+          "group flex w-full items-center gap-2.5 rounded-lg px-2.5 py-2 text-left",
+          selected ? "bg-white shadow-xs dark:bg-zinc-800" : "hover:bg-zinc-200/50 dark:hover:bg-zinc-800/50",
+        )}
+      >
+        <LogoDot
+          account={account}
+          color={color}
+          ring={
+            selected
+              ? "ring-white dark:ring-zinc-800"
+              : "ring-(--sidebar) group-hover:ring-[color-mix(in_oklab,var(--color-zinc-200)_50%,var(--sidebar))] dark:group-hover:ring-[color-mix(in_oklab,var(--color-zinc-800)_50%,var(--sidebar))]"
+          }
+        />
+        <span className="min-w-0 flex-1 truncate text-sm">{account.email}</span>
+        {account.status === "reauth_required" && <Warning className="size-3.5 shrink-0 text-amber-600" />}
+        <CaretRight className="size-3.5 shrink-0 text-zinc-400" />
+      </button>
+    </li>
+  );
+}
+
+/**
+ * The logo with the account color as a dot on its corner, as in the sidebar.
+ * The ring has the color behind the logo, so it cuts the logo.
+ */
+function LogoDot({
+  account,
+  color,
+  ring,
+  large,
+}: {
+  account: AccountSummary;
+  color: string;
+  ring: string;
+  large?: boolean;
+}) {
+  return (
+    <span className="relative flex shrink-0" title={PROVIDER_NAMES[shownProvider(account)]}>
+      <AccountIcon account={account} className={cx("text-zinc-500", large ? "size-10" : "size-4")} />
+      <span
+        className={cx(
+          "absolute rounded-full",
+          large ? "-right-1 -bottom-1 size-3.5 ring-[3px]" : "-right-0.5 -bottom-0.5 size-2 ring-[1.5px]",
+          ring,
+        )}
+        style={{ background: color }}
+      />
+    </span>
+  );
+}
+
+function AccountDetail({
+  account,
+  savedColors,
+  onAddColor,
+  onRemoveColor,
+}: {
+  account: AccountSummary;
+  savedColors: string[];
+  onAddColor: (color: string) => void;
+  onRemoveColor: (color: string) => void;
+}) {
   // The name and the color save on separate fetchers, so one save does not cancel the other.
   const nameSaver = useFetcher<typeof action>();
-  const colorSaver = useFetcher<typeof action>();
+  const colorSaver = useFetcher<typeof action>({ key: colorKey(account.id) });
   const remover = useFetcher<typeof action>();
   const removing = remover.state !== "idle";
   const confirm = useConfirm();
+  const [name, setName] = useState(account.name);
   const lastName = useRef(account.name);
   const timer = useRef<ReturnType<typeof setTimeout>>(undefined);
   const [showSaved, setShowSaved] = useState(false);
+  // The color shows on the account while the person moves in the color picker. It saves when the picker closes.
+  const [previewColor, setPreviewColor] = useState<string>();
+  const color = previewColor ?? String(colorSaver.formData?.get("color") ?? account.color);
 
   const saving = nameSaver.state !== "idle" || colorSaver.state !== "idle";
+  // The color of the account stays a swatch after the person removes it from the added colors.
+  const swatches = [...new Set([...ACCOUNT_COLORS, ...savedColors, account.color])];
 
   // The name saves after a short pause in typing, or at once when the field loses focus.
-  function saveName(name: string, delay: number) {
+  function saveName(value: string, delay: number) {
     clearTimeout(timer.current);
     timer.current = setTimeout(() => {
-      const trimmed = name.trim();
+      const trimmed = value.trim();
       if (trimmed === lastName.current) return;
       lastName.current = trimmed;
       nameSaver.submit({ intent: "update", accountId: account.id, name: trimmed }, { method: "post" });
     }, delay);
+  }
+
+  function saveColor(value: string) {
+    setPreviewColor(undefined);
+    if (value === account.color && colorSaver.formData == null) return;
+    colorSaver.submit({ intent: "update", accountId: account.id, color: value }, { method: "post" });
   }
 
   useEffect(() => () => clearTimeout(timer.current), []);
@@ -146,31 +317,108 @@ function AccountRow({ account }: { account: AccountSummary }) {
   }, [saving, nameSaver.data, colorSaver.data]);
 
   return (
-    <li className={cx("flex flex-col gap-3 p-4", removing && "opacity-50")}>
-      <div className="flex items-center gap-3">
-        <span className="grid size-9 shrink-0 place-items-center rounded-lg bg-zinc-100 dark:bg-zinc-800">
-          <AccountIcon account={account} className="size-5 text-zinc-500" />
-        </span>
+    <div className={cx("flex min-w-0 flex-col gap-6 p-6", removing && "opacity-50")}>
+      <div className="flex items-center gap-4">
+        <LogoDot account={account} color={color} ring="ring-white dark:ring-zinc-950" large />
         <div className="min-w-0 flex-1">
-          <p className="truncate text-sm font-medium">{account.email}</p>
-          <p className="text-xs text-zinc-500">{PROVIDER_NAMES[shownProvider(account)]}</p>
+          <p className="truncate text-lg font-semibold">{name.trim() || account.email}</p>
+          <p className="truncate text-sm text-zinc-500">
+            {account.email} · {PROVIDER_NAMES[shownProvider(account)]}
+          </p>
         </div>
         {account.status === "reauth_required" && (
           <Link
             to={reconnectUrl(account)}
             reloadDocument={account.provider !== "imap"}
-            className="inline-flex items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
+            className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-amber-50 px-2.5 py-1 text-xs font-medium text-amber-800 dark:bg-amber-950/40 dark:text-amber-300"
           >
             <Warning className="size-3.5" /> Sign in again
           </Link>
         )}
+      </div>
+
+      <label className="flex flex-col gap-1.5">
+        <span className="text-sm font-medium">Display name</span>
+        <input
+          value={name}
+          placeholder="Display name"
+          className={cx(inputClass, "max-w-80")}
+          onChange={(event) => {
+            setName(event.target.value);
+            saveName(event.target.value, 600);
+          }}
+          onBlur={(event) => saveName(event.target.value, 0)}
+          onKeyDown={(event) => {
+            if (event.key === "Enter") event.currentTarget.blur();
+          }}
+        />
+      </label>
+
+      <fieldset className="flex flex-col gap-2">
+        <legend className="mb-2 text-sm font-medium">Color</legend>
+        <div className="flex flex-wrap items-center gap-2">
+          {swatches.map((swatch) => (
+            <span key={swatch} className="group/swatch relative flex">
+              <label title={swatch} className="cursor-pointer">
+                <input
+                  type="radio"
+                  name={`color-${account.id}`}
+                  value={swatch}
+                  checked={color === swatch}
+                  onChange={() => saveColor(swatch)}
+                  className="peer sr-only"
+                />
+                <span
+                  className="block size-5 rounded-full ring-zinc-900 ring-offset-2 ring-offset-white peer-checked:ring-2 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 dark:ring-white dark:ring-offset-zinc-950"
+                  style={{ background: swatch }}
+                />
+              </label>
+              {savedColors.includes(swatch) && (
+                <button
+                  type="button"
+                  aria-label={`Remove the color ${swatch}`}
+                  title="Remove the color"
+                  onClick={() => onRemoveColor(swatch)}
+                  className="absolute -top-1.5 -right-1.5 grid size-3.5 place-items-center rounded-full bg-zinc-700 text-white opacity-0 group-hover/swatch:opacity-100 focus-visible:opacity-100 dark:bg-zinc-300 dark:text-zinc-900"
+                >
+                  <X className="size-2.5" />
+                </button>
+              )}
+            </span>
+          ))}
+          <label
+            title="Add a color"
+            className="press relative grid size-5 cursor-pointer place-items-center rounded-full border border-dashed border-zinc-300 text-zinc-500 focus-within:ring-2 focus-within:ring-accent-500 hover:border-zinc-500 hover:text-zinc-900 dark:border-zinc-700 dark:hover:border-zinc-500 dark:hover:text-zinc-100"
+          >
+            <Plus className="size-3" />
+            <input
+              type="color"
+              aria-label="Add a color"
+              value={color}
+              onChange={(event) => setPreviewColor(event.target.value)}
+              // React's onChange runs on each move in the picker. The native change event runs once, when the picker closes.
+              ref={(input) => {
+                if (!input) return;
+                input.onchange = () => {
+                  const value = input.value.toLowerCase();
+                  onAddColor(value);
+                  saveColor(value);
+                };
+              }}
+              className="absolute inset-0 size-full cursor-pointer opacity-0"
+            />
+          </label>
+        </div>
+      </fieldset>
+
+      <div className="flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <remover.Form method="post">
           <input type="hidden" name="accountId" value={account.id} />
           <button
             name="intent"
             value="remove"
             disabled={removing}
-            className="press inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
+            className="press -ml-2.5 inline-flex items-center gap-1.5 rounded-lg px-2.5 py-1.5 text-sm text-zinc-500 hover:bg-red-50 hover:text-red-600 disabled:opacity-50 dark:hover:bg-red-950/40 dark:hover:text-red-400"
             onClick={async (event) => {
               // The dialog does not block, so stop the submit and send it after the answer.
               event.preventDefault();
@@ -182,44 +430,11 @@ function AccountRow({ account }: { account: AccountSummary }) {
             <Trash className="size-4" /> Remove
           </button>
         </remover.Form>
-      </div>
-      <div className="flex flex-wrap items-center gap-x-4 gap-y-3 sm:pl-12">
-        <input
-          defaultValue={account.name}
-          placeholder="Display name"
-          aria-label="Display name"
-          className={cx(inputClass, "w-full sm:w-auto sm:min-w-0 sm:flex-1 sm:max-w-64")}
-          onChange={(event) => saveName(event.target.value, 600)}
-          onBlur={(event) => saveName(event.target.value, 0)}
-          onKeyDown={(event) => {
-            if (event.key === "Enter") event.currentTarget.blur();
-          }}
-        />
-        <fieldset className="flex gap-2" aria-label="Account color">
-          {ACCOUNT_COLORS.map((color) => (
-            <label key={color} className="cursor-pointer">
-              <input
-                type="radio"
-                name={`color-${account.id}`}
-                value={color}
-                defaultChecked={account.color === color}
-                onChange={() =>
-                  colorSaver.submit({ intent: "update", accountId: account.id, color }, { method: "post" })
-                }
-                className="peer sr-only"
-              />
-              <span
-                className="block size-5 rounded-full ring-zinc-900 ring-offset-2 ring-offset-white peer-checked:ring-2 peer-focus-visible:ring-2 peer-focus-visible:ring-accent-500 dark:ring-white dark:ring-offset-zinc-950"
-                style={{ background: color }}
-              />
-            </label>
-          ))}
-        </fieldset>
-        <span aria-live="polite" className="ml-auto text-xs text-zinc-500">
+        <span aria-live="polite" className="text-xs text-zinc-500">
           {saving ? "Saving…" : showSaved ? "Saved" : ""}
         </span>
       </div>
-    </li>
+    </div>
   );
 }
 
