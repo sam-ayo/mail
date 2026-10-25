@@ -1,4 +1,5 @@
 import sanitizeHtml from "sanitize-html";
+import { proxiedImageUrl } from "./image-proxy.server";
 
 // Selectors for quoted replies from common mail clients. The reading pane
 // hides them until the person asks to see them.
@@ -37,8 +38,24 @@ html.dark body{background:transparent;filter:invert(1) hue-rotate(180deg)}
 html.dark body :is(img,video,picture,svg,[background],[style*="background-image"]):not(:is([background],[style*="background-image"]) *){filter:invert(1) hue-rotate(180deg)}
 `;
 
-const CSP =
-  "default-src 'none'; img-src 'self' https: http: data:; style-src 'unsafe-inline' https:; font-src https: data:";
+// The frame loads nothing from other servers. Remote images go through the
+// app's image proxy, so senders do not get the reader's IP address. Remote
+// stylesheets and fonts do not load, and the email shows with other fonts.
+const CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; font-src data:";
+
+const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
+
+/** Changes the remote URLs in CSS to proxy URLs. */
+function proxyCssUrls(css: string) {
+  return css.replace(CSS_URL, (match, _quote, url: string) => {
+    const proxied = proxiedImageUrl(url);
+    return proxied === url ? match : `url("${proxied}")`;
+  });
+}
+
+// sanitize-html gives the text of a <style> tag as it is, with no filter.
+// The HTML parser also ends a <style> tag at the first "</style".
+const STYLE_TAG = /(<style\b[^>]*>)([\s\S]*?)(<\/style)/gi;
 
 interface Options {
   /** Maps a Content-ID to a URL, for inline images. */
@@ -52,6 +69,7 @@ function isTrackingPixel(attribs: Record<string, string>) {
 }
 
 export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
+  html = html.replace(STYLE_TAG, (_match, open: string, css: string, close: string) => open + proxyCssUrls(css) + close);
   return sanitizeHtml(html, {
     allowedTags: [
       ...sanitizeHtml.defaults.allowedTags,
@@ -111,7 +129,13 @@ export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
           const url = resolveCid(attribs.src.slice(4));
           return { tagName, attribs: { ...attribs, src: url ?? "" } };
         }
-        return { tagName, attribs };
+        return { tagName, attribs: attribs.src ? { ...attribs, src: proxiedImageUrl(attribs.src) } : attribs };
+      },
+      "*": (tagName, attribs) => {
+        const next = { ...attribs };
+        if (next.style) next.style = proxyCssUrls(next.style);
+        if (next.background) next.background = proxiedImageUrl(next.background);
+        return { tagName, attribs: next };
       },
     },
     exclusiveFilter: (frame) => frame.tag === "img" && isTrackingPixel(frame.attribs),

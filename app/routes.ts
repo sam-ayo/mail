@@ -28,6 +28,7 @@ export default [
   route("api/attachments/:accountId", "routes/api.attachments.ts"),
   route("api/counts", "routes/api.counts.ts"),
   route("api/avatar", "routes/api.avatar.ts"),
+  route("api/image", "routes/api.image.ts"),
   route("api/unsubscribe", "routes/api.unsubscribe.ts"),
   route("api/inbound/resend", "routes/api.inbound.resend.ts"),
   route("api/push", "routes/api.push.ts"),
