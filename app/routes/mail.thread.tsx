@@ -79,6 +79,13 @@ const threadCache = new Map<string, CacheEntry>();
 const CACHE_LIMIT = 100;
 /** Cached data older than this shows at once, then reloads in the background. */
 const STALE_MS = 30_000;
+/**
+ * An early load skips cached data newer than this. The app reloads its data
+ * each 20 seconds, and React Router then reloads each fetcher that loaded a
+ * conversation. Each list row has such a fetcher, and each server load uses
+ * provider quota and server time.
+ */
+const PREFETCH_FRESH_MS = 5 * 60_000;
 /** The conversation on the screen. A reload of it always asks the server. */
 let shownKey: string | null = null;
 
@@ -140,7 +147,7 @@ export async function clientLoader(args: Route.ClientLoaderArgs) {
   // An error from a fetcher replaces the full page, so a failed prefetch
   // stays silent. The fetchers do not use the data. If you open the
   // conversation, the error shows in the conversation pane.
-  return loadCached(args).then(
+  return loadCached(args, true).then(
     (data) => {
       warmImages(data.thread);
       return data;
@@ -149,13 +156,14 @@ export async function clientLoader(args: Route.ClientLoaderArgs) {
   );
 }
 
-async function loadCached({ params, request, serverLoader }: Route.ClientLoaderArgs) {
+async function loadCached({ params, request, serverLoader }: Route.ClientLoaderArgs, prefetch = false) {
   const key = threadKey(params.accountId, params.threadId);
   const entry = threadCache.get(key);
 
-  if (entry?.data && key !== shownKey) {
+  // The conversation on the screen reloads by itself, so an early load of it uses the cache.
+  if (entry?.data && (key !== shownKey || prefetch)) {
     const refresh =
-      Date.now() - entry.at > STALE_MS
+      Date.now() - entry.at > (prefetch ? PREFETCH_FRESH_MS : STALE_MS)
         ? (entry.pending ?? fetchThread(key, serverLoader)).then(
             (data) => ({ ...data, loadedAt: Date.now() }),
             () => null,
