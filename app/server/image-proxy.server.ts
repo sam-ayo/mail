@@ -1,7 +1,9 @@
+import { createHmac, timingSafeEqual } from "node:crypto";
 import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from "node:dns";
 import http, { type IncomingMessage } from "node:http";
 import https from "node:https";
 import { BlockList, isIP } from "node:net";
+import { env } from "./env.server";
 
 // The server fetches the remote images in emails, so senders do not get the
 // reader's IP address. Vercel limits a function response to 4.5 MB, so the
@@ -68,12 +70,28 @@ function safeLookup(hostname: string, options: LookupOptions, callback: LookupCa
   });
 }
 
-/** Changes a remote image URL to the app's proxy URL. Other URLs do not change. */
+// The sanitizer signs each proxy URL. Then the proxy needs no session, and
+// the CDN can keep its responses for all users. Only the URLs in emails get
+// a signature, so the proxy does not fetch other URLs.
+const signingKey = createHmac("sha256", env.sessionSecret).update("image-proxy").digest();
+
+function signature(url: string) {
+  return createHmac("sha256", signingKey).update(url).digest("base64url").slice(0, 22);
+}
+
+/** True if the signature is from proxiedImageUrl for this URL. */
+export function isSignedImageUrl(url: string, given: string) {
+  const expected = Buffer.from(signature(url));
+  const actual = Buffer.from(given);
+  return actual.length === expected.length && timingSafeEqual(actual, expected);
+}
+
+/** Changes a remote image URL to the app's signed proxy URL. Other URLs do not change. */
 export function proxiedImageUrl(src: string) {
-  const url = src.trim();
-  if (url.startsWith("//")) return `/api/image?url=${encodeURIComponent(`https:${url}`)}`;
-  if (!/^https?:\/\//i.test(url)) return url;
-  return `/api/image?url=${encodeURIComponent(url)}`;
+  let url = src.trim();
+  if (url.startsWith("//")) url = `https:${url}`;
+  else if (!/^https?:\/\//i.test(url)) return url;
+  return `/api/image?url=${encodeURIComponent(url)}&s=${signature(url)}`;
 }
 
 function get(url: URL, signal: AbortSignal) {
