@@ -49,46 +49,62 @@ const workspaceSignIn = () =>
     },
   }) satisfies BetterAuthPlugin;
 
-// An idle connection of the pool can get a WebSocket error. With no listener,
-// the error stops the Node.js process and all the requests in it. The pool
-// opens a new connection for the next query.
-const pool = new Pool({ connectionString: env.databaseUrl });
-pool.on("error", (error: Error) => console.error("Better Auth database pool:", error));
+function createAgentAuth() {
+  // An idle connection of the pool can get a WebSocket error. With no listener,
+  // the error stops the Node.js process and all the requests in it. The pool
+  // opens a new connection for the next query.
+  const pool = new Pool({ connectionString: env.databaseUrl });
+  pool.on("error", (error: Error) => console.error("Better Auth database pool:", error));
 
-export const agentAuth = betterAuth({
-  appName: "mail",
-  baseURL: env.appUrl,
-  basePath: "/api/auth",
-  // A separate key, so that the mail session secret signs only mail sessions.
-  secret: createHmac("sha256", env.sessionSecret).update("better-auth").digest("base64url"),
-  database: pool,
-  user: { modelName: "auth_users" },
-  // Sessions exist only for the sign-in and consent steps of an OAuth flow.
-  session: { modelName: "auth_sessions", expiresIn: 60 * 60 },
-  account: { modelName: "auth_accounts" },
-  verification: { modelName: "auth_verifications" },
-  advanced: {
-    cookiePrefix: "agent-auth",
-  },
-  plugins: [
-    jwt({ schema: { jwks: { modelName: "auth_jwks" } } }),
-    mcp({
-      loginPage: "/oauth/login",
-      consentPage: "/oauth/consent",
-      resource: MCP_RESOURCE,
-      scopes: ["offline_access", ...(Object.keys(MAIL_SCOPES) as MailScope[])],
-      // Each token acts for a person, so the client credentials grant is off.
-      grantTypes: ["authorization_code", "refresh_token"],
-      // Clients that do not support Client ID Metadata Documents yet register
-      // with RFC 7591. The deprecated method is open, as the MCP spec expects.
-      allowDynamicClientRegistration: true,
-      allowUnauthenticatedClientRegistration: true,
-      // One hour. The refresh token renews it.
-      accessTokenExpiresIn: 60 * 60,
-      // 90 days, the same as a mail session.
-      refreshTokenExpiresIn: 60 * 60 * 24 * 90,
-    }),
-    cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" }),
-    workspaceSignIn(),
-  ],
-});
+  return betterAuth({
+    appName: "mail",
+    baseURL: env.appUrl,
+    basePath: "/api/auth",
+    // A separate key, so that the mail session secret signs only mail sessions.
+    secret: createHmac("sha256", env.sessionSecret).update("better-auth").digest("base64url"),
+    database: pool,
+    user: { modelName: "auth_users" },
+    // Sessions exist only for the sign-in and consent steps of an OAuth flow.
+    session: { modelName: "auth_sessions", expiresIn: 60 * 60 },
+    account: { modelName: "auth_accounts" },
+    verification: { modelName: "auth_verifications" },
+    advanced: {
+      cookiePrefix: "agent-auth",
+    },
+    plugins: [
+      jwt({ schema: { jwks: { modelName: "auth_jwks" } } }),
+      mcp({
+        loginPage: "/oauth/login",
+        consentPage: "/oauth/consent",
+        resource: MCP_RESOURCE,
+        scopes: ["offline_access", ...(Object.keys(MAIL_SCOPES) as MailScope[])],
+        // Each token acts for a person, so the client credentials grant is off.
+        grantTypes: ["authorization_code", "refresh_token"],
+        // Clients that do not support Client ID Metadata Documents yet register
+        // with RFC 7591. The deprecated method is open, as the MCP spec expects.
+        allowDynamicClientRegistration: true,
+        allowUnauthenticatedClientRegistration: true,
+        // One hour. The refresh token renews it.
+        accessTokenExpiresIn: 60 * 60,
+        // 90 days, the same as a mail session.
+        refreshTokenExpiresIn: 60 * 60 * 24 * 90,
+      }),
+      cimd({ fetchClientMetadataResource, metadataProfile: "mcp-2026-07-28" }),
+      workspaceSignIn(),
+    ],
+  });
+}
+
+let instance: ReturnType<typeof createAgentAuth> | undefined;
+
+/**
+ * The Better Auth instance. It starts at the first OAuth request, not when
+ * the server starts. At start, Better Auth writes the MCP resource to the
+ * database. Before, no request waited for this write, so Vercel could pause
+ * the instance during it, and the database connection broke. Now the first
+ * OAuth request waits for it. Mail and image requests use no Better Auth.
+ */
+export function getAgentAuth() {
+  instance ??= createAgentAuth();
+  return instance;
+}

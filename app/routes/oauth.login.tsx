@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
 import { GoogleIcon, Logo, MicrosoftIcon } from "~/components/ui";
-import { agentAuth } from "~/server/agent-auth.server";
+import { getAgentAuth } from "~/server/agent-auth.server";
 import { getUserId } from "~/server/auth.server";
 import { env, oauthConfigured } from "~/server/env.server";
 import type { Route } from "./+types/oauth.login";
@@ -24,7 +24,7 @@ export async function loader({ request }: Route.LoaderArgs) {
     return { returnTo: url.pathname + url.search, configured: oauthConfigured, review: !!env.reviewPassword };
   }
 
-  const { headers } = await agentAuth.api.workspaceSignIn({
+  const { headers } = await getAgentAuth().api.workspaceSignIn({
     body: { workspaceId },
     returnHeaders: true,
   });

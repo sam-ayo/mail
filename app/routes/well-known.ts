@@ -1,9 +1,9 @@
 import { oauthProviderAuthServerMetadata } from "@better-auth/oauth-provider";
-import { agentAuth } from "~/server/agent-auth.server";
+import { getAgentAuth } from "~/server/agent-auth.server";
 import { env } from "~/server/env.server";
 import type { Route } from "./+types/well-known";
 
-const authServerMetadata = oauthProviderAuthServerMetadata(agentAuth);
+let authServerMetadata: ReturnType<typeof oauthProviderAuthServerMetadata> | undefined;
 
 /**
  * OAuth discovery documents at the root of the host, where MCP clients look
@@ -12,10 +12,13 @@ const authServerMetadata = oauthProviderAuthServerMetadata(agentAuth);
  */
 export async function loader({ request, params }: Route.LoaderArgs) {
   const path = params["*"];
-  if (path === "oauth-authorization-server/api/auth") return authServerMetadata(request);
+  if (path === "oauth-authorization-server/api/auth") {
+    authServerMetadata ??= oauthProviderAuthServerMetadata(getAgentAuth());
+    return authServerMetadata(request);
+  }
   // The MCP plugin serves the protected resource metadata at the root paths.
   if (path === "oauth-protected-resource" || path === "oauth-protected-resource/mcp") {
-    return agentAuth.handler(request);
+    return getAgentAuth().handler(request);
   }
   // ChatGPT verifies that the owner of the MCP server owns this domain. The
   // body must be the token alone, as plain text.

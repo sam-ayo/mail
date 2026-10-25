@@ -1,7 +1,7 @@
 import { Form, redirect } from "react-router";
 import { AccountIcon, Button, Logo } from "~/components/ui";
 import { isMailScope, MAIL_SCOPES } from "~/lib/agents";
-import { agentAuth } from "~/server/agent-auth.server";
+import { getAgentAuth } from "~/server/agent-auth.server";
 import { listAccounts, resolveUser, toSummary } from "~/server/accounts.server";
 import { getUserId } from "~/server/auth.server";
 import { env } from "~/server/env.server";
@@ -28,13 +28,13 @@ async function sameWorkspace(request: Request, authUserId: string) {
 /** The consent step of the OAuth flow. Better Auth signs the query, so the page passes it back as is. */
 export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
-  const session = await agentAuth.api.getSession({ headers: request.headers });
+  const session = await getAgentAuth().api.getSession({ headers: request.headers });
   const clientId = url.searchParams.get("client_id");
   if (!session || !clientId) throw new Response("The sign-in request is not valid. Connect the agent again.", { status: 400 });
   // The login step signs in to the browser's workspace, and then runs the authorize step again.
   if (!(await sameWorkspace(request, session.user.id))) throw redirect(`/oauth/login${url.search}`);
 
-  const client = await agentAuth.api.getOAuthClientPublic({
+  const client = await getAgentAuth().api.getOAuthClientPublic({
     query: { client_id: clientId },
     headers: request.headers,
   });
@@ -64,14 +64,14 @@ export async function loader({ request }: Route.LoaderArgs) {
 
 export async function action({ request }: Route.ActionArgs) {
   if (request.headers.get("Origin") !== env.appUrl) throw new Response("Forbidden", { status: 403 });
-  const session = await agentAuth.api.getSession({ headers: request.headers });
+  const session = await getAgentAuth().api.getSession({ headers: request.headers });
   if (!session || !(await sameWorkspace(request, session.user.id))) {
     throw new Response("This browser signed in to another workspace. Connect the agent again.", { status: 409 });
   }
   const form = await request.formData();
-  // Use the HTTP handler, not agentAuth.api. The consent endpoint runs the
+  // Use the HTTP handler, not the API functions. The consent endpoint runs the
   // authorize step again, and that step needs a request.
-  const response = await agentAuth.handler(
+  const response = await getAgentAuth().handler(
     new Request(`${env.appUrl}/api/auth/oauth2/consent`, {
       method: "POST",
       headers: {
