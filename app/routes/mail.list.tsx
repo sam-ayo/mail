@@ -1520,8 +1520,17 @@ function InboxTabs({
     { value: "important", label: "Important" },
     { value: "promotion", label: "Promotions", badge: unreadPromotions },
   ];
+  // One pill slides under the two tabs, so the change of tab shows where the
+  // selection went. The tabs have the same width, so the pill moves by its own width.
   return (
-    <div role="tablist" aria-label="Inbox" className="flex gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
+    <div role="tablist" aria-label="Inbox" className="relative grid grid-cols-2 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
+      <span
+        aria-hidden
+        className={cx(
+          "absolute inset-y-0.5 left-0.5 w-[calc(50%-2px)] rounded-md bg-white shadow-sm transition-transform duration-150 ease-in-out motion-reduce:transition-none dark:bg-zinc-800",
+          tab === "promotion" && "translate-x-full",
+        )}
+      />
       {tabs.map(({ value, label, badge }) => (
         <button
           key={value}
@@ -1530,10 +1539,8 @@ function InboxTabs({
           aria-selected={tab === value}
           onClick={() => onChange(value)}
           className={cx(
-            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors",
-            tab === value
-              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
-              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
+            "relative flex items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors duration-150 ease-in-out",
+            tab === value ? "text-zinc-900 dark:text-zinc-100" : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
           )}
         >
           {label}
