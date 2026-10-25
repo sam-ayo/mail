@@ -24,6 +24,8 @@ export default [
   ]),
 
   route("api/threads", "routes/api.threads.ts"),
+  route("api/categories", "routes/api.categories.ts"),
+  route("api/triage", "routes/api.triage.ts"),
   route("api/send", "routes/api.send.ts"),
   route("api/attachments/:accountId", "routes/api.attachments.ts"),
   route("api/counts", "routes/api.counts.ts"),

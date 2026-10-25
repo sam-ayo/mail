@@ -13,6 +13,7 @@ import {
   LinkSimple,
   List,
   MagnifyingGlass,
+  Megaphone,
   NotePencil,
   Paperclip,
   ShieldWarning,
@@ -45,6 +46,7 @@ import { useHotkeys } from "~/components/hotkeys";
 import { LocalDate } from "~/components/local-date";
 import type { ThreadRef } from "~/components/mail-context";
 import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
+import { toast } from "sonner";
 import type { MenuEntry } from "~/components/menu";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { setListCollapsed } from "~/components/list-panel";
@@ -52,7 +54,7 @@ import { SINGLE_PANE, useMediaQuery, usePaneSwipeBack, usePullToRefresh, useRowS
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
 import { AccountIcon, Avatar, Hint, IconButton, cx } from "~/components/ui";
-import type { AccountSummary, Folder, ThreadAction, ThreadSummary } from "~/lib/mail";
+import type { AccountSummary, Folder, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
 import {
   displayName,
   FOLDER_LABELS,
@@ -66,6 +68,7 @@ import {
 } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { listThreads } from "~/server/mail.server";
+import { withCategories } from "~/server/triage.server";
 import type { Route } from "./+types/mail.list";
 
 export function loader({ params, request, context }: Route.LoaderArgs) {
@@ -82,7 +85,12 @@ export function loader({ params, request, context }: Route.LoaderArgs) {
     user.id,
     { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
     user.accounts,
-  ).then((result) => ({ ...result, query }));
+  ).then(async (result) => ({
+    ...result,
+    // The inbox shows important mail and promotions in two tabs.
+    threads: params.folder === "inbox" && !query ? await withCategories(result.threads) : result.threads,
+    query,
+  }));
   return { list };
 }
 
@@ -344,7 +352,13 @@ function ThreadList({
     setCursor(moreFetcher.data.nextCursor);
   }, [moreFetcher.data]);
 
-  const threads = useMemo(() => {
+  // AI sorting puts promotions in their own tab of the inbox. Mail with no
+  // category shows with the important mail, so that no mail stays hidden.
+  const sorted = folder === "inbox" && !loaderData.query;
+  const [tab, setTab] = useState<ThreadCategory>("important");
+  const [moved, setMoved] = useState<Record<string, ThreadCategory>>({});
+
+  const allThreads = useMemo(() => {
     const seen = new Set<string>();
     const unique = [...loaderData.threads, ...extra].filter((thread) => {
       const key = threadKey(thread.accountId, thread.id);
@@ -357,6 +371,17 @@ function ThreadList({
       .map((thread) => applyPatch(thread, patches[threadKey(thread.accountId, thread.id)], loadedAt))
       .filter((thread) => !thread.removed);
   }, [loaderData.threads, extra, patches, loadedAt, scope]);
+
+  const categoryOf = (thread: ThreadSummary): ThreadCategory =>
+    moved[threadKey(thread.accountId, thread.id)] ?? thread.category ?? "important";
+  const threads = useMemo(
+    () => (sorted ? allThreads.filter((thread) => categoryOf(thread) === tab) : allThreads),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allThreads, sorted, tab, moved],
+  );
+  const unreadPromotions = sorted
+    ? allThreads.filter((thread) => thread.unread && categoryOf(thread) === "promotion").length
+    : 0;
 
   const base = `/mail/${scope}/${folder}`;
   const openKey =
@@ -460,6 +485,45 @@ function ThreadList({
     const params = new URLSearchParams({ cursor });
     if (loaderData.query) params.set("q", loaderData.query);
     moreFetcher.load(`${base}?${params}`);
+  }
+
+  // A tab can show only a few rows of each page. Load more pages to fill it,
+  // but not the full inbox: each page asks the mail servers.
+  const tabLoads = useRef(0);
+  useEffect(() => {
+    tabLoads.current = 0;
+  }, [tab, loaderData]);
+  useEffect(() => {
+    if (!sorted || threads.length >= 15 || !cursor || moreFetcher.state !== "idle") return;
+    if (tabLoads.current >= 4) return;
+    tabLoads.current += 1;
+    loadMore();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [sorted, threads.length, cursor, moreFetcher.state]);
+
+  /** Moves conversations to the other tab. The AI sorting script learns from these changes. */
+  async function moveTo(category: ThreadCategory, rows: ThreadSummary[]) {
+    const targets = rows.flatMap((thread) =>
+      threadRefs(thread).map((ref) => ({ ...ref, sender: thread.participants[0]?.email })),
+    );
+    const keys = targets.map((t) => threadKey(t.accountId, t.threadId));
+    const previous = { ...moved };
+    setMoved((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, category])) }));
+    setSelected(new Set());
+    if (openKey && keys.includes(openKey)) closeThread();
+    const label = category === "promotion" ? "Promotions" : "Important";
+    try {
+      const response = await fetch("/api/categories", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ category, targets }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      toast.success(rows.length === 1 ? `Moved to ${label}` : `Moved ${rows.length} conversations to ${label}`);
+    } catch {
+      setMoved(previous);
+      toast.error(`Could not move to ${label}`);
+    }
   }
 
   // A search runs after a short pause in the typing. Enter runs it at once.
@@ -607,6 +671,11 @@ function ThreadList({
       starred
         ? { label: `Remove star${count}`, icon: Star, shortcut: "S", onSelect: () => act("unstar", rows) }
         : { label: `Star${count}`, icon: Star, shortcut: "S", onSelect: () => act("star", rows) },
+      sorted && {
+        label: tab === "promotion" ? `Move to Important${count}` : `Move to Promotions${count}`,
+        icon: tab === "promotion" ? Tray : Megaphone,
+        onSelect: () => moveTo(tab === "promotion" ? "important" : "promotion", rows),
+      },
       "separator",
       {
         label: selected.has(key) ? "Deselect" : "Select",
@@ -782,6 +851,18 @@ function ThreadList({
             />
             <kbd className="absolute top-1/2 right-2.5 -translate-y-1/2">/</kbd>
           </Form>
+          {sorted && (
+            <InboxTabs
+              tab={tab}
+              unreadPromotions={unreadPromotions}
+              onChange={(next) => {
+                setTab(next);
+                setSelected(new Set());
+                setFocusIndex(0);
+                if (openKey) closeThread();
+              }}
+            />
+          )}
         </header>
 
         {loaderData.errors.map((error) => {
@@ -821,7 +902,7 @@ function ThreadList({
                 searching && "opacity-50",
               )}
             >
-              <EmptyList folder={folder} query={loaderData.query} />
+              <EmptyList folder={folder} query={loaderData.query} promotions={sorted && tab === "promotion"} />
             </ul>
           ) : (
             <Virtuoso
@@ -1396,7 +1477,12 @@ function BulkActions({
   );
 }
 
-function EmptyList({ folder, query }: { folder: Folder; query: string }) {
+function EmptyList({ folder, query, promotions }: { folder: Folder; query: string; promotions: boolean }) {
+  if (promotions) {
+    return (
+      <li className="px-6 py-16 text-center text-sm text-zinc-500">No promotions</li>
+    );
+  }
   if (query) {
     return (
       <li className="px-6 py-16 text-center text-sm text-zinc-500">
@@ -1417,5 +1503,43 @@ function EmptyList({ folder, query }: { folder: Folder; query: string }) {
     <li className="px-6 py-16 text-center text-sm text-zinc-500">
       {FOLDER_LABELS[folder]} is empty.
     </li>
+  );
+}
+
+/** The two tabs of the sorted inbox. */
+function InboxTabs({
+  tab,
+  unreadPromotions,
+  onChange,
+}: {
+  tab: ThreadCategory;
+  unreadPromotions: number;
+  onChange(tab: ThreadCategory): void;
+}) {
+  const tabs: { value: ThreadCategory; label: string; badge?: number }[] = [
+    { value: "important", label: "Important" },
+    { value: "promotion", label: "Promotions", badge: unreadPromotions },
+  ];
+  return (
+    <div role="tablist" aria-label="Inbox" className="flex gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
+      {tabs.map(({ value, label, badge }) => (
+        <button
+          key={value}
+          type="button"
+          role="tab"
+          aria-selected={tab === value}
+          onClick={() => onChange(value)}
+          className={cx(
+            "flex flex-1 items-center justify-center gap-1.5 rounded-md px-3 py-1 text-sm font-medium transition-colors",
+            tab === value
+              ? "bg-white text-zinc-900 shadow-sm dark:bg-zinc-800 dark:text-zinc-100"
+              : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
+          )}
+        >
+          {label}
+          {badge ? <span className="text-xs text-zinc-500 tabular-nums">{formatCount(badge)}</span> : null}
+        </button>
+      ))}
+    </div>
   );
 }

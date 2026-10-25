@@ -2,7 +2,6 @@ import type { CallToolResult } from "@modelcontextprotocol/server";
 import { MCPServer } from "mcp-use";
 import { OAuthError, OAuthErrorCode, oauthCustomProvider } from "mcp-use/oauth";
 import { oauthBetterAuthProvider } from "mcp-use/oauth/better-auth";
-import sanitizeHtml from "sanitize-html";
 import * as z from "zod";
 import { MAIL_SCOPES, type MailScope } from "~/lib/agents";
 import { buildOutgoing, draftFor, type ComposeDraft } from "~/lib/compose";
@@ -21,6 +20,7 @@ import {
   sendMessage,
   unreadCounts,
 } from "~/server/mail.server";
+import { htmlToText } from "~/server/sanitize.server";
 import { errorMessage } from "~/server/util.server";
 
 /**
@@ -107,23 +107,6 @@ async function run<T extends CallToolResult>(fn: () => Promise<T>): Promise<T | 
     return failure(errorMessage(error));
   }
 }
-function htmlToText(html: string) {
-  return sanitizeHtml(html.replace(/<(br|\/p|\/div|\/tr|\/li|\/h\d)[^>]*>/gi, "$&\n"), {
-    allowedTags: [],
-    allowedAttributes: {},
-    nonTextTags: ["style", "script", "head", "title", "noscript"],
-  })
-    .replace(/&nbsp;/g, " ")
-    .replace(/&amp;/g, "&")
-    .replace(/&lt;/g, "<")
-    .replace(/&gt;/g, ">")
-    .replace(/&quot;/g, '"')
-    .replace(/&#39;/g, "'")
-    .replace(/[ \t]+\n/g, "\n")
-    .replace(/\n{3,}/g, "\n\n")
-    .trim();
-}
-
 function messageBody(message: Pick<Message, "text" | "html" | "snippet">) {
   const body = message.text?.trim() || (message.html ? htmlToText(message.html) : message.snippet);
   return body.length > MAX_BODY_CHARS

@@ -66,7 +66,14 @@ export interface ThreadSummary {
   messageIds?: string[];
   /** The same conversation in other accounts. `mergeDuplicates` sets this. */
   copies?: { accountId: string; id: string }[];
+  /** The category from AI sorting, or from the person. Only inbox lists have it. */
+  category?: ThreadCategory;
 }
+
+/** The categories of AI sorting. A conversation with no category shows with the important mail. */
+export const THREAD_CATEGORIES = ["important", "promotion"] as const;
+
+export type ThreadCategory = (typeof THREAD_CATEGORIES)[number];
 
 export interface Attachment {
   id: string;

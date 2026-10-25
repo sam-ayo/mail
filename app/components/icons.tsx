@@ -33,6 +33,7 @@ import {
   MailReply01Icon,
   MailReplyAll01Icon,
   MailSend01Icon,
+  Megaphone01Icon,
   Menu01Icon,
   Moon02Icon,
   MoreHorizontalIcon,
@@ -105,6 +106,7 @@ export const HardDrives = icon(HardDriveIcon);
 export const Info = icon(InformationCircleIcon);
 export const Keyboard = icon(KeyboardIcon);
 export const LinkSimple = icon(Link01Icon);
+export const Megaphone = icon(Megaphone01Icon);
 export const List = icon(Menu01Icon);
 export const MagnifyingGlass = icon(Search01Icon);
 export const MarkdownLogo = icon(ViewIcon);

@@ -185,3 +185,21 @@ export function emailDocument(body: string) {
 export function hasQuotedHtml(html: string) {
   return QUOTE_MARKERS.test(html);
 }
+
+/** The text of an email body, for an AI agent. */
+export function htmlToText(html: string) {
+  return sanitizeHtml(html.replace(/<(br|\/p|\/div|\/tr|\/li|\/h\d)[^>]*>/gi, "$&\n"), {
+    allowedTags: [],
+    allowedAttributes: {},
+    nonTextTags: ["style", "script", "head", "title", "noscript"],
+  })
+    .replace(/&nbsp;/g, " ")
+    .replace(/&amp;/g, "&")
+    .replace(/&lt;/g, "<")
+    .replace(/&gt;/g, ">")
+    .replace(/&quot;/g, '"')
+    .replace(/&#39;/g, "'")
+    .replace(/[ \t]+\n/g, "\n")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+}
