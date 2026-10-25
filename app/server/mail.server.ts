@@ -1,3 +1,4 @@
+import { createHash } from "node:crypto";
 import type {
   AccountError,
   Folder,
@@ -124,6 +125,39 @@ export async function listThreads(
   return { threads, nextCursor: encodeCursor(nextCursors), errors };
 }
 
+// Sanitized email bodies. The parse and the sanitizer use most of the CPU
+// time of a conversation load, and the same messages load many times. The
+// key is a hash of the raw HTML and the inline image URLs, so a changed
+// message gets a new entry. The cache is in memory only, so no mail content
+// stays on a disk.
+const sanitizedCache = new Map<string, string>();
+const SANITIZED_CACHE_CHARS = 32 * 1024 * 1024;
+let sanitizedCacheChars = 0;
+
+function sanitizeCached(html: string, byContentId: Map<string, string>) {
+  const hash = createHash("sha256").update(html);
+  for (const [cid, url] of byContentId) hash.update(`\0${cid}\0${url}`);
+  const key = hash.digest("base64url");
+
+  const cached = sanitizedCache.get(key);
+  if (cached !== undefined) {
+    // Move the entry to the end, so the oldest entries go first.
+    sanitizedCache.delete(key);
+    sanitizedCache.set(key, cached);
+    return cached;
+  }
+  const clean = sanitizeEmailHtml(html, { resolveCid: (cid) => byContentId.get(cid) });
+  if (clean.length > SANITIZED_CACHE_CHARS / 8) return clean;
+  sanitizedCache.set(key, clean);
+  sanitizedCacheChars += clean.length;
+  for (const [oldKey, oldClean] of sanitizedCache) {
+    if (sanitizedCacheChars <= SANITIZED_CACHE_CHARS) break;
+    sanitizedCache.delete(oldKey);
+    sanitizedCacheChars -= oldClean.length;
+  }
+  return clean;
+}
+
 function renderMessage(accountId: string, message: Message): RenderedMessage {
   const { html, ...rest } = message;
   if (!html) return { ...rest, hasQuote: false };
@@ -132,7 +166,7 @@ function renderMessage(accountId: string, message: Message): RenderedMessage {
       .filter((a) => a.contentId)
       .map((a) => [a.contentId!, attachmentUrl(accountId, message.id, a.id)]),
   );
-  const clean = sanitizeEmailHtml(html, { resolveCid: (cid) => byContentId.get(cid) });
+  const clean = sanitizeCached(html, byContentId);
   return {
     ...rest,
     // Inline images show in the body, so do not list them as attachments too.
