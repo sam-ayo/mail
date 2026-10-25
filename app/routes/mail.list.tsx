@@ -1071,25 +1071,23 @@ function AccountLabel({ accounts }: { accounts: AccountSummary[] }) {
   );
 }
 
-// A touch screen has no hover. There, a conversation loads when its row stays
-// on the screen, so it opens with its messages and pictures.
-const NO_HOVER = "(hover: none)";
+// A conversation loads when its row stays on the screen, so it opens with its
+// messages and pictures. A touch screen has no hover, so it needs this most.
 const SHOWN_DELAY_MS = 400;
 // Each load uses provider quota. A shown conversation loads again only after this time.
 const SHOWN_FRESH_MS = 5 * 60_000;
 const shownLoads = new Map<string, number>();
 
-/** On a touch screen, loads the conversation when the row stays on the screen. `version` changes with a new message. */
+/** Loads the conversation when the row stays on the screen. `version` changes with a new message. */
 function useLoadWhenShown(row: RefObject<HTMLElement | null>, href: string, version: string) {
   const fetcher = useFetcher();
-  const noHover = useMediaQuery(NO_HOVER);
   const loading = useRef(false);
   useEffect(() => {
     if (fetcher.state === "idle") loading.current = false;
   }, [fetcher.state]);
   useEffect(() => {
     const element = row.current;
-    if (!noHover || !element) return;
+    if (!element) return;
     let timer: ReturnType<typeof setTimeout> | undefined;
     const observer = new IntersectionObserver(([entry]) => {
       clearTimeout(timer);
@@ -1110,7 +1108,7 @@ function useLoadWhenShown(row: RefObject<HTMLElement | null>, href: string, vers
       if (loading.current) shownLoads.delete(version);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [noHover, href, version]);
+  }, [href, version]);
 }
 
 function ThreadRow({
