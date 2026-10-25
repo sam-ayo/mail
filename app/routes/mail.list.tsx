@@ -23,6 +23,7 @@ import {
   X,
 } from "~/components/icons";
 import { forwardRef, Suspense, useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import type { RefObject } from "react";
 import { Virtuoso } from "react-virtuoso";
 import type { VirtuosoHandle } from "react-virtuoso";
 import {
@@ -859,6 +860,7 @@ function ThreadList({
                     onAction={(action) => act(action, [thread])}
                     menu={() => menuFor(thread)}
                     onPrefetch={(start) => prefetch(start ? thread : null)}
+                    prefetchHref={prefetchHref(thread)}
                   />
                 );
               }}
@@ -1069,6 +1071,48 @@ function AccountLabel({ accounts }: { accounts: AccountSummary[] }) {
   );
 }
 
+// A touch screen has no hover. There, a conversation loads when its row stays
+// on the screen, so it opens with its messages and pictures.
+const NO_HOVER = "(hover: none)";
+const SHOWN_DELAY_MS = 400;
+// Each load uses provider quota. A shown conversation loads again only after this time.
+const SHOWN_FRESH_MS = 5 * 60_000;
+const shownLoads = new Map<string, number>();
+
+/** On a touch screen, loads the conversation when the row stays on the screen. `version` changes with a new message. */
+function useLoadWhenShown(row: RefObject<HTMLElement | null>, href: string, version: string) {
+  const fetcher = useFetcher();
+  const noHover = useMediaQuery(NO_HOVER);
+  const loading = useRef(false);
+  useEffect(() => {
+    if (fetcher.state === "idle") loading.current = false;
+  }, [fetcher.state]);
+  useEffect(() => {
+    const element = row.current;
+    if (!noHover || !element) return;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const observer = new IntersectionObserver(([entry]) => {
+      clearTimeout(timer);
+      if (!entry.isIntersecting) return;
+      timer = setTimeout(() => {
+        const at = shownLoads.get(version);
+        if (at && Date.now() - at < SHOWN_FRESH_MS) return;
+        shownLoads.set(version, Date.now());
+        loading.current = true;
+        fetcher.load(href);
+      }, SHOWN_DELAY_MS);
+    });
+    observer.observe(element);
+    return () => {
+      clearTimeout(timer);
+      observer.disconnect();
+      // A row that goes away stops its load. Then the next show loads again.
+      if (loading.current) shownLoads.delete(version);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [noHover, href, version]);
+}
+
 function ThreadRow({
   thread,
   index,
@@ -1081,6 +1125,7 @@ function ThreadRow({
   onToggleSelected,
   onAction,
   onPrefetch,
+  prefetchHref,
   menu,
 }: {
   thread: ThreadSummary;
@@ -1096,11 +1141,14 @@ function ThreadRow({
   onAction(action: ThreadAction): void;
   /** Starts (true) or stops (false) an early load of the conversation. */
   onPrefetch(start: boolean): void;
+  /** The URL that loads the conversation early. */
+  prefetchHref: string;
   menu(): MenuEntry[];
 }) {
   const [menuOpen, setMenuOpen] = useState(false);
   const rowRef = useRef<HTMLDivElement>(null);
   const contentRef = useRef<HTMLDivElement>(null);
+  useLoadWhenShown(rowRef, prefetchHref, `${threadKey(thread.accountId, thread.id)}:${thread.date}:${thread.messageCount}`);
   // A swipe to the left archives, or moves back to the inbox. A swipe to the
   // right marks the conversation as read or unread.
   const restore = folder === "archive" || folder === "trash" || folder === "spam";
