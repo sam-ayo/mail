@@ -391,11 +391,20 @@ export function createOutlookProvider(account: Account): MailProvider {
       };
     },
 
-    async inboxUnreadCount() {
-      const folder = await request<{ unreadItemCount: number }>(
-        "/mailFolders/inbox?$select=unreadItemCount",
-      );
-      return folder.unreadItemCount;
+    async inboxUnread(limit: number) {
+      const params = new URLSearchParams({
+        $top: String(limit),
+        $select: "conversationId",
+        $filter: "isRead eq false",
+      });
+      const [folder, page] = await Promise.all([
+        request<{ unreadItemCount: number }>("/mailFolders/inbox?$select=unreadItemCount"),
+        request<{ value: { conversationId: string }[] }>(`/mailFolders/inbox/messages?${params}`),
+      ]);
+      return {
+        total: folder.unreadItemCount,
+        threads: page.value.map((m) => ({ id: encodeId(m.conversationId) })),
+      };
     },
   };
 }

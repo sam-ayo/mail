@@ -888,10 +888,14 @@ export function createDemoProvider(account: Account): MailProvider {
       throw new ProviderError("Attachment not found", 404);
     },
 
-    async inboxUnreadCount() {
-      return [...threads.values()].filter(
+    async inboxUnread(limit: number) {
+      const unread = [...threads.values()].filter(
         (thread) => thread.location === "inbox" && thread.messages.some((m) => m.unread),
-      ).length;
+      );
+      return {
+        total: unread.length,
+        threads: unread.slice(0, limit).map(({ id, category }) => ({ id, category })),
+      };
     },
   };
 }

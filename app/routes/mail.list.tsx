@@ -326,7 +326,7 @@ function ThreadList({
     };
   }, [shownKey, loaderData, loadedAt]);
 
-  const { accounts, account, patches, runAction, openCompose } = useMail();
+  const { accounts, account, patches, runAction, openCompose, refreshCounts } = useMail();
   const navigate = useNavigate();
   const location = useLocation();
   const navigation = useNavigation();
@@ -516,6 +516,7 @@ function ThreadList({
         body: JSON.stringify({ category, targets }),
       });
       if (!response.ok) throw new Error(String(response.status));
+      refreshCounts();
       toast.success(rows.length === 1 ? `Moved to ${label}` : `Moved ${rows.length} conversations to ${label}`);
     } catch {
       setMoved(previous);

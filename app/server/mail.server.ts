@@ -6,9 +6,10 @@ import type {
   RenderedMessage,
   RenderedThread,
   ThreadAction,
+  ThreadCategory,
   ThreadSummary,
 } from "~/lib/mail";
-import { attachmentUrl, unsubscribeMethod } from "~/lib/mail";
+import { attachmentUrl, threadKey, unsubscribeMethod } from "~/lib/mail";
 import type { Account } from "./accounts.server";
 import { getAccount, listAccounts } from "./accounts.server";
 import { createDemoProvider } from "./providers/demo.server";
@@ -19,6 +20,7 @@ import { createOutlookProvider } from "./providers/outlook.server";
 import type { MailProvider, OutgoingMessage } from "./providers/types";
 import { ProviderAuthError, ProviderError } from "./providers/types";
 import { emailDocument, hasQuotedHtml, sanitizeEmailHtml } from "./sanitize.server";
+import { categoriesFor } from "./triage.server";
 import { errorMessage, parseAddresses } from "./util.server";
 
 export function providerFor(account: Account): MailProvider {
@@ -302,14 +304,29 @@ function unsubscribeEmail(mailto: string): OutgoingMessage {
   return { to, cc: [], bcc: [], subject: fields.get("subject") || "Unsubscribe", text, html, attachments: [] };
 }
 
-/** Inbox unread counts. A slow or failed account gets `null`, not an error. */
+/** The unread conversations of each account that the count looks at for Promotions. */
+const UNREAD_SCAN = 500;
+
+/**
+ * Inbox unread counts, with no mail in Promotions. A slow or failed account
+ * gets `null`, not an error.
+ */
 export async function unreadCounts(userId: string): Promise<Record<string, number | null>> {
   const accounts = (await listAccounts(userId)).filter((a) => a.status === "active");
   const entries = await Promise.all(
     accounts.map(async (account) => {
       const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
       const count = providerFor(account)
-        .inboxUnreadCount()
+        .inboxUnread(UNREAD_SCAN)
+        .then(async ({ total, threads }) => {
+          const categories = await categoriesFor(threads.map(({ id }) => ({ accountId: account.id, id }))).catch(
+            () => new Map<string, ThreadCategory>(),
+          );
+          const promotions = threads.filter(
+            ({ id, category }) => (categories.get(threadKey(account.id, id)) ?? category) === "promotion",
+          ).length;
+          return Math.max(0, total - promotions);
+        })
         .catch(() => null);
       return [account.id, await Promise.race([count, timeout])] as const;
     }),

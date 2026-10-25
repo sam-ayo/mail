@@ -345,9 +345,15 @@ export function createGmailProvider(account: Account): MailProvider {
       };
     },
 
-    async inboxUnreadCount() {
-      const label = await request<{ threadsUnread?: number }>("/labels/INBOX");
-      return label.threadsUnread ?? 0;
+    async inboxUnread(limit: number) {
+      const params = new URLSearchParams({ maxResults: String(limit), fields: "threads/id" });
+      params.append("labelIds", "INBOX");
+      params.append("labelIds", "UNREAD");
+      const [label, list] = await Promise.all([
+        request<{ threadsUnread?: number }>("/labels/INBOX"),
+        request<{ threads?: { id: string }[] }>(`/threads?${params}`),
+      ]);
+      return { total: label.threadsUnread ?? 0, threads: (list.threads ?? []).map(({ id }) => ({ id })) };
     },
   };
 }

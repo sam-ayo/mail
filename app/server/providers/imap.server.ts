@@ -405,10 +405,17 @@ export function createImapProvider(account: Account): MailProvider {
       };
     },
 
-    async inboxUnreadCount() {
-      const { client: imap } = await client();
-      const status = await imap.status("INBOX", { unseen: true });
-      return (status && status.unseen) || 0;
+    async inboxUnread(limit: number) {
+      return withMailbox("INBOX", async (imap) => {
+        const uids = (await imap.search({ seen: false }, { uid: true })) || [];
+        return {
+          total: uids.length,
+          threads: uids
+            .sort((a, b) => b - a)
+            .slice(0, limit)
+            .map((uid) => ({ id: encodeThreadId("INBOX", uid) })),
+        };
+      });
     },
   };
 }

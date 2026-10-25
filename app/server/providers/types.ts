@@ -1,4 +1,4 @@
-import type { Address, Folder, Thread, ThreadAction, ThreadSummary } from "~/lib/mail";
+import type { Address, Folder, Thread, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
 
 export interface ListOptions {
   folder: Folder;
@@ -36,6 +36,16 @@ export interface OutgoingMessage {
   };
 }
 
+export interface UnreadInbox {
+  /** Unread items in the inbox. */
+  total: number;
+  /**
+   * The conversation of each unread item that `total` counts, at most the
+   * limit. A conversation with more than one unread item shows more than once.
+   */
+  threads: { id: string; category?: ThreadCategory }[];
+}
+
 export interface AttachmentContent {
   filename: string;
   mimeType: string;
@@ -52,8 +62,8 @@ export interface MailProvider {
   modifyThread(threadId: string, action: ThreadAction): Promise<{ threadId?: string } | void>;
   send(message: OutgoingMessage): Promise<void>;
   getAttachment(messageId: string, attachmentId: string): Promise<AttachmentContent>;
-  /** Unread conversations in the inbox. */
-  inboxUnreadCount(): Promise<number>;
+  /** The unread items in the inbox, with their conversations. */
+  inboxUnread(limit: number): Promise<UnreadInbox>;
 }
 
 /** The provider rejected the credentials. The person must sign in again. */

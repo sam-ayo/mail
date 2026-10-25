@@ -311,13 +311,13 @@ export function createHostedProvider(account: Account): MailProvider {
       };
     },
 
-    async inboxUnreadCount() {
-      const row = await queryOne<{ count: number }>(
-        `SELECT COUNT(DISTINCT thread_id)::int AS count FROM hosted_messages
+    async inboxUnread(limit: number) {
+      const rows = await query<{ thread_id: string }>(
+        `SELECT DISTINCT thread_id FROM hosted_messages
          WHERE mailbox = $1 AND folder = 'inbox' AND unread`,
         [mailbox],
       );
-      return row?.count ?? 0;
+      return { total: rows.length, threads: rows.slice(0, limit).map((row) => ({ id: row.thread_id })) };
     },
   };
 }
