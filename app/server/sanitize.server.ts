@@ -50,12 +50,28 @@ html.dark body :is(img,video,picture,svg,[background],[style*="background-image"
 // stylesheets and fonts do not load, and the email shows with other fonts.
 const CSP = "default-src 'none'; img-src 'self' data:; style-src 'unsafe-inline'; font-src data:";
 
-const CSS_URL = /url\(\s*(['"]?)(.*?)\1\s*\)/gi;
+// A url() in CSS: in double quotes, in single quotes, or with no quotes. A
+// quoted URL can have parentheses. A URL with no quotes can have them only
+// with a backslash escape, as in "url(a\(1\).png)". Each character can match
+// only one branch, so a long bad url() in an email cannot make the match slow.
+const CSS_URL = /url\(\s*(?:"((?:[^"\\\n]|\\.)*)"|'((?:[^'\\\n]|\\.)*)'|((?:[^"'()\\\s]|\\(?:[0-9a-f]{6}|[0-9a-f]{1,5}(?![0-9a-f]))\s?|\\[^0-9a-f\n])*))\s*\)/gi;
+const CSS_ESCAPE = /\\(?:([0-9a-f]{1,6})\s?|(.))/gi;
+
+/** Removes the CSS escapes from a URL, so "\)" gives ")" and "\20 " gives a space. */
+function unescapeCss(value: string) {
+  return value.replace(CSS_ESCAPE, (_match, hex: string | undefined, char: string | undefined) => {
+    if (char !== undefined) return char;
+    const code = parseInt(hex!, 16);
+    return code > 0 && code <= 0x10ffff ? String.fromCodePoint(code) : "\ufffd";
+  });
+}
 
 /** Changes the remote URLs in CSS to proxy URLs. */
 function proxyCssUrls(css: string) {
-  return css.replace(CSS_URL, (match, _quote, url: string) => {
+  return css.replace(CSS_URL, (match, double?: string, single?: string, bare?: string) => {
+    const url = unescapeCss(double ?? single ?? bare ?? "");
     const proxied = proxiedImageUrl(url);
+    // A proxy URL has no double quote, backslash, or line break, so it needs no escape here.
     return proxied === url ? match : `url("${proxied}")`;
   });
 }
