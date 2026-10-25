@@ -1,3 +1,4 @@
+import { parse, serialize } from "parse5";
 import sanitizeHtml from "sanitize-html";
 import { proxiedImageUrl } from "./image-proxy.server";
 
@@ -15,6 +16,11 @@ const QUOTE_SELECTORS = [
 
 const QUOTE_MARKERS = /class="[^"]*(gmail_quote|yahoo_quoted)|type="cite"|id="(divRplyFwdMsg|appendonsend|mail-editor-reference-message-container)"/;
 
+// "max-width:100%" applies only to images outside tables. In a table cell,
+// a browser calculates the minimum width of such an image as 0. Then the cell
+// can become 0 px wide, and the image does not show. Wide tables scale down
+// with the frame, see EmailFrame.
+//
 // In dark mode, the frame inverts the email and turns the hue back, so most
 // colours keep their hue. The frame is transparent, so the email shows on the
 // colour of the message card. Images and background images get a second inversion,
@@ -26,7 +32,8 @@ html,body{margin:0;padding:0;background:#fff;color:#18181b}
 html{overflow-x:hidden}
 html body,html:root{height:auto !important;min-height:0 !important}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;overflow-wrap:anywhere;padding:4px 2px}
-img{max-width:100%;height:auto}
+img{height:auto}
+img:not(table img){max-width:100%}
 table{max-width:100%}
 td,th{overflow-wrap:break-word}
 pre{white-space:pre-wrap}
@@ -68,11 +75,27 @@ function isTrackingPixel(attribs: Record<string, string>) {
   return width <= 1 && height <= 1 && !Number.isNaN(width) && !Number.isNaN(height);
 }
 
+/** Proxies the remote URLs in the style and background of each element. */
+function proxyAttributeUrls(tagName: string, attribs: Record<string, string>) {
+  const next = { ...attribs };
+  if (next.style) next.style = proxyCssUrls(next.style);
+  if (next.background) next.background = proxiedImageUrl(next.background);
+  return { tagName, attribs: next };
+}
+
 export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
+  // Parse the HTML as a browser does, then serialize it again. Many emails
+  // have tag errors, such as an extra "</tr>". A browser ignores it, but the
+  // parser of sanitize-html closes the parent table, and the layout breaks.
+  html = serialize(parse(html));
   html = html.replace(STYLE_TAG, (_match, open: string, css: string, close: string) => open + proxyCssUrls(css) + close);
   return sanitizeHtml(html, {
     allowedTags: [
       ...sanitizeHtml.defaults.allowedTags,
+      // The frame parser moves the attributes of this <body> tag, such as a
+      // maximum width, to the body of the frame. A browser does the same with
+      // the original email. A wrapper element would break CSS such as "body > p".
+      "body",
       "img",
       "style",
       "center",
@@ -110,6 +133,7 @@ export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
       a: ["href", "name", "target", "rel"],
       img: ["src", "alt"],
       font: ["face", "size"],
+      body: ["background"],
       table: ["cellpadding", "cellspacing", "background"],
       td: ["colspan", "rowspan", "nowrap", "background"],
       th: ["colspan", "rowspan", "nowrap", "background"],
@@ -131,12 +155,7 @@ export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
         }
         return { tagName, attribs: attribs.src ? { ...attribs, src: proxiedImageUrl(attribs.src) } : attribs };
       },
-      "*": (tagName, attribs) => {
-        const next = { ...attribs };
-        if (next.style) next.style = proxyCssUrls(next.style);
-        if (next.background) next.background = proxiedImageUrl(next.background);
-        return { tagName, attribs: next };
-      },
+      "*": proxyAttributeUrls,
     },
     exclusiveFilter: (frame) => frame.tag === "img" && isTrackingPixel(frame.attribs),
   });

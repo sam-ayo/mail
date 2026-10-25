@@ -254,6 +254,9 @@ importers:
       nodemailer:
         specifier: ^10.1.0
         version: 10.1.0
+      parse5:
+        specifier: ^8.0.1
+        version: 8.0.1
       pdfjs-dist:
         specifier: ^6.4.299
         version: 6.4.299
@@ -2601,6 +2604,9 @@ packages:
 
   parse-srcset@1.0.2:
     resolution: {integrity: sha512-/2qh0lav6CmI15FzA3i/2Bzk2zCgQhGMkvhOhKNcBVQ1ldgpbfiNTVslmooUmWJcADi1f1kIeynbDRVzNlfR6Q==}
+
+  parse5@8.0.1:
+    resolution: {integrity: sha512-z1e/HMG90obSGeidlli3hj7cbocou0/wa5HacvI3ASx34PecNjNQeaHNo5WIZpWofN9kgkqV1q5YvXe3F0FoPw==}
 
   parseley@0.13.1:
     resolution: {integrity: sha512-uNBJZzmb60l6p6VWLTmevizNAGnE0xoSf1n0B4q3ntegDNzcS68NRCcBDZTcyXHxt2XhBChsCuqj4M+nChvE/A==}
@@ -5081,6 +5087,10 @@ snapshots:
   p-map@7.1.1: {}
 
   parse-srcset@1.0.2: {}
+
+  parse5@8.0.1:
+    dependencies:
+      entities: 8.1.0
 
   parseley@0.13.1:
     dependencies:
