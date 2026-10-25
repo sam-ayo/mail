@@ -1,7 +1,7 @@
 #!/usr/bin/env node
 // Sorts new inbox mail into Important and Promotions with Claude Code or Codex.
 // It runs on your computer, so it uses your Claude or ChatGPT subscription.
-// install.sh makes launchd run it every few minutes.
+// install.sh makes launchd run it each minute. A run with no new mail does not call the AI.
 //
 // Config (environment, or ~/.config/relay-ai-sorting/config.env):
 //   RELAY_URL         The mail app, for example https://mail.samayo.me

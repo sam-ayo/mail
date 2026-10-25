@@ -1,4 +1,5 @@
 import { requireApiTokenUser } from "~/server/api-tokens.server";
+import { releaseNotifications } from "~/server/push.server";
 import { setCategories, unsortedThreads, type CategoryInput } from "~/server/triage.server";
 import type { Route } from "./+types/api.triage";
 
@@ -30,5 +31,8 @@ export async function action({ request }: Route.ActionArgs) {
     category: r.category,
     sender: typeof r.sender === "string" ? r.sender : undefined,
   })) as CategoryInput[];
-  return Response.json({ saved: await setCategories(userId, items, "ai") });
+  const saved = await setCategories(userId, items, "ai");
+  // New threads that waited for the AI get their notification now, if they are important.
+  await releaseNotifications(userId).catch((error) => console.error("Cannot release the waiting notifications", error));
+  return Response.json({ saved });
 }

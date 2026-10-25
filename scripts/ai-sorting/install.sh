@@ -4,13 +4,13 @@
 # cannot read files in ~/Desktop or ~/Documents.
 #
 # Usage: RELAY_URL=https://mail.samayo.me RELAY_TOKEN=relay_... scripts/ai-sorting/install.sh
-# Optional: AI_SORTING_ENGINE=codex, AI_SORTING_MODEL=..., INTERVAL=300 (seconds)
+# Optional: AI_SORTING_ENGINE=codex, AI_SORTING_MODEL=..., INTERVAL=60 (seconds)
 set -euo pipefail
 
 : "${RELAY_URL:?Set RELAY_URL to the mail app, for example https://mail.samayo.me}"
 : "${RELAY_TOKEN:?Set RELAY_TOKEN to a token from Settings › AI sorting}"
 engine="${AI_SORTING_ENGINE:-claude}"
-interval="${INTERVAL:-300}"
+interval="${INTERVAL:-60}"
 label="me.samayo.relay-ai-sorting"
 dir="$HOME/.config/relay-ai-sorting"
 plist="$HOME/Library/LaunchAgents/$label.plist"

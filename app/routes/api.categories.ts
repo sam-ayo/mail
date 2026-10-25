@@ -1,4 +1,5 @@
 import { requireUserId } from "~/server/auth.server";
+import { releaseNotifications } from "~/server/push.server";
 import { setCategories, type CategoryInput } from "~/server/triage.server";
 import type { Route } from "./+types/api.categories";
 
@@ -23,5 +24,9 @@ export async function action({ request }: Route.ActionArgs) {
     sender: t.sender,
   })) as CategoryInput[];
   const saved = await setCategories(userId, items, "user");
+  // A waiting thread that the person moved does not wait for the AI.
+  if (saved) {
+    await releaseNotifications(userId).catch((error) => console.error("Cannot release the waiting notifications", error));
+  }
   return Response.json({ saved }, { status: saved ? 200 : 400 });
 }
