@@ -4,8 +4,13 @@ import https from "node:https";
 import { BlockList, isIP } from "node:net";
 
 // The server fetches the remote images in emails, so senders do not get the
-// reader's IP address. Vercel limits a function response to 4.5 MB.
-const MAX_BYTES = 4 * 1024 * 1024;
+// reader's IP address. Vercel limits a function response to 4.5 MB, so the
+// server makes larger images smaller. Emails show images at about 600 px wide.
+const MAX_DOWNLOAD_BYTES = 25 * 1024 * 1024;
+const MAX_RESPONSE_BYTES = 4 * 1024 * 1024;
+const SHRINK_OVER_BYTES = 1024 * 1024;
+const SHRINK_WIDTH = 1600;
+const SHRINKABLE = /^image\/(jpeg|png|webp|gif|avif|tiff)$/;
 const MAX_REDIRECTS = 4;
 const TIMEOUT_MS = 10_000;
 const IMAGE_TYPE = /^image\/[a-z0-9.+-]+$/;
@@ -114,7 +119,7 @@ export async function fetchRemoteImage(raw: string) {
 
     const contentType = (response.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
     const length = Number(response.headers["content-length"] ?? 0);
-    if (status !== 200 || !IMAGE_TYPE.test(contentType) || length > MAX_BYTES) {
+    if (status !== 200 || !IMAGE_TYPE.test(contentType) || length > MAX_DOWNLOAD_BYTES) {
       response.destroy();
       return null;
     }
@@ -123,13 +128,33 @@ export async function fetchRemoteImage(raw: string) {
     let size = 0;
     for await (const chunk of response as AsyncIterable<Buffer>) {
       size += chunk.length;
-      if (size > MAX_BYTES) {
+      if (size > MAX_DOWNLOAD_BYTES) {
         response.destroy();
         return null;
       }
       chunks.push(chunk);
     }
-    return { data: Buffer.concat(chunks), contentType };
+    return shrink({ data: Buffer.concat(chunks), contentType });
   }
   return null;
+}
+
+/** Makes a large image smaller as WebP. Returns null if the image stays too large to send. */
+async function shrink(image: { data: Buffer; contentType: string }) {
+  if (image.data.length <= SHRINK_OVER_BYTES || !SHRINKABLE.test(image.contentType)) {
+    return image.data.length <= MAX_RESPONSE_BYTES ? image : null;
+  }
+  try {
+    // Load sharp only here. If its native binary fails to load, only large images fail.
+    const { default: sharp } = await import("sharp");
+    const data = await sharp(image.data, { animated: true })
+      .rotate()
+      .resize({ width: SHRINK_WIDTH, withoutEnlargement: true })
+      .webp({ quality: 80 })
+      .toBuffer();
+    const smaller = data.length < image.data.length ? { data, contentType: "image/webp" } : image;
+    return smaller.data.length <= MAX_RESPONSE_BYTES ? smaller : null;
+  } catch {
+    return image.data.length <= MAX_RESPONSE_BYTES ? image : null;
+  }
 }

@@ -40,13 +40,14 @@ const viewRefreshPreamble: Plugin = {
  * Do this only for the build. The dev module runner cannot run CommonJS
  * packages such as react when it inlines them. On Vercel, the Vercel preset
  * builds the server in "ssrBundle_*" environments and not in "ssr", so the
- * `ssr` option does not apply there.
+ * `ssr` option does not apply there. sharp stays external, because it loads
+ * a native binary from its own package folder.
  */
 const bundleServerDependencies: Plugin = {
   name: "bundle-server-dependencies",
   apply: "build",
   configEnvironment(name) {
-    if (name === "ssr" || name.startsWith("ssrBundle_")) return { resolve: { noExternal: true } };
+    if (name === "ssr" || name.startsWith("ssrBundle_")) return { resolve: { noExternal: true, external: ["sharp"] } };
   },
 };
 
@@ -79,6 +80,6 @@ export default defineConfig({
     ],
     // Only server modules import these packages. Without this list, the dev
     // dependency scan bundles them for the browser and reloads the page.
-    exclude: ["imapflow", "mailparser", "nodemailer", "sanitize-html"],
+    exclude: ["imapflow", "mailparser", "nodemailer", "sanitize-html", "sharp"],
   },
 });

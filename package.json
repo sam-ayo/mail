@@ -37,6 +37,7 @@
     "react-router": "^8.4.0",
     "react-virtuoso": "^4.18.16",
     "sanitize-html": "^2.18.0",
+    "sharp": "^0.35.5",
     "sonner": "^2.0.8",
     "tldts": "^7.4.18",
     "web-push": "^3.6.7",
