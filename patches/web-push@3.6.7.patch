@@ -1,0 +1,34 @@
+diff --git a/src/web-push-lib.js b/src/web-push-lib.js
+index a47df054e7d9809cde27d6e645d66f60b84dd8c1..4850286ba72e8b9b2f458e81207c2e2d1671ead9 100644
+--- a/src/web-push-lib.js
++++ b/src/web-push-lib.js
+@@ -1,6 +1,5 @@
+ 'use strict';
+ 
+-const url = require('url');
+ const https = require('https');
+ 
+ const WebPushError = require('./web-push-error.js');
+@@ -271,7 +270,7 @@ WebPushLib.prototype.generateRequestDetails = function(subscription, payload, op
+         requestDetails.headers.Authorization = 'key=' + currentGCMAPIKey;
+       }
+     } else if (currentVapidDetails) {
+-      const parsedUrl = url.parse(subscription.endpoint);
++      const parsedUrl = new URL(subscription.endpoint);
+       const audience = parsedUrl.protocol + '//'
+       + parsedUrl.host;
+ 
+@@ -345,10 +344,10 @@ WebPushLib.prototype.sendNotification = function(subscription, payload, options)
+ 
+     return new Promise(function(resolve, reject) {
+       const httpsOptions = {};
+-      const urlParts = url.parse(requestDetails.endpoint);
++      const urlParts = new URL(requestDetails.endpoint);
+       httpsOptions.hostname = urlParts.hostname;
+-      httpsOptions.port = urlParts.port;
+-      httpsOptions.path = urlParts.path;
++      httpsOptions.port = urlParts.port || undefined;
++      httpsOptions.path = urlParts.pathname + urlParts.search;
+ 
+       httpsOptions.headers = requestDetails.headers;
+       httpsOptions.method = requestDetails.method;

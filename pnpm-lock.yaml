@@ -187,6 +187,9 @@ settings:
   autoInstallPeers: true
   excludeLinksFromLockfile: false
 
+patchedDependencies:
+  web-push@3.6.7: e36756b6436d3f15f30d85bffe79fafd6d42d8720bbf6f60edd108e3e0dcd383
+
 importers:
 
   .:
@@ -286,7 +289,7 @@ importers:
         version: 7.4.18
       web-push:
         specifier: ^3.6.7
-        version: 3.6.7
+        version: 3.6.7(patch_hash=e36756b6436d3f15f30d85bffe79fafd6d42d8720bbf6f60edd108e3e0dcd383)
       zod:
         specifier: ^4.6.7
         version: 4.6.7
@@ -5569,7 +5572,7 @@ snapshots:
       fsevents: 2.3.3
       jiti: 2.7.0
 
-  web-push@3.6.7:
+  web-push@3.6.7(patch_hash=e36756b6436d3f15f30d85bffe79fafd6d42d8720bbf6f60edd108e3e0dcd383):
     dependencies:
       asn1.js: 5.4.1
       http_ece: 1.2.0

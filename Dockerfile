@@ -7,7 +7,8 @@ WORKDIR /app
 RUN pnpm install --frozen-lockfile
 
 FROM base AS production-dependencies-env
-COPY ./package.json pnpm-lock.yaml /app/
+COPY ./package.json pnpm-lock.yaml pnpm-workspace.yaml /app/
+COPY ./patches /app/patches
 WORKDIR /app
 RUN pnpm install --frozen-lockfile --prod
 
