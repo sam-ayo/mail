@@ -379,9 +379,6 @@ function ThreadList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allThreads, sorted, tab, moved],
   );
-  const unreadPromotions = sorted
-    ? allThreads.filter((thread) => thread.unread && categoryOf(thread) === "promotion").length
-    : 0;
 
   const base = `/mail/${scope}/${folder}`;
   const openKey =
@@ -854,7 +851,6 @@ function ThreadList({
           {sorted && (
             <InboxTabs
               tab={tab}
-              unreadPromotions={unreadPromotions}
               onChange={(next) => {
                 setTab(next);
                 setSelected(new Set());
@@ -1509,20 +1505,18 @@ function EmptyList({ folder, query, promotions }: { folder: Folder; query: strin
 /** The two tabs of the sorted inbox. */
 function InboxTabs({
   tab,
-  unreadPromotions,
   onChange,
 }: {
   tab: ThreadCategory;
-  unreadPromotions: number;
   onChange(tab: ThreadCategory): void;
 }) {
-  const tabs: { value: ThreadCategory; label: string; badge?: number }[] = [
+  const tabs: { value: ThreadCategory; label: string }[] = [
     { value: "important", label: "Important" },
-    { value: "promotion", label: "Promotions", badge: unreadPromotions },
+    { value: "promotion", label: "Promotions" },
   ];
   return (
     <div role="tablist" aria-label="Inbox" className="flex gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
-      {tabs.map(({ value, label, badge }) => (
+      {tabs.map(({ value, label }) => (
         <button
           key={value}
           type="button"
@@ -1537,7 +1531,6 @@ function InboxTabs({
           )}
         >
           {label}
-          {badge ? <span className="text-xs text-zinc-500 tabular-nums">{formatCount(badge)}</span> : null}
         </button>
       ))}
     </div>
