@@ -168,7 +168,7 @@ export async function unsortedThreads(userId: string, limit: number) {
   const all = pages.flat();
   const categories = await categoriesFor(all.map((item) => item.thread));
   const todo = all
-    .filter((item) => !categories.has(threadKey(item.thread.accountId, item.thread.id)))
+    .filter((item) => !item.thread.category && !categories.has(threadKey(item.thread.accountId, item.thread.id)))
     .sort((a, b) => b.thread.date.localeCompare(a.thread.date))
     .slice(0, limit);
   const [threads, examples] = await Promise.all([

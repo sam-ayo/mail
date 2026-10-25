@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Address, Folder, Message, ProviderKind, Thread, ThreadAction, ThreadSummary, Unsubscribe } from "~/lib/mail";
+import type { Address, Folder, Message, ProviderKind, Thread, ThreadAction, ThreadCategory, ThreadSummary, Unsubscribe } from "~/lib/mail";
 import type { Account, DemoCredentials } from "../accounts.server";
 import { snippetFromText } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
@@ -15,6 +15,7 @@ interface DemoThread {
   location: Location;
   messages: Message[];
   attachments: Map<string, { filename: string; mimeType: string; data: Buffer }>;
+  category?: ThreadCategory;
 }
 
 interface Seed {
@@ -32,6 +33,8 @@ interface Seed {
   unsubscribe?: Unsubscribe;
   /** A fixed Message-ID. Seeds with the same ID in two demo accounts show as one conversation in the unified inbox. */
   shared?: string;
+  /** The category that AI sorting would give. A category in the database has priority. */
+  category?: ThreadCategory;
 }
 
 const people = {
@@ -59,6 +62,15 @@ const people = {
   coach: { name: "Dana Whitfield", email: "dana@whitfield-coaching.example" },
   school: { name: "Oakridge Evening Classes", email: "enrol@oakridge.example" },
   energy: { name: "Lumen Energy", email: "billing@lumen-energy.example" },
+  summit: { name: "ShipIt Summit", email: "tickets@shipitsummit.example" },
+  notion: { name: "Notebook", email: "offers@notebook-app.example" },
+  outfitters: { name: "Trailhead Outfitters", email: "deals@trailhead.example" },
+  grocer: { name: "Fresh Basket", email: "hello@freshbasket.example" },
+  streaming: { name: "Reelbox", email: "offers@reelbox.example" },
+  fonts: { name: "Typeforge", email: "news@typeforge.example" },
+  cameras: { name: "Lens & Light", email: "sale@lensandlight.example" },
+  fares: { name: "Aurora Airlines Deals", email: "deals@aurora-air.example" },
+  gym: { name: "Pulse Fitness", email: "members@pulsefitness.example" },
 } satisfies Record<string, Address>;
 
 function newsletterHtml(title: string, paragraphs: string[]) {
@@ -79,6 +91,41 @@ function receiptHtml(amount: string, item: string) {
 <tr><td style="padding:8px 0;border-bottom:1px solid #e3e8ee">${item}</td><td align="right" style="border-bottom:1px solid #e3e8ee">${amount}</td></tr>
 <tr><td style="padding:8px 0;font-weight:600">Amount paid</td><td align="right" style="font-weight:600">${amount}</td></tr></table>
 <p style="color:#697386;font-size:12px;margin-top:24px">Questions? Visit <a href="https://support.stripe.com">support.stripe.com</a>.</p></div>`;
+}
+
+function promoHtml(brand: string, color: string, headline: string, text: string, button: string) {
+  return `<!doctype html><html><body style="margin:0;background:#f4f4f5">
+<table width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:32px 16px">
+<table width="560" cellpadding="0" cellspacing="0" style="background:#ffffff;border-radius:12px;overflow:hidden;font-family:-apple-system,Segoe UI,sans-serif;color:#18181b">
+<tr><td style="background:${color};padding:20px 40px;font:700 18px -apple-system,sans-serif;color:#ffffff">${brand}</td></tr>
+<tr><td style="padding:36px 40px 8px"><h1 style="margin:0;font-size:30px;line-height:1.2">${headline}</h1></td></tr>
+<tr><td style="padding:12px 40px;font-size:16px;line-height:1.6;color:#3f3f46">${text}</td></tr>
+<tr><td style="padding:20px 40px 36px"><a href="https://example.com/offer" style="display:inline-block;background:${color};color:#fff;padding:14px 24px;border-radius:8px;text-decoration:none;font-weight:600;font-size:15px">${button}</a></td></tr>
+<tr><td style="padding:16px 40px;background:#fafafa;font-size:12px;color:#71717a">You receive this email because you signed up for news from ${brand}. <a href="https://example.com/unsubscribe" style="color:#71717a">Unsubscribe</a></td></tr>
+</table></td></tr></table><img src="https://example.com/open.gif" width="1" height="1" alt=""></body></html>`;
+}
+
+/** A promotional email from a mailing list, which AI sorting puts in Promotions. */
+function promo(
+  from: Address,
+  subject: string,
+  hoursAgo: number,
+  color: string,
+  headline: string,
+  text: string,
+  button: string,
+  unread = false,
+): Seed {
+  return {
+    from,
+    subject,
+    hoursAgo,
+    unread,
+    category: "promotion",
+    unsubscribe: { url: `https://${from.email.split("@")[1]}/unsubscribe`, oneClick: true },
+    body: `${headline}\n\n${text}\n\n${button}: https://example.com/offer`,
+    html: promoHtml(from.name ?? from.email, color, headline, text, button),
+  };
 }
 
 // More than one demo account receives these, so the unified
@@ -198,6 +245,25 @@ const SEEDS: Seed[] = [
     hoursAgo: 80,
     body: "Sam Rivera: \"Can we try the unread dot on the left edge instead of bolding? Feels calmer.\"",
   },
+  promo(
+    people.summit,
+    "Last day for early-bird tickets: ShipIt Summit 2027",
+    9,
+    "#ea580c",
+    "Early-bird prices end at midnight",
+    "Two days of talks on developer tools, platform teams, and AI in production. Get 40% off your ticket until midnight tonight.",
+    "Get my ticket",
+    true,
+  ),
+  promo(
+    people.notion,
+    "Upgrade your team to Notebook Plus and save 25%",
+    40,
+    "#2563eb",
+    "Your team has outgrown the free plan",
+    "Unlimited pages, version history, and guest access for the whole team. Pay yearly before 31 October and save 25%.",
+    "See the offer",
+  ),
   {
     from: people.hr,
     subject: "Open enrolment closes Friday",
@@ -340,6 +406,35 @@ const PERSONAL_SEEDS: Seed[] = [
       content: '<?xml version="1.0"?><gpx version="1.1" creator="demo"><trk><name>River route</name></trk></gpx>',
     },
   },
+  promo(
+    people.outfitters,
+    "30% off everything this weekend 🏔️",
+    2.5,
+    "#15803d",
+    "The autumn sale starts now",
+    "Take 30% off jackets, boots, and packs until Sunday night. Members also get free delivery on all orders.",
+    "Shop the sale",
+    true,
+  ),
+  promo(
+    people.grocer,
+    "Your first box for $10, this week only",
+    16,
+    "#65a30d",
+    "Fresh food at your door for $10",
+    "Choose from 40 recipes each week. Use the code AUTUMN10 at checkout for your first box.",
+    "Choose my recipes",
+    true,
+  ),
+  promo(
+    people.streaming,
+    "We miss you: 3 months of Reelbox for $1",
+    45,
+    "#be123c",
+    "Come back for $1 a month",
+    "New series every Friday, with no ads. Restart your plan today and pay $1 a month for 3 months.",
+    "Restart my plan",
+  ),
   LISBON_TRIP,
   NORA_COFFEE,
   {
@@ -373,6 +468,25 @@ const STUDIO_SEEDS: Seed[] = [
     hoursAgo: 12,
     body: "Your deployment of studio-site to production is ready.\n\nCommit: Update case studies page",
   },
+  promo(
+    people.fonts,
+    "The Designer Bundle: 12 font families for $49",
+    8,
+    "#7c3aed",
+    "12 font families. One price.",
+    "Display, serif, and mono families with a full commercial license. The bundle is 92% off for the next 72 hours.",
+    "Get the bundle",
+    true,
+  ),
+  promo(
+    people.cameras,
+    "Black Friday starts early: up to 40% off lenses",
+    30,
+    "#0f172a",
+    "Up to 40% off lenses and lights",
+    "Our biggest sale of the year starts early for subscribers. Prices drop on primes, zooms, and LED panels.",
+    "See the deals",
+  ),
   {
     from: people.client,
     subject: "Invoice #0007",
@@ -406,6 +520,25 @@ const OUTLOOK_SEEDS: Seed[] = [
     hoursAgo: 28,
     body: "Your October bill is $64.20. We will take the payment by direct debit on 1 November.",
   },
+  promo(
+    people.fares,
+    "Flash sale: fares to Europe from $299",
+    5,
+    "#0369a1",
+    "Europe from $299 return",
+    "Fly to Lisbon, Oslo, or Rome between January and March. The sale ends on Tuesday or when the seats go.",
+    "Find a fare",
+    true,
+  ),
+  promo(
+    people.gym,
+    "Bring a friend for free in November",
+    60,
+    "#db2777",
+    "Your friends train free in November",
+    "Each member can bring one friend to any class at no cost, all month. Book their place in the app.",
+    "Book a class",
+  ),
   NORA_COFFEE,
   {
     from: people.airline,
@@ -531,6 +664,7 @@ function seed(account: Account) {
       location: s.location ?? "inbox",
       messages: [first],
       attachments: new Map(),
+      category: s.category,
     };
     if (s.attachment) {
       const attachmentId = nextId();
@@ -616,6 +750,7 @@ export function createDemoProvider(account: Account): MailProvider {
       messageCount: thread.messages.length,
       hasAttachments: thread.messages.some((m) => m.attachments.length > 0),
       messageIds: thread.messages.flatMap((m) => (m.messageIdHeader ? [m.messageIdHeader] : [])),
+      ...(folder === "inbox" && thread.category ? { category: thread.category } : {}),
     };
   }
 
