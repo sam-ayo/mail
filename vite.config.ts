@@ -68,7 +68,6 @@ export default defineConfig({
   },
   optimizeDeps: {
     include: [
-      "lucide-react",
       "sonner",
       "cmdk",
       "react-virtuoso",
