@@ -103,12 +103,50 @@ function fetchThread(key: string, serverLoader: () => Promise<ThreadData>) {
   return pending;
 }
 
+const IMAGE_TYPES = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/;
+
+// Pictures that loaded early. The browser cache keeps them, so a conversation
+// shows with its pictures when it opens.
+const warmed = new Set<string>();
+const WARMED_LIMIT = 500;
+
+/** Starts a load of each picture in all the messages: body images, image attachments, and avatars. */
+function warmImages(thread: RenderedThread) {
+  const urls = new Set<string>();
+  for (const message of thread.messages) {
+    if (message.from.email.includes("@")) urls.add(`/api/avatar?email=${encodeURIComponent(message.from.email)}`);
+    for (const attachment of message.attachments) {
+      if (IMAGE_TYPES.test(attachment.mimeType)) urls.add(attachmentUrl(thread.accountId, message.id, attachment.id));
+    }
+    // A parsed document does not load its images. Only the Image objects below do.
+    if (message.html) {
+      const doc = new DOMParser().parseFromString(message.html, "text/html");
+      doc.querySelectorAll("img[src]").forEach((img) => urls.add(img.getAttribute("src")!));
+    }
+  }
+  for (const url of urls) {
+    if (!url || url.startsWith("data:") || warmed.has(url)) continue;
+    warmed.add(url);
+    if (warmed.size > WARMED_LIMIT) warmed.delete(warmed.values().next().value!);
+    const image = new Image();
+    // The same policy as the email frame, so senders get no referrer.
+    image.referrerPolicy = "no-referrer";
+    image.src = url;
+  }
+}
+
 export async function clientLoader(args: Route.ClientLoaderArgs) {
   if (!new URL(args.request.url).searchParams.has(PREFETCH_PARAM)) return loadCached(args);
   // An error from a fetcher replaces the full page, so a failed prefetch
   // stays silent. The fetchers do not use the data. If you open the
   // conversation, the error shows in the conversation pane.
-  return loadCached(args).catch(() => null as never);
+  return loadCached(args).then(
+    (data) => {
+      warmImages(data.thread);
+      return data;
+    },
+    () => null as never,
+  );
 }
 
 async function loadCached({ params, request, serverLoader }: Route.ClientLoaderArgs) {
@@ -811,7 +849,7 @@ function MessageCard({
               {message.attachments.map((attachment) => {
                 const preview = attachmentUrl(accountId, message.id, attachment.id);
                 const download = attachmentUrl(accountId, message.id, attachment.id, true);
-                const isImage = /^image\/(png|jpe?g|gif|webp|svg\+xml)$/.test(attachment.mimeType);
+                const isImage = IMAGE_TYPES.test(attachment.mimeType);
                 const canView = isImage || /^(application\/pdf|text\/plain)$/.test(attachment.mimeType);
                 return (
                   <li key={attachment.id}>
