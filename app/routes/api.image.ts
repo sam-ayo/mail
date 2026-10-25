@@ -15,13 +15,9 @@ export async function loader({ request }: Route.LoaderArgs) {
 
   const image = await fetchRemoteImage(url).catch(() => null);
   if (!image) {
-    return new Response(null, {
-      status: 404,
-      headers: {
-        "Cache-Control": "public, max-age=3600",
-        "CDN-Cache-Control": "max-age=3600",
-      },
-    });
+    // A failure can be temporary, for example a timeout. The CDN and the
+    // browser must not keep it, so the next load fetches the image again.
+    return new Response(null, { status: 404, headers: { "Cache-Control": "no-store" } });
   }
   return new Response(new Uint8Array(image.data), {
     headers: {
