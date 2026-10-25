@@ -49,13 +49,19 @@ const workspaceSignIn = () =>
     },
   }) satisfies BetterAuthPlugin;
 
+// An idle connection of the pool can get a WebSocket error. With no listener,
+// the error stops the Node.js process and all the requests in it. The pool
+// opens a new connection for the next query.
+const pool = new Pool({ connectionString: env.databaseUrl });
+pool.on("error", (error: Error) => console.error("Better Auth database pool:", error));
+
 export const agentAuth = betterAuth({
   appName: "mail",
   baseURL: env.appUrl,
   basePath: "/api/auth",
   // A separate key, so that the mail session secret signs only mail sessions.
   secret: createHmac("sha256", env.sessionSecret).update("better-auth").digest("base64url"),
-  database: new Pool({ connectionString: env.databaseUrl }),
+  database: pool,
   user: { modelName: "auth_users" },
   // Sessions exist only for the sign-in and consent steps of an OAuth flow.
   session: { modelName: "auth_sessions", expiresIn: 60 * 60 },
