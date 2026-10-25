@@ -17,7 +17,7 @@ import {
   updateAccountProfile,
 } from "~/server/accounts.server";
 import type { MailScope } from "~/lib/agents";
-import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-auth.server";
+import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-connections.server";
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
 import { resetDemoAccount } from "~/server/providers/demo.server";

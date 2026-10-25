@@ -9,7 +9,7 @@ import { buildOutgoing, draftFor, type ComposeDraft } from "~/lib/compose";
 import type { Message, ThreadSummary } from "~/lib/mail";
 import { FOLDERS, formatAddress, parseAddressList, THREAD_ACTIONS } from "~/lib/mail";
 import { listAccounts, resolveUser, toSummary } from "~/server/accounts.server";
-import { hasConsent, MCP_RESOURCE } from "~/server/agent-auth.server";
+import { hasConsent, MCP_RESOURCE } from "~/server/agent-connections.server";
 import { env } from "~/server/env.server";
 import {
   getAttachment,
