@@ -379,21 +379,17 @@ button,
   }
 }
 
-/* A pushed screen and a sheet, as in iOS. */
+/* A pushed screen, as in iOS. */
 @keyframes pane-push {
   from {
     transform: translateX(100%);
   }
 }
-@keyframes fade-in {
-  from {
-    opacity: 0;
-  }
-}
-@keyframes sheet-up {
-  from {
-    transform: translateY(100%);
-  }
+
+/* A sheet makes the page smaller, as in iOS. The screen around it is black. */
+html.sheet-open,
+html.sheet-open body {
+  background-color: #000;
 }
 
 /* A drawer swipe sets this variable on the drawer at each touch move. The

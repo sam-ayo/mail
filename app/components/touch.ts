@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
+import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
 
 // Touch gestures for phones, as in the iOS Mail app. A web app on the Home
 // Screen has no browser back gesture and no pull-to-refresh, so the app makes
@@ -349,4 +349,170 @@ export function useRowSwipe(options: {
     event.preventDefault();
     event.stopPropagation();
   };
+}
+
+/** iOS sheets move more slowly than pushed screens. */
+const SHEET_DURATION = 500;
+/** The page behind a sheet gets this much narrower, in px, as in Vaul. */
+const PAGE_INSET = 26;
+const PAGE_RADIUS = 8;
+
+/** Calls `done` once, after the transform transition of `element`. */
+function afterTransition(element: HTMLElement, duration: number, done: () => void) {
+  let finished = false;
+  const finish = (event?: TransitionEvent) => {
+    if (finished || (event && (event.target !== element || event.propertyName !== "transform"))) return;
+    finished = true;
+    element.removeEventListener("transitionend", finish);
+    done();
+  };
+  element.addEventListener("transitionend", finish);
+  // A transition to the same position sends no transitionend event.
+  setTimeout(finish, duration + 50);
+}
+
+/**
+ * A sheet that slides up over the page, as a new message in iOS Messages. The
+ * page behind it (the element with `data-sheet-page`) gets smaller and moves
+ * back. A swipe down on `handle` drags the sheet down. A long or fast swipe
+ * calls `onDismiss`. When `open` changes to false, the sheet slides down, then
+ * the hook calls `onClosed`. When `enabled` is false, the hook does nothing.
+ */
+export function useSheet(options: { enabled: boolean; open: boolean; onDismiss(): void; onClosed(): void }) {
+  const sheet = useRef<HTMLDivElement>(null);
+  const handle = useRef<HTMLElement>(null);
+  const backdrop = useRef<HTMLDivElement>(null);
+  const { enabled, open } = options;
+  const latest = useRef(options);
+  latest.current = options;
+
+  // `amount` is 1 when the sheet is open and 0 when it is closed. The page
+  // changes in proportion, so a drag moves the page back to its place too.
+  const pose = useCallback((amount: number, animate: boolean, done?: () => void) => {
+    const element = sheet.current;
+    const page = document.querySelector<HTMLElement>("[data-sheet-page]");
+    if (!element) return;
+    const transition = animate ? `${SHEET_DURATION}ms ${EASE}` : "";
+    const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+    // Reduced motion keeps the fade of the backdrop, without movement.
+    if (backdrop.current) {
+      backdrop.current.style.transition = transition && `opacity ${transition}`;
+      backdrop.current.style.opacity = String(amount);
+    }
+    if (reduce) {
+      if (done) setTimeout(done, animate ? SHEET_DURATION : 0);
+      return;
+    }
+    // The screen around the smaller page is black.
+    document.documentElement.classList.add("sheet-open");
+    element.style.transition = transition ? `transform ${transition}` : "none";
+    element.style.transform = `translateY(${(1 - amount) * 100}%)`;
+    if (page) {
+      const scale = 1 - (PAGE_INSET / window.innerWidth) * amount;
+      page.style.transition = transition ? `transform ${transition}, border-radius ${transition}` : "none";
+      page.style.transformOrigin = "top";
+      page.style.transform = `translateY(calc((env(safe-area-inset-top) + 2px) * ${amount})) scale(${scale})`;
+      page.style.borderRadius = `${PAGE_RADIUS * amount}px`;
+    }
+    if (done) {
+      if (animate) afterTransition(element, SHEET_DURATION, done);
+      else done();
+    }
+  }, []);
+
+  const clear = useCallback(() => {
+    document.documentElement.classList.remove("sheet-open");
+    const page = document.querySelector<HTMLElement>("[data-sheet-page]");
+    for (const element of [sheet.current, page, backdrop.current]) {
+      if (!element) continue;
+      element.style.transition = element.style.transform = element.style.transformOrigin = "";
+      element.style.borderRadius = element.style.opacity = "";
+    }
+  }, []);
+
+  useLayoutEffect(() => {
+    const element = sheet.current;
+    if (!enabled || !element) {
+      clear();
+      return;
+    }
+    if (open) {
+      // A new sheet starts below the screen. A sheet that closes goes back up
+      // from where it is.
+      if (!element.style.transform) {
+        pose(0, false);
+        void element.offsetHeight;
+      }
+      pose(1, true);
+    } else {
+      // The keyboard goes down with the sheet.
+      if (element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
+      pose(0, true, () => {
+        clear();
+        latest.current.onClosed();
+      });
+    }
+  }, [enabled, open, pose, clear]);
+
+  useEffect(() => clear, [clear]);
+
+  useEffect(() => {
+    const element = handle.current;
+    if (!element || !enabled) return;
+    let start: { x: number; y: number; time: number } | null = null;
+    let dragging = false;
+    let dy = 0;
+
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length !== 1 || dragging) return;
+      start = {
+        x: event.touches[0].clientX,
+        y: event.touches[0].clientY,
+        time: event.timeStamp,
+      };
+      dy = 0;
+    };
+    const onMove = (event: TouchEvent) => {
+      const panel = sheet.current;
+      if (!start || !panel) return;
+      const dx = event.touches[0].clientX - start.x;
+      dy = event.touches[0].clientY - start.y;
+      if (!dragging) {
+        if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+        if (dy <= Math.abs(dx)) {
+          start = null;
+          return;
+        }
+        dragging = true;
+      }
+      event.preventDefault();
+      pose(1 - Math.max(0, dy) / panel.offsetHeight, false);
+    };
+    const onEnd = (event: TouchEvent) => {
+      const panel = sheet.current;
+      if (!start || !dragging || !panel) {
+        start = null;
+        return;
+      }
+      // A flick closes the sheet, not only a long drag.
+      const speed = dy / Math.max(1, event.timeStamp - start.time);
+      start = null;
+      dragging = false;
+      if (dy > 0 && (dy > panel.offsetHeight * 0.25 || speed > 0.11)) latest.current.onDismiss();
+      else pose(1, true);
+    };
+
+    element.addEventListener("touchstart", onStart, { passive: true });
+    element.addEventListener("touchmove", onMove, { passive: false });
+    element.addEventListener("touchend", onEnd);
+    element.addEventListener("touchcancel", onEnd);
+    return () => {
+      element.removeEventListener("touchstart", onStart);
+      element.removeEventListener("touchmove", onMove);
+      element.removeEventListener("touchend", onEnd);
+      element.removeEventListener("touchcancel", onEnd);
+    };
+  }, [enabled, pose]);
+
+  return { sheet, handle, backdrop };
 }

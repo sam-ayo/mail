@@ -16,7 +16,7 @@ import { parseAddressList, textOn } from "~/lib/mail";
 import { markdownToHtml } from "~/lib/markdown";
 import { useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
-import { useMediaQuery } from "./touch";
+import { useMediaQuery, useSheet } from "./touch";
 import { ResizeHandle } from "./resize-handle";
 import { Button, FileName, Hint, IconButton, cx } from "./ui";
 
@@ -438,6 +438,20 @@ export function ComposeWindow() {
   const minimized = minimizedState && !sheet;
   const expanded = expandedState || sheet;
 
+  // A sheet slides down after the draft closes, so it keeps the last draft
+  // until the slide ends. A window closes at once.
+  const [shown, setShown] = useState(compose);
+  if (compose && compose !== shown) setShown(compose);
+  if (!compose && shown && !sheet) setShown(null);
+  const draft = compose ?? shown;
+  const closing = !compose && !!shown;
+  const sheetMotion = useSheet({
+    enabled: sheet && !!draft,
+    open: !!compose,
+    onDismiss: closeCompose,
+    onClosed: () => setShown(null),
+  });
+
   useEffect(() => setMinimized(false), [compose?.id]);
 
   // Keep the size that the person chose last.
@@ -497,7 +511,7 @@ export function ComposeWindow() {
       viewport.removeEventListener("scroll", fit);
       element.style.top = element.style.bottom = element.style.paddingBottom = "";
     };
-  }, [sheet, compose?.id]);
+  }, [sheet, draft?.id]);
 
   // Keep the full window in the viewport when its size or the viewport size changes.
   useLayoutEffect(() => {
@@ -525,18 +539,18 @@ export function ComposeWindow() {
   // A window with a set height has a fixed height, so the body field can fill it.
   const fill = expanded || (resizable && size.height !== null);
 
-  if (!compose) return null;
-  const title = compose.subject || "New message";
-  const sender = account(compose.accountId);
+  if (!draft) return null;
+  const title = draft.subject || "New message";
+  const sender = account(draft.accountId);
 
   return (
     <>
-      {sheet && <div aria-hidden className="fixed inset-0 z-40 bg-zinc-950/40 motion-safe:animate-[fade-in_320ms_ease-out]" />}
+      {sheet && <div ref={sheetMotion.backdrop} aria-hidden className="fixed inset-0 z-40 bg-zinc-950/40" />}
       <div
         className={cx(
           "fixed z-40 flex flex-col overflow-hidden rounded-t-xl bg-white pb-[env(safe-area-inset-bottom)] shadow-2xl shadow-zinc-900/20 ring-1 ring-zinc-950/10 dark:bg-zinc-900 dark:ring-white/10",
           sheet
-            ? "inset-x-0 top-[calc(env(safe-area-inset-top)+0.75rem)] bottom-0 rounded-t-2xl motion-safe:animate-[sheet-up_320ms_var(--ease-drawer)]"
+            ? "inset-x-0 top-[calc(env(safe-area-inset-top)+0.75rem)] bottom-0 rounded-t-2xl"
             : expanded
               ? "inset-x-2 top-4 bottom-0 sm:inset-x-[4%] sm:top-[4%] sm:bottom-[4%] sm:rounded-b-xl"
               : "right-2 bottom-0 w-[min(720px,calc(100vw-1rem))] max-w-[calc(100vw-1rem)] max-h-[calc(100dvh-1rem)] sm:right-6",
@@ -550,9 +564,13 @@ export function ComposeWindow() {
                 translate: `${offset.x}px ${offset.y}px`,
               }
         }
-        ref={windowRef}
+        ref={(element) => {
+          windowRef.current = element;
+          sheetMotion.sheet.current = element;
+        }}
         role="dialog"
         aria-label={title}
+        inert={closing}
       >
         {resizable && (
           <>
@@ -579,6 +597,7 @@ export function ComposeWindow() {
           </>
         )}
         <header
+          ref={sheetMotion.handle}
           className={cx(
             "flex items-center gap-2 px-4 py-2 text-sm max-sm:py-3",
             !sender && "bg-zinc-900 text-white dark:bg-zinc-800",
@@ -675,8 +694,8 @@ export function ComposeWindow() {
             }}
           >
             <Composer
-              key={compose.id}
-              draft={compose}
+              key={draft.id}
+              draft={draft}
               onChange={updateCompose}
               onDiscard={closeCompose}
               variant="window"

@@ -206,61 +206,65 @@ function Shell() {
     return list;
   }, [accounts, dark, navigate, openCompose, setThemeMode, sidebarCollapsed, submit, themeMode, toggleTheme]);
 
+  // A sheet on a phone makes this frame smaller, so the compose window is
+  // outside it.
   return (
-    <div className="flex h-dvh overflow-hidden pt-[env(safe-area-inset-top)]">
-      {/* iOS blurs the content under the status bar when no fixed element is
-          at the top edge. This opaque strip is that element, so iOS shows its
-          colour and not a blur. The headers have the page colour too. */}
-      <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top)] bg-white dark:bg-zinc-950" />
-      {/* On wide screens the sidebar collapses as in Colima GUI. The space
-          it takes changes at once, and the content slides on a spring from
-          its old position. The panel slides on the same spring, so its right
-          edge stays on the left edge of the content. A
-          pointer on the sidebar button or at the left edge brings a
-          collapsed panel back over the content. */}
-      <div
-        data-sidebar-frame
-        onPointerEnter={startPeek}
-        onPointerLeave={stopPeek}
-        className="group/sidebar hidden h-full w-[calc(var(--sidebar-width)+1rem)] shrink-0 md:block in-[.sidebar-collapsed]:w-0"
-      >
-        <SidebarButton />
-        <div aria-hidden className="fixed inset-y-0 left-0 z-30 hidden w-2 in-[.sidebar-collapsed]:block" />
+    <>
+      <div data-sheet-page className="flex h-dvh overflow-hidden bg-white pt-[env(safe-area-inset-top)] dark:bg-zinc-950">
+        {/* iOS blurs the content under the status bar when no fixed element is
+            at the top edge. This opaque strip is that element, so iOS shows its
+            colour and not a blur. The headers have the page colour too. */}
+        <div aria-hidden className="pointer-events-none fixed inset-x-0 top-0 z-20 h-[env(safe-area-inset-top)] bg-white dark:bg-zinc-950" />
+        {/* On wide screens the sidebar collapses as in Colima GUI. The space
+            it takes changes at once, and the content slides on a spring from
+            its old position. The panel slides on the same spring, so its right
+            edge stays on the left edge of the content. A
+            pointer on the sidebar button or at the left edge brings a
+            collapsed panel back over the content. */}
         <div
-          className={cx(
-            "fixed inset-y-0 left-0 z-40 transition-[translate] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none",
-            "in-[.sidebar-collapsed]:-translate-x-full in-[.sidebar-peek]:translate-x-0",
-            // Keyboard focus keeps it out. A click does not, because the
-            // link keeps the focus after the pointer leaves.
-            "in-[.sidebar-collapsed]:group-has-focus-visible/sidebar:translate-x-0",
-            "in-[.sidebar-collapsed]:[&_nav]:shadow-2xl in-[.sidebar-collapsed]:[&_nav]:shadow-zinc-950/20",
-          )}
+          data-sidebar-frame
+          onPointerEnter={startPeek}
+          onPointerLeave={stopPeek}
+          className="group/sidebar hidden h-full w-[calc(var(--sidebar-width)+1rem)] shrink-0 md:block in-[.sidebar-collapsed]:w-0"
         >
-          <Sidebar
-            resizable
-            scope={scope}
-            folder={folder}
-            dark={dark}
-            onToggleTheme={toggleTheme}
-            onShowShortcuts={() => setShortcutsOpen(true)}
-          />
+          <SidebarButton />
+          <div aria-hidden className="fixed inset-y-0 left-0 z-30 hidden w-2 in-[.sidebar-collapsed]:block" />
+          <div
+            className={cx(
+              "fixed inset-y-0 left-0 z-40 transition-[translate] duration-(--sidebar-duration) ease-spring motion-reduce:transition-none",
+              "in-[.sidebar-collapsed]:-translate-x-full in-[.sidebar-peek]:translate-x-0",
+              // Keyboard focus keeps it out. A click does not, because the
+              // link keeps the focus after the pointer leaves.
+              "in-[.sidebar-collapsed]:group-has-focus-visible/sidebar:translate-x-0",
+              "in-[.sidebar-collapsed]:[&_nav]:shadow-2xl in-[.sidebar-collapsed]:[&_nav]:shadow-zinc-950/20",
+            )}
+          >
+            <Sidebar
+              resizable
+              scope={scope}
+              folder={folder}
+              dark={dark}
+              onToggleTheme={toggleTheme}
+              onShowShortcuts={() => setShortcutsOpen(true)}
+            />
+          </div>
         </div>
+        <NavDrawer
+          scope={scope}
+          folder={folder}
+          threadOpen={Boolean(params.threadId)}
+          dark={dark}
+          onToggleTheme={toggleTheme}
+          onShowShortcuts={() => setShortcutsOpen(true)}
+        />
+        <main data-sidebar-content className="flex min-w-0 flex-1">
+          <Outlet />
+        </main>
+        <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
+        <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
       </div>
-      <NavDrawer
-        scope={scope}
-        folder={folder}
-        threadOpen={Boolean(params.threadId)}
-        dark={dark}
-        onToggleTheme={toggleTheme}
-        onShowShortcuts={() => setShortcutsOpen(true)}
-      />
-      <main data-sidebar-content className="flex min-w-0 flex-1">
-        <Outlet />
-      </main>
       <ComposeWindow />
-      <CommandPalette open={paletteOpen} onClose={() => setPaletteOpen(false)} commands={commands} />
-      <ShortcutsDialog open={shortcutsOpen} onClose={() => setShortcutsOpen(false)} />
-    </div>
+    </>
   );
 }
 
