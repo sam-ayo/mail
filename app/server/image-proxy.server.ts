@@ -16,6 +16,9 @@ const SHRINKABLE = /^image\/(jpeg|png|webp|gif|avif|tiff)$/;
 const MAX_REDIRECTS = 4;
 const TIMEOUT_MS = 10_000;
 const IMAGE_TYPE = /^image\/[a-z0-9.+-]+$/;
+// Some image servers send no type, or a generic binary type. Then the proxy
+// finds the type from the first bytes of the file, as browsers do.
+const GENERIC_TYPE = /^$|^(application|binary)\/octet-stream$/;
 
 // Addresses in private networks, the server itself, and cloud metadata
 // services. An email must not make the server fetch from these.
@@ -137,7 +140,8 @@ export async function fetchRemoteImage(raw: string) {
 
     const contentType = (response.headers["content-type"] ?? "").split(";")[0].trim().toLowerCase();
     const length = Number(response.headers["content-length"] ?? 0);
-    if (status !== 200 || !IMAGE_TYPE.test(contentType) || length > MAX_DOWNLOAD_BYTES) {
+    const generic = GENERIC_TYPE.test(contentType);
+    if (status !== 200 || !(generic || IMAGE_TYPE.test(contentType)) || length > MAX_DOWNLOAD_BYTES) {
       response.destroy();
       return null;
     }
@@ -152,8 +156,24 @@ export async function fetchRemoteImage(raw: string) {
       }
       chunks.push(chunk);
     }
-    return shrink({ data: Buffer.concat(chunks), contentType });
+    const data = Buffer.concat(chunks);
+    const type = generic ? sniffImageType(data) : contentType;
+    return type ? shrink({ data, contentType: type }) : null;
   }
+  return null;
+}
+
+/** Finds the image type from the first bytes. SVG is text, so it is not found here. */
+export function sniffImageType(data: Buffer) {
+  const ascii = (start: number, end: number) => data.toString("latin1", start, end);
+  if (data.length < 12) return null;
+  if (data[0] === 0x89 && ascii(1, 4) === "PNG") return "image/png";
+  if (data[0] === 0xff && data[1] === 0xd8 && data[2] === 0xff) return "image/jpeg";
+  if (ascii(0, 6) === "GIF87a" || ascii(0, 6) === "GIF89a") return "image/gif";
+  if (ascii(0, 4) === "RIFF" && ascii(8, 12) === "WEBP") return "image/webp";
+  if (ascii(4, 8) === "ftyp" && /^avi[fs]$/.test(ascii(8, 12))) return "image/avif";
+  if (ascii(0, 2) === "BM") return "image/bmp";
+  if (data.readUInt32BE(0) === 0x00000100) return "image/x-icon";
   return null;
 }
 
