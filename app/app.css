@@ -366,10 +366,16 @@ button,
 }
 
 /* An app on the Home Screen does not zoom, as a native app does not. The
-   email bodies are in frames, so they can still zoom. */
+   email bodies are in frames, so they can still zoom.
+   iOS starts a Home Screen app with a viewport that stops above the bottom
+   of the screen by the status bar height. The viewport gets the full screen
+   height only when the page is taller than that viewport. The app frame has
+   the height of the viewport (100dvh), so without this minimum height the
+   viewport stays short and the bottom of the screen stays empty. */
 @media (display-mode: standalone) {
   html {
     touch-action: pan-x pan-y;
+    min-height: 100vh;
   }
 }
 
