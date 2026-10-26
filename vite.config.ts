@@ -79,6 +79,6 @@ export default defineConfig({
     ],
     // Only server modules import these packages. Without this list, the dev
     // dependency scan bundles them for the browser and reloads the page.
-    exclude: ["imapflow", "mailparser", "nodemailer", "sanitize-html", "sharp"],
+    exclude: ["@typesafe-ai/sdk", "@vercel/functions", "imapflow", "mailparser", "nodemailer", "sanitize-html", "sharp"],
   },
 });

@@ -66,9 +66,10 @@ import {
   threadKey,
   threadRefs,
 } from "~/lib/mail";
+import { waitUntil } from "@vercel/functions";
 import { userContext } from "~/server/context";
 import { listThreads } from "~/server/mail.server";
-import { withCategories } from "~/server/triage.server";
+import { sortListed, withCategories } from "~/server/triage.server";
 import type { Route } from "./+types/mail.list";
 
 export function loader({ params, request, context }: Route.LoaderArgs) {
@@ -85,12 +86,14 @@ export function loader({ params, request, context }: Route.LoaderArgs) {
     user.id,
     { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
     user.accounts,
-  ).then(async (result) => ({
-    ...result,
+  ).then(async (result) => {
     // The inbox shows important mail and promotions in two tabs.
-    threads: params.folder === "inbox" && !query ? await withCategories(result.threads) : result.threads,
-    query,
-  }));
+    if (params.folder !== "inbox" || query) return { ...result, query };
+    const threads = await withCategories(result.threads);
+    // Mail that the mail check did not sort, such as older or read mail, shows in the next load.
+    waitUntil(sortListed(user.id, threads).catch((error) => console.error("Cannot sort the inbox", error)));
+    return { ...result, threads, query };
+  });
   return { list };
 }
 
@@ -498,7 +501,7 @@ function ThreadList({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sorted, threads.length, cursor, moreFetcher.state]);
 
-  /** Moves conversations to the other tab. The AI sorting script learns from these changes. */
+  /** Moves conversations to the other tab. AI sorting then puts later mail from the same senders there too. */
   async function moveTo(category: ThreadCategory, rows: ThreadSummary[]) {
     const targets = rows.flatMap((thread) =>
       threadRefs(thread).map((ref) => ({ ...ref, sender: thread.participants[0]?.email })),

@@ -3,10 +3,10 @@ import type { Address, ThreadCategory, ThreadSummary } from "~/lib/mail";
 import { displayName, threadKey } from "~/lib/mail";
 import type { Account } from "./accounts.server";
 import { listAccounts } from "./accounts.server";
-import { query, queryOne } from "./db.server";
+import { query } from "./db.server";
 import { env } from "./env.server";
 import { providerFor } from "./mail.server";
-import { categoriesFor } from "./triage.server";
+import { aiSortingOn, categoriesFor, senderOf, sortThreads } from "./triage.server";
 import { mapLimit } from "./util.server";
 
 export const pushConfigured = !!(env.push.publicKey && env.push.privateKey);
@@ -100,18 +100,6 @@ function threadPayloads(account: AccountRef, threads: ThreadSummary[]): PushPayl
   });
 }
 
-/** The address of the sender, as the AI sorting saves it. */
-function senderOf(thread: ThreadSummary) {
-  return thread.participants[0]?.email.toLowerCase() ?? "";
-}
-
-/**
- * How long a new thread with no category waits for the AI sorting script.
- * The script runs each minute. After this time, the notification goes anyway,
- * for example when the person's computer sleeps.
- */
-const SORT_WAIT_MINUTES = 5;
-
 /**
  * The category of each new thread: its own category, else the category of
  * its sender's earlier mail. A category that the person set wins over an AI category.
@@ -135,79 +123,22 @@ async function newThreadCategories(account: AccountRef, threads: ThreadSummary[]
   );
 }
 
-/** The AI sorting script used a token of the person in the last minutes. */
-async function aiSortingActive(userId: string) {
-  const row = await queryOne(
-    "SELECT 1 FROM api_tokens WHERE user_id = $1 AND last_used_at > now() - make_interval(mins => $2) LIMIT 1",
-    [userId, SORT_WAIT_MINUTES],
-  );
-  return !!row;
-}
-
 /**
  * Sends notifications to the owner of the account for new inbox threads that
- * are not promotions. When the AI sorting script runs, a thread with no
- * category waits for the AI. releaseNotifications sends it later.
+ * are not promotions. With AI sorting on, it sorts the threads first.
  */
-export async function notifyNewThreads(account: AccountRef, threads: ThreadSummary[]) {
+export async function notifyNewThreads(account: Account, threads: ThreadSummary[]) {
   if (threads.length === 0) return;
   let now = threads;
   try {
+    if (await aiSortingOn(account.userId)) await sortThreads(account, threads);
     const categories = await newThreadCategories(account, threads);
-    const unsorted = threads.filter((_, i) => !categories[i]);
-    const wait = unsorted.length > 0 && (await aiSortingActive(account.userId));
-    now = threads.filter((_, i) => categories[i] === "important" || (!categories[i] && !wait));
-    if (wait) {
-      await query(
-        `INSERT INTO pending_notifications (account_id, thread_id, thread)
-         SELECT $1, thread_id, thread FROM unnest($2::text[], $3::jsonb[]) AS t(thread_id, thread)
-         ON CONFLICT (account_id, thread_id) DO NOTHING`,
-        [account.id, unsorted.map((t) => t.id), unsorted.map((t) => JSON.stringify({ ...t, accountId: account.id }))],
-      );
-    }
+    now = threads.filter((_, i) => categories[i] !== "promotion");
   } catch (error) {
     // Without the categories, a notification for each thread is better than none.
-    console.error("Cannot read the thread categories", error);
+    console.error("Cannot sort the new threads", error);
   }
   await sendToUser(account.userId, threadPayloads(account, now));
-}
-
-/**
- * Sends the waiting notifications of threads that now have a category, or
- * that waited too long. A promotion gets no notification. With no userId,
- * it looks at all workspaces.
- */
-export async function releaseNotifications(userId?: string) {
-  const rows = await query<{ account_id: string; email: string; user_id: string; thread: ThreadSummary; category: ThreadCategory | null }>(
-    `WITH released AS (
-       DELETE FROM pending_notifications p
-       USING accounts a
-       WHERE a.id = p.account_id
-         AND ($1::text IS NULL OR a.user_id = $1)
-         AND (p.created_at < now() - make_interval(mins => $2)
-           OR EXISTS (SELECT 1 FROM thread_categories c WHERE c.account_id = p.account_id AND c.thread_id = p.thread_id))
-       RETURNING p.account_id, p.thread_id, p.thread, p.created_at, a.email, a.user_id
-     )
-     SELECT r.account_id, r.email, r.user_id, r.thread, c.category
-     FROM released r
-     LEFT JOIN thread_categories c ON c.account_id = r.account_id AND c.thread_id = r.thread_id
-     ORDER BY r.created_at`,
-    [userId ?? null, SORT_WAIT_MINUTES],
-  );
-  const byAccount = new Map<string, { account: AccountRef; threads: ThreadSummary[] }>();
-  for (const row of rows) {
-    if (row.category === "promotion") continue;
-    const entry = byAccount.get(row.account_id) ?? {
-      account: { id: row.account_id, email: row.email, userId: row.user_id },
-      threads: [],
-    };
-    entry.threads.push(row.thread);
-    byAccount.set(row.account_id, entry);
-  }
-  await Promise.all(
-    [...byAccount.values()].map(({ account, threads }) => sendToUser(account.userId, threadPayloads(account, threads))),
-  );
-  return rows.length;
 }
 
 /** Sends a notification for a hosted message that came to the inbox. The webhook calls it. */
@@ -217,10 +148,13 @@ export async function notifyHostedMessage(mailbox: string, messageId: string) {
     [messageId],
   );
   if (!message) return;
-  const owners = await query<{ id: string; email: string; user_id: string }>(
-    "SELECT id, email, user_id FROM accounts WHERE provider = 'hosted' AND email = $1 AND status = 'active'",
+  const owners = await query<{ user_id: string }>(
+    "SELECT DISTINCT user_id FROM accounts WHERE provider = 'hosted' AND email = $1 AND status = 'active'",
     [mailbox.toLowerCase()],
   );
+  const accounts = (await Promise.all(owners.map((owner) => listAccounts(owner.user_id))))
+    .flat()
+    .filter((a) => a.provider === "hosted" && a.email === mailbox.toLowerCase() && a.status === "active");
   const thread: ThreadSummary = {
     accountId: "",
     id: message.thread_id,
@@ -233,19 +167,19 @@ export async function notifyHostedMessage(mailbox: string, messageId: string) {
     messageCount: 1,
     hasAttachments: false,
   };
-  await Promise.all(
-    owners.map((owner) => notifyNewThreads({ id: owner.id, email: owner.email, userId: owner.user_id }, [thread])),
-  );
+  await Promise.all(accounts.map((account) => notifyNewThreads(account, [thread])));
 }
 
 /**
  * Looks at the inbox of each account whose owner has a device with
- * notifications on, and sends a notification for each new unread thread
- * that is not a promotion.
+ * notifications on or AI sorting on. It sorts each new unread thread, and
+ * sends a notification for each one that is not a promotion.
  * Hosted mail does not need this, because its webhook sends the notification.
  */
 export async function checkNewMail() {
-  const users = await query<{ user_id: string }>("SELECT DISTINCT user_id FROM push_subscriptions");
+  const users = await query<{ user_id: string }>(
+    "SELECT user_id FROM push_subscriptions UNION SELECT id FROM users WHERE ai_sorting",
+  );
   const accounts = (await Promise.all(users.map((u) => listAccounts(u.user_id))))
     .flat()
     .filter((a) => a.status === "active" && a.provider !== "hosted" && a.provider !== "demo");
@@ -279,10 +213,5 @@ export async function checkNewMail() {
       return 0;
     }
   });
-  // Notifications that waited too long for the AI sorting, also of hosted mail.
-  const released = await releaseNotifications().catch((error) => {
-    console.error("Cannot release the waiting notifications", error);
-    return 0;
-  });
-  return { accounts: accounts.length, notified: results.reduce((sum, n) => sum + n, 0), released };
+  return { accounts: accounts.length, notified: results.reduce((sum, n) => sum + n, 0) };
 }

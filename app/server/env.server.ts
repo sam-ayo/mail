@@ -46,6 +46,8 @@ export const env = {
   reviewPassword: process.env.REVIEW_PASSWORD || "",
   /** The token that ChatGPT asks for at /.well-known/openai-apps-challenge to verify the domain. */
   openaiAppsChallenge: process.env.OPENAI_APPS_CHALLENGE || "",
+  /** The API key of TypeSafe. Its model Jev does the AI sorting of the inbox. Empty turns AI sorting off. */
+  typesafeApiKey: process.env.TYPESAFE_API_KEY || "",
   /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
   push: {
     publicKey: process.env.VAPID_PUBLIC_KEY || "",

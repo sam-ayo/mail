@@ -85,10 +85,31 @@ export default function Privacy() {
         </li>
       </ul>
 
+      <h2>AI sorting</h2>
+      <p>
+        AI sorting puts promotions in their own tab of your inbox, and sends no notification for them. It is on by default.
+      </p>
+      <ul>
+        <li>
+          <strong>Data that TypeSafe gets:</strong> for each new conversation in your inbox, mail by samayo sends the sender,
+          the subject, the address that got the email, and the first 1,200 characters of the text to TypeSafe. TypeSafe's
+          model Jev answers only with a category. TypeSafe does not train its models on this data, and it keeps the data as
+          its <a href="https://typesafe.ai/legal/data-processing">Data Processing Agreement</a> tells.
+        </li>
+        <li>
+          <strong>Data that mail by samayo keeps:</strong> the category of each conversation, and the address of its sender.
+          When you move a conversation to the other tab, later mail from the same sender gets the same category.
+        </li>
+        <li>
+          <strong>Your control:</strong> Settings › AI sorting turns it off. mail by samayo then sends no more mail to
+          TypeSafe.
+        </li>
+      </ul>
+
       <h2>Sharing</h2>
       <p>
         mail by samayo does not sell your data, and does not use it for advertisements. mail by samayo shares your data only
-        with an AI agent that you connect and allow, as the section above tells. People do not read your email, unless you
+        with an AI agent that you connect and allow, and with TypeSafe for AI sorting, as the sections above tell. People do not read your email, unless you
         give permission for a specific message, or the law requires it, or it is necessary for security.
       </p>
 

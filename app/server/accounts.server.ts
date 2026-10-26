@@ -138,7 +138,10 @@ export async function mergeUsers(from: string, into: string) {
     from,
   ]);
   await query("UPDATE push_subscriptions SET user_id = $1 WHERE user_id = $2", [into, from]);
-  await query("UPDATE api_tokens SET user_id = $1 WHERE user_id = $2", [into, from]);
+  await query("UPDATE users SET ai_sorting = ai_sorting OR (SELECT ai_sorting FROM users WHERE id = $2) WHERE id = $1", [
+    into,
+    from,
+  ]);
   // The added colors of the two workspaces join, in their order and without duplicates.
   await query(
     `UPDATE users SET custom_colors = ARRAY(

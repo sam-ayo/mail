@@ -2,7 +2,7 @@ import { Link } from "react-router";
 import { Logo } from "./ui";
 
 export const CONTACT_EMAIL = "samuelayomideadeoye@gmail.com";
-export const UPDATED = "24 October 2026";
+export const UPDATED = "25 October 2026";
 
 /** The layout for the public privacy policy and terms of service pages. */
 export function LegalPage({ title, children }: { title: string; children: React.ReactNode }) {

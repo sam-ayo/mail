@@ -18,30 +18,28 @@ import {
 } from "~/server/accounts.server";
 import type { MailScope } from "~/lib/agents";
 import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-connections.server";
-import { createApiToken, deleteApiToken, listApiTokens, type ApiToken } from "~/server/api-tokens.server";
-import { env } from "~/server/env.server";
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
 import { resetDemoAccount } from "~/server/providers/demo.server";
+import { aiSortingConfigured, aiSortingOn, setAiSorting } from "~/server/triage.server";
 import type { Route } from "./+types/settings";
 
 export const meta: Route.MetaFunction = () => [{ title: "Settings · mail" }];
 
 export async function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
-  const [accounts, customColors, agents, apiTokens] = await Promise.all([
+  const [accounts, customColors, agents, aiSorting] = await Promise.all([
     listAccounts(user.id),
     listCustomColors(user.id),
     listAgentConnections(user.id),
-    listApiTokens(user.id),
+    aiSortingOn(user.id),
   ]);
   return {
     accounts: accounts.map(toSummary),
     customColors,
     agents,
     mcpUrl: MCP_RESOURCE,
-    apiTokens,
-    appUrl: env.appUrl,
+    aiSorting: aiSortingConfigured ? aiSorting : null,
   };
 }
 
@@ -81,15 +79,9 @@ export async function action({ request, context }: Route.ActionArgs) {
     case "disconnectAgent":
       await disconnectAgent(user.id, String(form.get("clientId") ?? ""));
       return { disconnected: true };
-    case "createToken":
-      try {
-        return { token: await createApiToken(user.id, String(form.get("name") ?? "")) };
-      } catch (error) {
-        return { tokenError: (error as Error).message };
-      }
-    case "deleteToken":
-      await deleteApiToken(user.id, String(form.get("tokenId") ?? ""));
-      return { deletedToken: true };
+    case "aiSorting":
+      await setAiSorting(user.id, form.get("on") === "true");
+      return { aiSorting: true };
     default:
       throw data("Unknown action", { status: 400 });
   }
@@ -136,7 +128,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
         <AiAgents agents={loaderData.agents} mcpUrl={loaderData.mcpUrl} />
 
-        <AiSorting tokens={loaderData.apiTokens} appUrl={loaderData.appUrl} />
+        {loaderData.aiSorting !== null && <AiSorting on={loaderData.aiSorting} />}
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -778,77 +770,33 @@ function AgentRow({ agent }: { agent: AgentConnection }) {
 }
 
 /**
- * Tokens for the AI sorting script. The script runs on your computer with
- * your Claude or ChatGPT subscription, so the server does not call an AI model.
+ * AI sorting puts promotions in their own inbox tab. It is on by default. The
+ * server sends the start of each new email to TypeSafe, so the person can turn it off.
  */
-function AiSorting({ tokens, appUrl }: { tokens: ApiToken[]; appUrl: string }) {
-  const creator = useFetcher<typeof action>();
-  const created = creator.data && "token" in creator.data ? creator.data.token : undefined;
-  const error = creator.data && "tokenError" in creator.data ? creator.data.tokenError : undefined;
-  const command = created ? `RELAY_URL=${appUrl} RELAY_TOKEN=${created} scripts/ai-sorting/install.sh` : "";
-
-  async function copy() {
-    await navigator.clipboard.writeText(command);
-    toast.success("Copied the install command");
-  }
-
+function AiSorting({ on }: { on: boolean }) {
+  const fetcher = useFetcher<typeof action>();
+  const shown = fetcher.formData ? fetcher.formData.get("on") === "true" : on;
   return (
     <section className="mt-10">
-      <h2 className="font-semibold">AI sorting</h2>
-      <p className="mb-3 text-sm text-zinc-500">
-        Put promotions in their own inbox tab. A script on your Mac sorts new mail with Claude Code or Codex, so it
-        uses your Claude or ChatGPT subscription. Make a token for the script, then run the command in the mail
-        repository.
-      </p>
-      {created ? (
-        <div className="space-y-2">
-          <p className="text-sm text-amber-700 dark:text-amber-400">Copy the command now. The token does not show again.</p>
-          <div className="flex items-center gap-2">
-            <input readOnly value={command} aria-label="Install command" className={cx(inputClass, "font-mono text-xs")} />
-            <Button className="shrink-0" onClick={copy}>
-              <Copy className="size-4" /> Copy
-            </Button>
-          </div>
+      <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
+        <div>
+          <h2 className="font-semibold">AI sorting</h2>
+          <p className="text-sm text-zinc-500">
+            {shown
+              ? "New mail goes to Important or Promotions. Promotions get no notification."
+              : "Put promotions in their own inbox tab. Promotions then get no notification."}{" "}
+            The sender, subject, and start of each new email go to TypeSafe, whose model Jev sorts the mail.
+          </p>
         </div>
-      ) : (
         <Button
-          disabled={creator.state !== "idle"}
-          onClick={() => creator.submit({ intent: "createToken", name: "AI sorting" }, { method: "post" })}
+          className="shrink-0"
+          variant={shown ? undefined : "primary"}
+          disabled={fetcher.state !== "idle"}
+          onClick={() => fetcher.submit({ intent: "aiSorting", on: String(!shown) }, { method: "post" })}
         >
-          <Plus className="size-4" /> Make a token
+          {shown ? "Turn off" : "Turn on"}
         </Button>
-      )}
-      {error && <p className="mt-2 text-sm text-red-600">{error}</p>}
-      {tokens.length > 0 && (
-        <ul className="mt-4 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
-          {tokens.map((token) => (
-            <TokenRow key={token.id} token={token} />
-          ))}
-        </ul>
-      )}
-    </section>
-  );
-}
-
-function TokenRow({ token }: { token: ApiToken }) {
-  const fetcher = useFetcher<typeof action>();
-  return (
-    <li className="flex items-center gap-3 px-4 py-3">
-      <div className="min-w-0 flex-1">
-        <p className="truncate text-sm font-medium">{token.name}</p>
-        <p className="truncate text-xs text-zinc-500">
-          {`Made ${new Date(token.createdAt).toLocaleDateString()} · ${
-            token.lastUsedAt ? `Last used ${new Date(token.lastUsedAt).toLocaleString()}` : "Not used yet"
-          }`}
-        </p>
       </div>
-      <Button
-        className="shrink-0"
-        disabled={fetcher.state !== "idle"}
-        onClick={() => fetcher.submit({ intent: "deleteToken", tokenId: token.id }, { method: "post" })}
-      >
-        Delete
-      </Button>
-    </li>
+    </section>
   );
 }
