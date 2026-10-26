@@ -25,6 +25,9 @@ const QUOTE_MARKERS = /class="[^"]*(gmail_quote|yahoo_quoted)|type="cite"|id="(d
 // colours keep their hue. The frame is transparent, so the email shows on the
 // colour of the message card. Images and background images get a second inversion,
 // so they show with their true colours. The parent sets the "dark" class.
+// The body background must stay transparent, also over an inline style on the
+// body. If not, the browser paints it on the canvas, outside the inversion,
+// and the inverted light text shows on a white background.
 // The frame always uses the light colour scheme. If the email also applied
 // its own dark styles, the inversion would turn its light text dark again.
 const BASE_STYLES = `
@@ -41,7 +44,7 @@ a{color:#4f46e5}
 body.hide-quotes ${QUOTE_SELECTORS.join(", body.hide-quotes ")}{display:none !important}
 html,html:root{color-scheme:light only !important}
 html.dark{background:transparent}
-html.dark body{background:transparent;filter:invert(1) hue-rotate(180deg)}
+html.dark body{background:transparent !important;filter:invert(1) hue-rotate(180deg)}
 html.dark body :is(img,video,picture,svg,[background],[style*="background-image"]):not(:is([background],[style*="background-image"]) *){filter:invert(1) hue-rotate(180deg)}
 `;
 
