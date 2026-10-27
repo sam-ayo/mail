@@ -299,7 +299,14 @@ export function Sidebar({
         )}
       </div>
 
-      <div className="space-y-px px-2.5 pb-2.5">
+      {/* The drawer panel goes to the bottom of the screen. The footer keeps
+          the buttons above the home indicator. */}
+      <div
+        className={cx(
+          "space-y-px px-2.5 pb-2.5",
+          drawer && "pb-[max(0.625rem,calc(env(safe-area-inset-bottom)-0.5rem))]",
+        )}
+      >
         <Link
           to="/welcome"
           className="press flex h-7 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 pointer-coarse:h-11 pointer-coarse:text-base hover:bg-(--sidebar-hover) dark:text-zinc-200"
