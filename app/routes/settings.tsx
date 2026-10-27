@@ -723,8 +723,7 @@ function AiAgents({ agents, mcpUrl }: { agents: AgentConnection[]; mcpUrl: strin
     <section className="mt-10">
       <h2 className="font-semibold">AI agents</h2>
       <p className="mb-3 text-sm text-zinc-500">
-        Connect Claude, ChatGPT, Cursor, or another MCP client to the email in all your accounts. Add this URL as a
-        custom connector or remote MCP server. The agent asks you to sign in and allow access.
+        Let Claude, ChatGPT, or another AI app use your email. Add this URL to the app as a connector.
       </p>
       <div className="flex items-center gap-2">
         <input readOnly value={mcpUrl} aria-label="MCP server URL" className={cx(inputClass, "font-mono text-xs")} />
@@ -871,6 +870,7 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
   const items = completion ? [completion.item, ...found.filter((i) => i !== completion.item)] : found;
   const [highlighted, setHighlighted] = useState<string>();
   const [focused, setFocused] = useState(false);
+  const inputRef = useRef<HTMLInputElement>(null);
 
   function add(sender: string) {
     fetcher.submit({ intent: "addImportantSender", sender }, { method: "post" });
@@ -894,8 +894,7 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
     <div className="mt-5">
       <h3 className="text-sm font-medium">Always important</h3>
       <p className="mb-3 text-sm text-zinc-500">
-        Mail from these senders always goes to Important. Enter an address, such as jobs@indeed.com, or a domain, such
-        as @mun.ca. Press Tab to complete a suggestion.
+        Mail from these senders always goes to Important.
       </p>
       <fetcher.Form method="post" className="flex gap-2">
         <input type="hidden" name="intent" value="addImportantSender" />
@@ -916,6 +915,7 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
               placeholder="Address or @domain"
               aria-label="Address or domain"
               aria-invalid={error ? true : undefined}
+              ref={inputRef}
               onKeyDown={completeOnKey}
               onFocus={() => {
                 setFocused(true);
@@ -925,13 +925,24 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
               className={inputClass}
             />
             {/* The rest of the completion shows in grey after the text. It has the padding and border of the input. */}
+            {/* A tap or a click on the grey text takes the completion. It does not take the focus from the input. */}
             {completion && focused && (
               <div
                 aria-hidden
-                className="pointer-events-none absolute inset-0 overflow-hidden border border-transparent px-3 py-2 text-sm whitespace-pre"
+                className="pointer-events-none absolute inset-0 flex overflow-hidden border border-transparent px-3 py-2 text-sm whitespace-pre pointer-coarse:text-[16px]"
               >
-                <span className="invisible">{text}</span>
-                <span className="text-zinc-400 dark:text-zinc-500">{completion.rest}</span>
+                <span className="invisible shrink-0">{text}</span>
+                <span
+                  className="pointer-events-auto flex-1 cursor-pointer text-zinc-400 dark:text-zinc-500"
+                  onPointerDown={(event) => {
+                    event.preventDefault();
+                    setText(completion.item);
+                    inputRef.current?.focus();
+                  }}
+                  onMouseDown={(event) => event.preventDefault()}
+                >
+                  {completion.rest}
+                </span>
               </div>
             )}
           </div>
