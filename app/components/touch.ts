@@ -385,6 +385,7 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
   const { enabled, open } = options;
   const latest = useRef(options);
   latest.current = options;
+  const moves = useRef(0);
 
   // `amount` is 1 when the sheet is open and 0 when it is closed. The page
   // changes in proportion, so a drag moves the page back to its place too.
@@ -409,6 +410,10 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
     // The full height of the screen, not of the sheet. With the keyboard up,
     // the sheet is shorter and would stop at the top of the keyboard.
     element.style.transform = `translateY(${(1 - amount) * window.innerHeight}px)`;
+    // iOS draws the caret on its own layer, which does not move with the
+    // sheet. Thus the caret shows only when the sheet stops in its place.
+    const move = ++moves.current;
+    element.style.caretColor = "transparent";
     if (page) {
       const scale = 1 - (PAGE_INSET / window.innerWidth) * amount;
       page.style.transition = transition ? `transform ${transition}, border-radius ${transition}` : "none";
@@ -416,10 +421,12 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
       page.style.transform = `translateY(calc((env(safe-area-inset-top) + 2px) * ${amount})) scale(${scale})`;
       page.style.borderRadius = `${PAGE_RADIUS * amount}px`;
     }
-    if (done) {
-      if (animate) afterTransition(element, SHEET_DURATION, done);
-      else done();
-    }
+    const settle = () => {
+      if (amount === 1 && move === moves.current) element.style.caretColor = "";
+      done?.();
+    };
+    if (animate) afterTransition(element, SHEET_DURATION, settle);
+    else settle();
   }, []);
 
   // After a close, the sheet and the backdrop stay down until React removes
@@ -430,7 +437,7 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
     for (const element of all ? [sheet.current, page, backdrop.current] : [page]) {
       if (!element) continue;
       element.style.transition = element.style.transform = element.style.transformOrigin = "";
-      element.style.borderRadius = element.style.opacity = "";
+      element.style.borderRadius = element.style.opacity = element.style.caretColor = "";
     }
   }, []);
 
