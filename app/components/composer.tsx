@@ -90,8 +90,10 @@ export function Composer({
   const activeAccounts = accounts.filter((a) => a.status === "active");
 
   useEffect(() => {
-    if (autoFocus === "body" || (draft.to && autoFocus === "to")) bodyRef.current?.focus();
-    else toRef.current?.focus();
+    // A sheet starts below the screen. Without preventScroll, iOS scrolls the
+    // page to show the field, and the page jumps behind the sheet.
+    const field = autoFocus === "body" || (draft.to && autoFocus === "to") ? bodyRef : toRef;
+    field.current?.focus({ preventScroll: true });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

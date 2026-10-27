@@ -406,7 +406,9 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
     // The screen around the smaller page is black.
     document.documentElement.classList.add("sheet-open");
     element.style.transition = transition ? `transform ${transition}` : "none";
-    element.style.transform = `translateY(${(1 - amount) * 100}%)`;
+    // The full height of the screen, not of the sheet. With the keyboard up,
+    // the sheet is shorter and would stop at the top of the keyboard.
+    element.style.transform = `translateY(${(1 - amount) * window.innerHeight}px)`;
     if (page) {
       const scale = 1 - (PAGE_INSET / window.innerWidth) * amount;
       page.style.transition = transition ? `transform ${transition}, border-radius ${transition}` : "none";
@@ -420,10 +422,12 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
     }
   }, []);
 
-  const clear = useCallback(() => {
+  // After a close, the sheet and the backdrop stay down until React removes
+  // them. A reset of their styles before that would show them for a frame.
+  const clear = useCallback((all = true) => {
     document.documentElement.classList.remove("sheet-open");
     const page = document.querySelector<HTMLElement>("[data-sheet-page]");
-    for (const element of [sheet.current, page, backdrop.current]) {
+    for (const element of all ? [sheet.current, page, backdrop.current] : [page]) {
       if (!element) continue;
       element.style.transition = element.style.transform = element.style.transformOrigin = "";
       element.style.borderRadius = element.style.opacity = "";
@@ -448,13 +452,13 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
       // The keyboard goes down with the sheet.
       if (element.contains(document.activeElement)) (document.activeElement as HTMLElement).blur();
       pose(0, true, () => {
-        clear();
+        clear(false);
         latest.current.onClosed();
       });
     }
   }, [enabled, open, pose, clear]);
 
-  useEffect(() => clear, [clear]);
+  useEffect(() => () => clear(), [clear]);
 
   useEffect(() => {
     const element = handle.current;
@@ -486,7 +490,7 @@ export function useSheet(options: { enabled: boolean; open: boolean; onDismiss()
         dragging = true;
       }
       event.preventDefault();
-      pose(1 - Math.max(0, dy) / panel.offsetHeight, false);
+      pose(1 - Math.max(0, dy) / window.innerHeight, false);
     };
     const onEnd = (event: TouchEvent) => {
       const panel = sheet.current;
