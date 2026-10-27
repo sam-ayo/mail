@@ -2,3 +2,14 @@
 build
 node_modules
 README.md
+# Secrets must not go into the build context. Fly sends the context to a remote builder.
+.env
+.env.*
+!.env.example
+.git
+.github
+.vercel
+worker
+docs
+directory
+*.bak
