@@ -5,8 +5,13 @@
 //        pnpm reencrypt --check  (only counts the values that an old key encrypted)
 // The script uses DATABASE_URL, ENCRYPTION_KEY, and ENCRYPTION_KEY_PREVIOUS from
 // the environment or from .env.
-import { currentKeyPrefix, decrypt, encrypt } from "../app/server/crypto.server";
-import { query } from "../app/server/db.server";
+
+// env.server.ts requires SESSION_SECRET, but this script makes no sessions. A
+// placeholder means that you do not have to copy the real secret for the script.
+process.env.SESSION_SECRET ||= "not used by the reencrypt script";
+const { currentKeyPrefix, decrypt, encrypt } = await import("../app/server/crypto.server");
+const { query } = await import("../app/server/db.server");
+export {};
 
 const tables = [
   { table: "accounts", column: "credentials", keys: ["id"] },
