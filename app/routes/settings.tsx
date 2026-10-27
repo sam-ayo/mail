@@ -800,10 +800,8 @@ function AiSorting({ on, importantSenders }: { on: boolean; importantSenders: st
         <div>
           <h2 className="font-semibold">AI sorting</h2>
           <p className="text-sm text-zinc-500">
-            {shown
-              ? "New mail goes to Important or Promotions. Only Important mail gets a notification."
-              : "Put promotions in their own inbox tab. Only Important mail then gets a notification."}{" "}
-            The sender, subject, and start of each new email go to TypeSafe, whose model Jev sorts the mail.
+            {shown ? "New mail goes to Important or Promotions." : "Put promotions in their own tab."} The AI of
+            TypeSafe reads each new email to sort it.
           </p>
         </div>
         <Button
