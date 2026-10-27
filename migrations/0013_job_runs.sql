@@ -6,7 +6,7 @@ CREATE TABLE job_runs (
   -- The start of the last run that succeeded.
   ran_at TIMESTAMPTZ,
   -- The current run. The lease ends when the run ends, or at running_until if
-  -- the server stops during the run.
+  -- the server stops during the run. A long run renews it.
   run_id TEXT,
   started_at TIMESTAMPTZ,
   running_until TIMESTAMPTZ

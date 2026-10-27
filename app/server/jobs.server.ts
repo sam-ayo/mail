@@ -6,11 +6,11 @@ import { deleteExpiredSummaries } from "./summary-cache.server";
 
 const jobs = {
   /** Sends push notifications for new mail in Gmail, Outlook, and IMAP accounts. */
-  "check-mail": { seconds: 60, maxSeconds: 10 * 60, run: checkNewMail },
+  "check-mail": { seconds: 60, leaseSeconds: 2 * 60, run: checkNewMail },
   /** Deletes old thread summaries and the old workspaces of the public demo. */
   "expire-cache": {
     seconds: 24 * 60 * 60,
-    maxSeconds: 30 * 60,
+    leaseSeconds: 5 * 60,
     run: async () => ({ deleted: await deleteExpiredSummaries(), demoWorkspaces: await deleteExpiredDemoUsers() }),
   },
 };
@@ -20,8 +20,8 @@ export type JobName = keyof typeof jobs;
 /**
  * Takes the lease of a job. It returns null when the job ran in this period or
  * runs now on another server. The 10 seconds let a run that starts a little
- * early still count. If the server stops during the run, the lease ends after
- * maxSeconds.
+ * early still count. The run renews the lease while it lasts. If the server
+ * stops during the run, the lease ends after leaseSeconds.
  */
 async function claim(name: JobName): Promise<string | null> {
   const runId = randomToken(12);
@@ -34,7 +34,7 @@ async function claim(name: JobName): Promise<string | null> {
        WHERE (job_runs.ran_at IS NULL OR job_runs.ran_at < now() - make_interval(secs => $3))
          AND (job_runs.running_until IS NULL OR job_runs.running_until < now())
        RETURNING 1`,
-      [name, runId, jobs[name].seconds - 10, jobs[name].maxSeconds],
+      [name, runId, jobs[name].seconds - 10, jobs[name].leaseSeconds],
     );
     return rows.length > 0 ? runId : null;
   } catch (error) {
@@ -57,17 +57,35 @@ async function release(name: JobName, runId: string, succeeded: boolean) {
   );
 }
 
+/** Extends the lease of a run that still runs. */
+async function renew(name: JobName, runId: string) {
+  await query(
+    `UPDATE job_runs SET running_until = now() + make_interval(secs => $3)
+     WHERE name = $1 AND run_id = $2`,
+    [name, runId, jobs[name].leaseSeconds],
+  );
+}
+
 /** Runs a job if no other server ran it in its period or runs it now. */
 export async function runJob(name: JobName) {
   const runId = await claim(name);
   if (runId === null) return { skipped: true };
+  // Renew three times in each lease, so one failed renewal does not end the lease.
+  const renewal = runId
+    ? setInterval(
+        () => renew(name, runId).catch((error) => console.error(`Cannot renew job ${name}`, error)),
+        (jobs[name].leaseSeconds * 1000) / 3,
+      )
+    : undefined;
   let result;
   try {
     result = await jobs[name].run();
   } catch (error) {
+    clearInterval(renewal);
     await release(name, runId, false).catch((releaseError) => console.error(`Cannot release job ${name}`, releaseError));
     throw error;
   }
+  clearInterval(renewal);
   await release(name, runId, true);
   return result;
 }
