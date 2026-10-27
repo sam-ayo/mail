@@ -800,8 +800,7 @@ function AiSorting({ on, importantSenders }: { on: boolean; importantSenders: st
         <div>
           <h2 className="font-semibold">AI sorting</h2>
           <p className="text-sm text-zinc-500">
-            {shown ? "New mail goes to Important or Promotions." : "Put promotions in their own tab."} AI reads each
-            new email to sort it.
+            {shown ? "New mail goes to Important or Promotions." : "Put promotions in their own tab."}
           </p>
         </div>
         <Button
