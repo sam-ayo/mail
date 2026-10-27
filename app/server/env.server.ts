@@ -18,6 +18,11 @@ export const env = {
   cronSecret: process.env.CRON_SECRET || "",
   sessionSecret: secret("SESSION_SECRET"),
   encryptionKey: secret("ENCRYPTION_KEY"),
+  /** Old encryption keys, separated by commas. They only decrypt. See "Rotate the encryption key" in README.md. */
+  previousEncryptionKeys: (process.env.ENCRYPTION_KEY_PREVIOUS || "")
+    .split(",")
+    .map((key) => key.trim())
+    .filter(Boolean),
   google: {
     clientId: process.env.GOOGLE_CLIENT_ID || "",
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
