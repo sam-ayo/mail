@@ -344,10 +344,15 @@ function NavDrawer({
         disabled={threadOpen}
         className="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
       />
+      {/* After a swipe, the drawer must leave at the speed of the finger.
+          Base UI gives a strength from 0.1 (fast) to 1 (slow) for the
+          finger time to the edge, 80 to 360 ms. The drawer curve starts at
+          2.25 times its mean speed, so the time is 2.25 times the finger
+          time: strength × 700 ms + 110 ms. A slow release stops at 500 ms. */}
       <Drawer.Portal keepMounted>
-        <Drawer.Backdrop className="fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
+        <Drawer.Backdrop className="nav-backdrop fixed inset-0 z-40 min-h-dvh bg-zinc-950 opacity-[calc(0.4*(1-var(--drawer-swipe-progress)))] transition-opacity duration-[400ms] ease-(--ease-drawer) data-ending-style:opacity-0 data-starting-style:opacity-0 data-swiping:duration-0 md:hidden" />
         <Drawer.Viewport className="fixed inset-0 z-40 flex items-stretch justify-start md:hidden">
-          <Drawer.Popup className="h-full w-64 pt-[env(safe-area-inset-top)] outline-none [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[400ms] ease-(--ease-drawer) data-ending-style:[transform:translateX(-100%)] data-starting-style:[transform:translateX(-100%)] data-ending-style:duration-[calc(var(--drawer-swipe-strength)*300ms)] data-swiping:select-none">
+          <Drawer.Popup className="h-full w-64 pt-[env(safe-area-inset-top)] outline-none [transform:translateX(var(--drawer-swipe-movement-x))] transition-transform duration-[400ms] ease-(--ease-drawer) data-ending-style:[transform:translateX(-100%)] data-starting-style:[transform:translateX(-100%)] data-ending-style:duration-300 data-swipe-dismiss:data-ending-style:duration-[min(calc(var(--drawer-swipe-strength)*700ms_+_110ms),500ms)] data-swiping:select-none">
             <Drawer.Title className="sr-only">Folders and accounts</Drawer.Title>
             <Sidebar
               drawer

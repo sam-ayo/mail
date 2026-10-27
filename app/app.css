@@ -400,6 +400,13 @@ html.sheet-open body {
   initial-value: 0px;
 }
 
+/* After a swipe, the drawer closes at the speed of the finger, often in less
+   than 300 ms. The backdrop cannot read that speed, so it fades in a short
+   time. Otherwise the shade stays on the screen after the drawer goes. */
+.nav-backdrop[data-ending-style]:has(~ * [data-swipe-dismiss]) {
+  transition-duration: 200ms;
+}
+
 /* iOS zooms into inputs with text smaller than 16px. */
 @media (pointer: coarse) {
   input,
