@@ -31,3 +31,16 @@ pnpm dev
 - `/agents` is the public documentation of the connector. The Claude and ChatGPT directory listings link to it.
 - `/review` is the sign-in for directory reviewers. `REVIEW_PASSWORD` turns it on. Each sign-in gets a new workspace with three demo accounts, so reviewers never share a workspace. Demo accounts send nothing.
 - `OPENAI_APPS_CHALLENGE` is the domain token for ChatGPT, at `/.well-known/openai-apps-challenge`.
+
+## Rotate the encryption key
+
+`ENCRYPTION_KEY` encrypts the account credentials and the cached thread summaries in the database. Each stored value names the key that encrypted it, so you can replace the key without a loss of data. Replace the key if it possibly leaked, for example after a security incident at the host.
+
+1. Make a new key with `openssl rand -base64 32`.
+2. In production, move the old key to `ENCRYPTION_KEY_PREVIOUS`, and put the new key in `ENCRYPTION_KEY`. `ENCRYPTION_KEY_PREVIOUS` can hold more than one key, separated by commas.
+3. Redeploy. The app now encrypts with the new key, and it decrypts with the old and the new key.
+4. Run `pnpm reencrypt` with the production `DATABASE_URL`, `ENCRYPTION_KEY`, and `ENCRYPTION_KEY_PREVIOUS`. It encrypts all stored values again with the new key.
+5. Run `pnpm reencrypt --check`. It must say "All values use the current key."
+6. Remove `ENCRYPTION_KEY_PREVIOUS` in production, and redeploy.
+
+If a step fails, do not remove the old key. The app cannot read a value without its key.
