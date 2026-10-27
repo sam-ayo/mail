@@ -446,7 +446,7 @@ function ThreadList({
   // slides it out. The list stays under it, so it keeps its scroll position.
   const singlePane = useMediaQuery(SINGLE_PANE);
   const paneOpen = Boolean(openKey || loadingThread);
-  const swipeBack = usePaneSwipeBack({ enabled: singlePane && paneOpen, onBack: closeThread });
+  const swipeBack = usePaneSwipeBack({ enabled: singlePane && paneOpen, onBack: closeThread, under: listRef });
   const resetPane = swipeBack.reset;
   const [pushing, setPushing] = useState(false);
   const wasOpen = useRef(paneOpen);
@@ -819,6 +819,9 @@ function ThreadList({
           // The resize handle sets --list-width. Without it, the default width applies.
           "w-full lg:w-[var(--list-width,420px)] lg:shrink-0 xl:w-[var(--list-width,460px)]",
           paneOpen && "lg:in-[.list-collapsed]:hidden",
+          // Under a pushed conversation, the list moves a little to the left, as in iOS.
+          "max-lg:motion-safe:transition-transform max-lg:motion-safe:duration-320 max-lg:motion-safe:ease-(--ease-drawer)",
+          singlePane && paneOpen && "max-lg:motion-safe:[transform:translateX(-30%)]",
         )}
         // The conversation covers the list on a narrow screen.
         inert={singlePane && paneOpen}
@@ -1023,6 +1026,13 @@ function ThreadList({
       </section>
 
       {(openKey || loadingThread) && <ListExpandHandle />}
+      {singlePane && paneOpen && (
+        <div
+          ref={swipeBack.dim}
+          aria-hidden
+          className="pointer-events-none absolute inset-0 z-10 bg-black/10 transition-opacity duration-320 ease-(--ease-drawer) starting:opacity-0 dark:bg-black/40"
+        />
+      )}
       <div
         ref={swipeBack.pane}
         data-list-thread

@@ -50,47 +50,165 @@ function clearStyle(element: HTMLElement | null) {
   element.style.transform = "";
 }
 
+/** The list under a pushed pane moves left by this part of its width, as in iOS. */
+const UNDER_SHIFT = 0.3;
+
+/**
+ * Moves a value with a spring, from its current position and speed. A spring
+ * has no fixed duration, so a fast swipe ends fast and a slow one ends slowly.
+ * `response` is in seconds. The returned function stops the spring.
+ */
+function spring(options: {
+  from: number;
+  to: number;
+  velocity: number;
+  response?: number;
+  damping?: number;
+  onUpdate(value: number): void;
+  onDone(): void;
+}) {
+  const { from, to, onUpdate, onDone, response = 0.4, damping = 1 } = options;
+  const stiffness = (2 * Math.PI / response) ** 2;
+  const friction = (4 * Math.PI * damping) / response;
+  let value = from;
+  let velocity = options.velocity;
+  let last = performance.now();
+  let frame = 0;
+  const step = (now: number) => {
+    // Small steps keep the spring stable when a frame comes late.
+    let time = Math.min(0.064, (now - last) / 1000);
+    last = now;
+    while (time > 0) {
+      const dt = Math.min(time, 1 / 240);
+      velocity += (-stiffness * (value - to) - friction * velocity) * dt;
+      value += velocity * dt;
+      time -= dt;
+    }
+    if (Math.abs(value - to) < 0.5 && Math.abs(velocity) < 20) {
+      onUpdate(to);
+      onDone();
+      return;
+    }
+    onUpdate(value);
+    frame = requestAnimationFrame(step);
+  };
+  frame = requestAnimationFrame(step);
+  return () => cancelAnimationFrame(frame);
+}
+
+/** Where a swipe that ends at this speed, in px/s, would stop by itself. */
+function project(velocity: number) {
+  const deceleration = 0.998;
+  return ((velocity / 1000) * deceleration) / (1 - deceleration);
+}
+
 /**
  * A pane that slides in from the right, as a pushed screen in iOS. A swipe
  * from the left edge drags it back out, and `back` slides it out. The pane
  * stays out of view until `reset`, so it does not show again while the route
- * changes.
+ * changes. The `under` element moves and the `dim` element fades with the
+ * pane. Their styles give their positions while the pane is open.
  */
-export function usePaneSwipeBack(options: { enabled: boolean; onBack(): void }) {
+export function usePaneSwipeBack(options: {
+  enabled: boolean;
+  onBack(): void;
+  under?: React.RefObject<HTMLElement | null>;
+}) {
   const pane = useRef<HTMLDivElement>(null);
-  const { enabled, onBack } = options;
+  const dim = useRef<HTMLDivElement>(null);
+  const { enabled, onBack, under } = options;
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   const closing = useRef(false);
+  const offset = useRef(0);
+  const stop = useRef<(() => void) | null>(null);
+
+  // Puts the pane `x` px to the right, and the list and the dim in proportion.
+  const place = useCallback(
+    (x: number) => {
+      const element = pane.current;
+      if (!element) return;
+      offset.current = x;
+      const progress = Math.min(1, x / element.offsetWidth);
+      element.style.transition = "none";
+      element.style.transform = `translateX(${x}px)`;
+      const list = under?.current;
+      if (list) {
+        list.style.transition = "none";
+        list.style.transform = `translateX(${-UNDER_SHIFT * element.offsetWidth * (1 - progress)}px)`;
+      }
+      if (dim.current) {
+        dim.current.style.transition = "none";
+        dim.current.style.opacity = String(1 - progress);
+      }
+    },
+    [under],
+  );
+
+  const clear = useCallback(() => {
+    stop.current?.();
+    stop.current = null;
+    offset.current = 0;
+    for (const element of [pane.current, under?.current, dim.current]) {
+      if (!element) continue;
+      element.style.transition = element.style.transform = element.style.opacity = "";
+    }
+  }, [under]);
+
+  // Moves the pane out, or back in, at the speed of the finger.
+  const release = useCallback(
+    (velocity: number, out: boolean) => {
+      const element = pane.current;
+      if (!element) return;
+      stop.current?.();
+      closing.current = out;
+      stop.current = spring({
+        from: offset.current,
+        to: out ? element.offsetWidth : 0,
+        velocity,
+        // A pane that goes back in stops at its place, without a bounce past it.
+        onUpdate: (x) => place(out ? x : Math.max(0, x)),
+        onDone: () => {
+          stop.current = null;
+          if (out) onBackRef.current();
+          else clear();
+        },
+      });
+    },
+    [place, clear],
+  );
 
   const back = useCallback(() => {
-    const element = pane.current;
-    if (!element || closing.current) return;
+    if (!pane.current || closing.current) return;
     if (!enabled || window.matchMedia("(prefers-reduced-motion: reduce)").matches) {
       onBackRef.current();
       return;
     }
-    closing.current = true;
-    slide(element, "translateX(100%)", () => onBackRef.current());
-  }, [enabled]);
+    release(0, true);
+  }, [enabled, release]);
 
   const reset = useCallback(() => {
     closing.current = false;
-    clearStyle(pane.current);
-  }, []);
+    clear();
+  }, [clear]);
 
   useEffect(() => {
     const element = pane.current;
     if (!element || !enabled) return;
-    let start: { x: number; y: number; time: number } | null = null;
+    let start: { x: number; y: number } | null = null;
     let dragging = false;
+    // The last positions of the finger, to get its speed at the release.
+    let history: { x: number; time: number }[] = [];
 
     const onStart = (event: TouchEvent) => {
       const touch = event.touches[0];
-      // The edge of the screen only. A swipe on the content scrolls it.
-      if (event.touches.length !== 1 || touch.clientX > 28 || closing.current) return;
-      start = { x: touch.clientX, y: touch.clientY, time: event.timeStamp };
+      // The edge of the screen only. A swipe on the content scrolls it. A
+      // pane that moves back in can be caught again at its edge.
+      if (event.touches.length !== 1 || closing.current) return;
+      if (touch.clientX > offset.current + 28) return;
+      start = { x: touch.clientX, y: touch.clientY };
       dragging = false;
+      history = [{ x: touch.clientX, time: event.timeStamp }];
     };
     const onMove = (event: TouchEvent) => {
       if (!start) return;
@@ -99,31 +217,37 @@ export function usePaneSwipeBack(options: { enabled: boolean; onBack(): void }) 
       const dy = touch.clientY - start.y;
       if (!dragging) {
         if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
-        if (dx <= Math.abs(dy)) {
+        if (dx <= Math.abs(dy) && !stop.current) {
           start = null;
           return;
         }
         dragging = true;
-        element.style.transition = "none";
+        // The finger holds the pane where it is now. The drag continues from
+        // there, so the pane does not jump to the finger.
+        stop.current?.();
+        stop.current = null;
+        start.x = touch.clientX - offset.current;
       }
       event.preventDefault();
-      element.style.transform = `translateX(${Math.max(0, dx)}px)`;
+      history.push({ x: touch.clientX, time: event.timeStamp });
+      while (history.length > 2 && event.timeStamp - history[0].time > 100) history.shift();
+      place(Math.max(0, touch.clientX - start.x));
     };
     const onEnd = (event: TouchEvent) => {
       if (!start || !dragging) {
         start = null;
         return;
       }
-      const dx = (event.changedTouches[0]?.clientX ?? start.x) - start.x;
-      const speed = dx / Math.max(1, event.timeStamp - start.time);
       start = null;
       dragging = false;
-      if (dx > element.offsetWidth * 0.35 || (speed > 0.5 && dx > 30)) {
-        closing.current = true;
-        slide(element, "translateX(100%)", () => onBackRef.current());
-      } else {
-        slide(element, "translateX(0px)", () => clearStyle(element));
-      }
+      const first = history[0];
+      const lastX = event.changedTouches[0]?.clientX ?? history[history.length - 1].x;
+      const elapsed = event.timeStamp - first.time;
+      const velocity = elapsed > 0 ? ((lastX - first.x) / elapsed) * 1000 : 0;
+      // The pane goes to where the swipe would take it. A finger that moves
+      // back to the left at the end keeps the pane open.
+      const out = velocity > -100 && offset.current + project(velocity) > element.offsetWidth / 2;
+      release(velocity, out);
     };
 
     element.addEventListener("touchstart", onStart, { passive: true });
@@ -136,9 +260,11 @@ export function usePaneSwipeBack(options: { enabled: boolean; onBack(): void }) 
       element.removeEventListener("touchend", onEnd);
       element.removeEventListener("touchcancel", onEnd);
     };
-  }, [enabled]);
+  }, [enabled, place, release]);
 
-  return { pane, back, reset };
+  useEffect(() => () => stop.current?.(), []);
+
+  return { pane, dim, back, reset };
 }
 
 /** How far the content moves for a pull. The content moves less than the finger. */
