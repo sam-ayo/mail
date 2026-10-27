@@ -542,10 +542,22 @@ function ThreadList({
     }, SEARCH_DELAY_MS);
   }
   // A search from a menu changes the text in the box. The text that you type stays.
+  const [hasSearchText, setHasSearchText] = useState(Boolean(loaderData.query));
   useEffect(() => {
     const input = searchRef.current;
     if (input && document.activeElement !== input) input.value = loaderData.query;
-  }, [loaderData.query]);
+    setHasSearchText(Boolean(input?.value));
+  }, [loaderData.query, base]);
+  function clearSearch() {
+    clearTimeout(searchTimer.current);
+    const input = searchRef.current;
+    if (input) {
+      input.value = "";
+      input.focus();
+    }
+    setHasSearchText(false);
+    if (loaderData.query) navigate(base);
+  }
 
   function targetThreads(): ThreadSummary[] {
     if (selected.size > 0) return threads.filter((t) => selected.has(threadKey(t.accountId, t.id)));
@@ -840,7 +852,10 @@ function ThreadList({
               enterKeyHint="search"
               defaultValue={loaderData.query}
               placeholder={`Search ${scopeAccount ? scopeAccount.email : "all mail"}`}
-              onChange={(event) => searchSoon(event.currentTarget.value)}
+              onChange={(event) => {
+                setHasSearchText(event.currentTarget.value !== "");
+                searchSoon(event.currentTarget.value);
+              }}
               onKeyDown={(event) => {
                 if (event.key === "Escape") {
                   clearTimeout(searchTimer.current);
@@ -848,9 +863,20 @@ function ThreadList({
                   if (loaderData.query) navigate(base);
                 }
               }}
-              className="w-full rounded-lg border border-transparent bg-zinc-100 py-1.5 pr-10 pl-9 text-sm outline-none transition-[background-color,border-color,box-shadow] placeholder:text-zinc-400 focus:border-accent-500 focus:bg-white focus:ring-2 focus:ring-accent-500/20 dark:bg-zinc-900 dark:focus:bg-zinc-900"
+              className="w-full rounded-lg border border-transparent bg-zinc-100 py-1.5 pr-10 pl-9 text-sm outline-none [&::-webkit-search-cancel-button]:appearance-none transition-[background-color,border-color,box-shadow] placeholder:text-zinc-400 focus:border-accent-500 focus:bg-white focus:ring-2 focus:ring-accent-500/20 dark:bg-zinc-900 dark:focus:bg-zinc-900"
             />
-            <kbd className="absolute top-1/2 right-2.5 -translate-y-1/2">/</kbd>
+            {hasSearchText ? (
+              <button
+                type="button"
+                aria-label="Clear search"
+                onClick={clearSearch}
+                className="absolute top-1/2 right-1 flex size-7 -translate-y-1/2 items-center justify-center rounded-md text-zinc-400 hover:text-zinc-600 dark:hover:text-zinc-300"
+              >
+                <X className="size-4" />
+              </button>
+            ) : (
+              <kbd className="absolute top-1/2 right-2.5 -translate-y-1/2">/</kbd>
+            )}
           </Form>
           {sorted && (
             <InboxTabs
