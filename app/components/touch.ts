@@ -64,10 +64,12 @@ function spring(options: {
   velocity: number;
   response?: number;
   damping?: number;
+  /** The spring stops this near its target, in px. */
+  rest?: number;
   onUpdate(value: number): void;
   onDone(): void;
 }) {
-  const { from, to, onUpdate, onDone, response = 0.4, damping = 1 } = options;
+  const { from, to, onUpdate, onDone, response = 0.4, damping = 1, rest = 0.5 } = options;
   const stiffness = (2 * Math.PI / response) ** 2;
   const friction = (4 * Math.PI * damping) / response;
   let value = from;
@@ -84,7 +86,7 @@ function spring(options: {
       value += velocity * dt;
       time -= dt;
     }
-    if (Math.abs(value - to) < 0.5 && Math.abs(velocity) < 20) {
+    if (Math.abs(value - to) < rest && Math.abs(velocity) < 40 * rest) {
       onUpdate(to);
       onDone();
       return;
@@ -166,6 +168,8 @@ export function usePaneSwipeBack(options: {
         from: offset.current,
         to: out ? element.offsetWidth : 0,
         velocity,
+        // Past the edge, the last px do not show. The list comes back sooner.
+        rest: out ? 4 : 0.5,
         // A pane that goes back in stops at its place, without a bounce past it.
         onUpdate: (x) => place(out ? x : Math.max(0, x)),
         onDone: () => {
