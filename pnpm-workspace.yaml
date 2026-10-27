@@ -1,2 +1,6 @@
 patchedDependencies:
   web-push@3.6.7: patches/web-push@3.6.7.patch
+
+allowBuilds:
+  # Its install script only checks the binary. The binary comes from a platform package.
+  esbuild: false
