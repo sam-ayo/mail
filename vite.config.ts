@@ -76,6 +76,9 @@ export default defineConfig({
       "@base-ui/react/drawer",
       "@base-ui/react/tooltip",
       "@base-ui/react/context-menu",
+      "@base-ui/react/autocomplete",
+      "@base-ui/react/collapsible",
+      "pdfjs-dist",
     ],
     // Only server modules import these packages. Without this list, the dev
     // dependency scan bundles them for the browser and reloads the page.

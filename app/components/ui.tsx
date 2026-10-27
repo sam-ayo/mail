@@ -147,20 +147,26 @@ export function initialsFor(name: string | undefined, email: string) {
 export function Avatar({
   name,
   email,
+  domain,
   color,
   size = "md",
 }: {
   name?: string;
   email: string;
+  /** Shows the company logo of the domain, instead of the image for the email. */
+  domain?: string;
   color?: string;
   size?: "sm" | "md" | "lg";
 }) {
   const hue = [...email].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
+  const src = domain
+    ? `/api/avatar?domain=${encodeURIComponent(domain)}`
+    : `/api/avatar?email=${encodeURIComponent(email)}`;
   // The initials show until the logo loads, and stay when the server has no logo.
   // A list row can show a different sender later, so keep the email with the result.
   const [logo, setLogo] = useState<{ email: string; loaded: boolean }>();
   const loaded = logo?.email === email && logo.loaded;
-  const hasLogo = email.includes("@") && !(logo?.email === email && !logo.loaded);
+  const hasLogo = (domain || email.includes("@")) && !(logo?.email === email && !logo.loaded);
   return (
     <span
       className={cx(
@@ -176,7 +182,7 @@ export function Avatar({
       {hasLogo && (
         <img
           key={email}
-          src={`/api/avatar?email=${encodeURIComponent(email)}`}
+          src={src}
           alt=""
           // The image can load before hydration, and then React gets no load event.
           ref={(image) => {

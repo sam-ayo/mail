@@ -19,6 +19,7 @@ import {
   Download04Icon,
   File01Icon,
   File02Icon,
+  Flag01Icon,
   HardDriveIcon,
   InboxIcon,
   InformationCircleIcon,
@@ -101,6 +102,7 @@ export const EnvelopeSimple = icon(Mail01Icon);
 export const EnvelopeSimpleOpen = icon(MailOpen01Icon);
 export const File = icon(File01Icon);
 export const FileText = icon(File02Icon);
+export const Flag = icon(Flag01Icon);
 export const Gear = icon(Settings01Icon);
 export const HardDrives = icon(HardDriveIcon);
 export const Info = icon(InformationCircleIcon);

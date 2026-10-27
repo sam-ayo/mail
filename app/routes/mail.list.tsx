@@ -10,6 +10,7 @@ import {
   Copy,
   EnvelopeSimple,
   EnvelopeSimpleOpen,
+  Flag,
   LinkSimple,
   List,
   MagnifyingGlass,
@@ -527,6 +528,36 @@ function ThreadList({
     }
   }
 
+  /**
+   * Adds the sender to the list of important senders. The server moves the
+   * other conversations from the sender in Promotions to Important too.
+   */
+  async function alwaysImportant(thread: ThreadSummary) {
+    const sender = thread.participants[0]?.email.toLowerCase();
+    if (!sender) return;
+    const rows = threads.filter((t) => t.participants[0]?.email.toLowerCase() === sender);
+    const targets = rows.flatMap((t) => threadRefs(t).map((ref) => ({ ...ref, sender })));
+    const keys = targets.map((t) => threadKey(t.accountId, t.threadId));
+    const previous = { ...moved };
+    setMoved((current) => ({ ...current, ...Object.fromEntries(keys.map((key) => [key, "important" as const])) }));
+    setSelected(new Set());
+    if (openKey && keys.includes(openKey)) closeThread();
+    try {
+      const response = await fetch("/api/important-senders", {
+        method: "POST",
+        headers: { "content-type": "application/json" },
+        body: JSON.stringify({ sender, targets }),
+      });
+      if (!response.ok) throw new Error(String(response.status));
+      refreshCounts();
+      revalidator.revalidate();
+      toast.success(`Mail from ${sender} now always goes to Important`);
+    } catch {
+      setMoved(previous);
+      toast.error("Could not add the sender to Important");
+    }
+  }
+
   // A search runs after a short pause in the typing. Enter runs it at once.
   const searchTimer = useRef<ReturnType<typeof setTimeout>>(undefined);
   useEffect(() => () => clearTimeout(searchTimer.current), []);
@@ -689,6 +720,10 @@ function ThreadList({
         icon: tab === "promotion" ? Tray : Megaphone,
         onSelect: () => moveTo(tab === "promotion" ? "important" : "promotion", rows),
       },
+      sorted &&
+        tab === "promotion" &&
+        !bulk &&
+        sender && { label: "Always important", icon: Flag, onSelect: () => alwaysImportant(thread) },
       "separator",
       {
         label: selected.has(key) ? "Deselect" : "Select",

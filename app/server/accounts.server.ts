@@ -77,13 +77,20 @@ export async function isDemoUser(id: string) {
   return row?.demo ?? false;
 }
 
-/** Deletes the demo workspaces that are older than a week. A workspace with a real mailbox stays. */
+/**
+ * Deletes the demo workspaces that are older than a week. A workspace with a
+ * real mailbox stays. The Better Auth user of a workspace goes too, with its
+ * agent consents and tokens.
+ */
 export async function deleteExpiredDemoUsers() {
   const rows = await query<{ id: string }>(
     `DELETE FROM users u WHERE u.demo AND u.created_at < now() - interval '7 days'
        AND NOT EXISTS (SELECT 1 FROM accounts a WHERE a.user_id = u.id AND a.provider <> 'demo')
      RETURNING u.id`,
   );
+  // The Better Auth tables have no foreign key to users. Also delete the
+  // Better Auth users that an earlier run left.
+  await query("DELETE FROM auth_users a WHERE NOT EXISTS (SELECT 1 FROM users u WHERE u.id = a.id)");
   return rows.length;
 }
 

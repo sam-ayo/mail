@@ -1,12 +1,13 @@
-import { useEffect, useRef, useState } from "react";
+import { Autocomplete } from "@base-ui/react/autocomplete";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning, X } from "~/components/icons";
 import { data, Form, Link, useFetcher, useFetchers, useSubmit } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
-import { AccountIcon, Button, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
-import { ACCOUNT_COLORS, shownProvider, type AccountSummary } from "~/lib/mail";
+import { AccountIcon, Avatar, Button, IconButton, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
+import { ACCOUNT_COLORS, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
 import {
   addCustomColor,
   deleteAccount,
@@ -21,18 +22,26 @@ import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnecti
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
 import { resetDemoAccount } from "~/server/providers/demo.server";
-import { aiSortingConfigured, aiSortingOn, setAiSorting } from "~/server/triage.server";
+import {
+  addImportantSender,
+  aiSortingConfigured,
+  aiSortingOn,
+  listImportantSenders,
+  removeImportantSender,
+  setAiSorting,
+} from "~/server/triage.server";
 import type { Route } from "./+types/settings";
 
 export const meta: Route.MetaFunction = () => [{ title: "Settings · mail" }];
 
 export async function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
-  const [accounts, customColors, agents, aiSorting] = await Promise.all([
+  const [accounts, customColors, agents, aiSorting, importantSenders] = await Promise.all([
     listAccounts(user.id),
     listCustomColors(user.id),
     listAgentConnections(user.id),
     aiSortingOn(user.id),
+    aiSortingConfigured ? listImportantSenders(user.id) : [],
   ]);
   return {
     accounts: accounts.map(toSummary),
@@ -40,6 +49,7 @@ export async function loader({ context }: Route.LoaderArgs) {
     agents,
     mcpUrl: MCP_RESOURCE,
     aiSorting: aiSortingConfigured ? aiSorting : null,
+    importantSenders,
   };
 }
 
@@ -82,6 +92,13 @@ export async function action({ request, context }: Route.ActionArgs) {
     case "aiSorting":
       await setAiSorting(user.id, form.get("on") === "true");
       return { aiSorting: true };
+    case "addImportantSender": {
+      const pattern = await addImportantSender(user.id, String(form.get("sender") ?? ""));
+      return pattern ? { importantSender: pattern } : { importantSenderError: "Enter an address or a domain." };
+    }
+    case "removeImportantSender":
+      await removeImportantSender(user.id, String(form.get("pattern") ?? ""));
+      return { removedImportantSender: true };
     default:
       throw data("Unknown action", { status: 400 });
   }
@@ -128,7 +145,9 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
         <AiAgents agents={loaderData.agents} mcpUrl={loaderData.mcpUrl} />
 
-        {loaderData.aiSorting !== null && <AiSorting on={loaderData.aiSorting} />}
+        {loaderData.aiSorting !== null && (
+          <AiSorting on={loaderData.aiSorting} importantSenders={loaderData.importantSenders} />
+        )}
 
         <section className="mt-10">
           <h2 className="font-semibold">Session</h2>
@@ -773,7 +792,7 @@ function AgentRow({ agent }: { agent: AgentConnection }) {
  * AI sorting puts promotions in their own inbox tab. It is on by default. The
  * server sends the start of each new email to TypeSafe, so the person can turn it off.
  */
-function AiSorting({ on }: { on: boolean }) {
+function AiSorting({ on, importantSenders }: { on: boolean; importantSenders: string[] }) {
   const fetcher = useFetcher<typeof action>();
   const shown = fetcher.formData ? fetcher.formData.get("on") === "true" : on;
   return (
@@ -783,8 +802,8 @@ function AiSorting({ on }: { on: boolean }) {
           <h2 className="font-semibold">AI sorting</h2>
           <p className="text-sm text-zinc-500">
             {shown
-              ? "New mail goes to Important or Promotions. Promotions get no notification."
-              : "Put promotions in their own inbox tab. Promotions then get no notification."}{" "}
+              ? "New mail goes to Important or Promotions. Only Important mail gets a notification."
+              : "Put promotions in their own inbox tab. Only Important mail then gets a notification."}{" "}
             The sender, subject, and start of each new email go to TypeSafe, whose model Jev sorts the mail.
           </p>
         </div>
@@ -797,6 +816,187 @@ function AiSorting({ on }: { on: boolean }) {
           {shown ? "Turn off" : "Turn on"}
         </Button>
       </div>
+      <ImportantSenders patterns={importantSenders} />
     </section>
+  );
+}
+
+/**
+ * Senders whose mail always goes to Important. The list has priority over
+ * Jev, and stays when the person turns AI sorting off.
+ */
+function ImportantSenders({ patterns }: { patterns: string[] }) {
+  const fetcher = useFetcher<typeof action>();
+  const [text, setText] = useState("");
+  const error = fetcher.data && "importantSenderError" in fetcher.data ? fetcher.data.importantSenderError : undefined;
+  useEffect(() => {
+    if (fetcher.state === "idle" && fetcher.data && "importantSender" in fetcher.data) setText("");
+  }, [fetcher.state, fetcher.data]);
+
+  // The people in the recent mail of the person load once, when the field gets
+  // the focus. Then each key filters them at once.
+  const known = useFetcher<{ senders: KnownSender[] }>();
+  function loadKnown() {
+    if (known.state === "idle" && !known.data) known.load("/api/important-senders");
+  }
+  // A mail search for the text finds people in older mail. It runs after a short pause in the typing.
+  const searched = useFetcher<{ senders: KnownSender[] }>();
+  const query = text.trim();
+  useEffect(() => {
+    if (query.replace(/^@/, "").length < 2) return;
+    const timer = setTimeout(() => searched.load(`/api/important-senders?q=${encodeURIComponent(query)}`), 300);
+    return () => clearTimeout(timer);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [query]);
+  const found = useMemo(() => {
+    // Both lists can have a person. The larger count is the better one.
+    const counts = new Map<string, number>();
+    for (const { email, count } of [...(known.data?.senders ?? []), ...(searched.data?.senders ?? [])]) {
+      counts.set(email, Math.max(counts.get(email) ?? 0, count));
+    }
+    const senders = [...counts].map(([email, count]) => ({ email, count }));
+    return suggestImportantSenders(senders, patterns, text);
+  }, [known.data, searched.data, patterns, text]);
+
+  // The first suggestion that starts with the text completes it in the field.
+  // A domain also matches without its "@", so "lin" completes to "@linkedin.com".
+  const lower = text.toLowerCase();
+  const completion = lower
+    ? found.flatMap((item) => {
+        const form = [item, item.replace(/^@/, "")].find((f) => f.startsWith(lower) && f.length > lower.length);
+        return form ? [{ item, rest: form.slice(lower.length) }] : [];
+      })[0]
+    : undefined;
+  // The completed suggestion comes first in the list too.
+  const items = completion ? [completion.item, ...found.filter((i) => i !== completion.item)] : found;
+  const [highlighted, setHighlighted] = useState<string>();
+  const [focused, setFocused] = useState(false);
+
+  function add(sender: string) {
+    fetcher.submit({ intent: "addImportantSender", sender }, { method: "post" });
+  }
+
+  /** Tab or → takes the completion. Return adds it, if no suggestion has the keyboard highlight. */
+  function completeOnKey(event: React.KeyboardEvent<HTMLInputElement>) {
+    if (!completion) return;
+    const input = event.currentTarget;
+    const atEnd = input.selectionStart === input.value.length && input.selectionEnd === input.value.length;
+    if ((event.key === "Tab" && !event.shiftKey) || (event.key === "ArrowRight" && atEnd)) {
+      event.preventDefault();
+      setText(completion.item);
+    } else if (event.key === "Enter" && !highlighted) {
+      event.preventDefault();
+      add(completion.item);
+    }
+  }
+
+  return (
+    <div className="mt-5">
+      <h3 className="text-sm font-medium">Always important</h3>
+      <p className="mb-3 text-sm text-zinc-500">
+        Mail from these senders always goes to Important. Enter an address, such as jobs@indeed.com, or a domain, such
+        as @mun.ca. Press Tab to complete a suggestion.
+      </p>
+      <fetcher.Form method="post" className="flex gap-2">
+        <input type="hidden" name="intent" value="addImportantSender" />
+        {/* A click on a suggestion adds it at once. */}
+        <Autocomplete.Root
+          items={items}
+          value={text}
+          onValueChange={setText}
+          onItemHighlighted={(item) => setHighlighted(item)}
+          submitOnItemClick
+        >
+          <div className="relative min-w-0 flex-1">
+            <Autocomplete.Input
+              name="sender"
+              required
+              maxLength={320}
+              spellCheck={false}
+              placeholder="Address or @domain"
+              aria-label="Address or domain"
+              aria-invalid={error ? true : undefined}
+              onKeyDown={completeOnKey}
+              onFocus={() => {
+                setFocused(true);
+                loadKnown();
+              }}
+              onBlur={() => setFocused(false)}
+              className={inputClass}
+            />
+            {/* The rest of the completion shows in grey after the text. It has the padding and border of the input. */}
+            {completion && focused && (
+              <div
+                aria-hidden
+                className="pointer-events-none absolute inset-0 overflow-hidden border border-transparent px-3 py-2 text-sm whitespace-pre"
+              >
+                <span className="invisible">{text}</span>
+                <span className="text-zinc-400 dark:text-zinc-500">{completion.rest}</span>
+              </div>
+            )}
+          </div>
+          {items.length > 0 && (
+            <Autocomplete.Portal>
+              <Autocomplete.Positioner sideOffset={4} align="start" className="z-[60] outline-none">
+                <Autocomplete.Popup className="max-h-72 w-(--anchor-width) overflow-y-auto rounded-xl bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 outline-none dark:bg-zinc-900 dark:ring-white/10">
+                  <Autocomplete.List>
+                    {(item: string) => (
+                      <Autocomplete.Item
+                        key={item}
+                        value={item}
+                        className="flex cursor-default items-center gap-2.5 rounded-lg px-2.5 py-1.5 text-zinc-700 outline-none select-none data-highlighted:bg-zinc-100 dark:text-zinc-200 dark:data-highlighted:bg-zinc-800"
+                      >
+                        <SenderLabel pattern={item} />
+                      </Autocomplete.Item>
+                    )}
+                  </Autocomplete.List>
+                </Autocomplete.Popup>
+              </Autocomplete.Positioner>
+            </Autocomplete.Portal>
+          )}
+        </Autocomplete.Root>
+        <Button type="submit" className="shrink-0" disabled={fetcher.state !== "idle"}>
+          <Plus className="size-4" /> Add
+        </Button>
+      </fetcher.Form>
+      {error && <p className="mt-2 text-sm text-red-600 dark:text-red-400">{error}</p>}
+      {patterns.length > 0 && (
+        <ul className="mt-3 divide-y divide-zinc-200 rounded-xl border border-zinc-200 dark:divide-zinc-800 dark:border-zinc-800">
+          {patterns.map((pattern) => (
+            <ImportantSenderRow key={pattern} pattern={pattern} />
+          ))}
+        </ul>
+      )}
+    </div>
+  );
+}
+
+/** The logo and the text of an address or a domain in the list of important senders. */
+function SenderLabel({ pattern }: { pattern: string }) {
+  const domain = pattern.startsWith("@") ? pattern.slice(1) : undefined;
+  return (
+    <>
+      <Avatar email={domain ?? pattern} domain={domain} size="sm" />
+      <span className="min-w-0 truncate">{pattern}</span>
+      {domain && <span className="ml-auto shrink-0 pl-2 text-xs text-zinc-500">All senders</span>}
+    </>
+  );
+}
+
+function ImportantSenderRow({ pattern }: { pattern: string }) {
+  const fetcher = useFetcher<typeof action>();
+  if (fetcher.formData) return null;
+  return (
+    <li className="flex items-center justify-between gap-3 px-3 py-2 text-sm">
+      <span className="flex min-w-0 flex-1 items-center gap-2.5">
+        <SenderLabel pattern={pattern} />
+      </span>
+      <IconButton
+        label={`Remove ${pattern}`}
+        onClick={() => fetcher.submit({ intent: "removeImportantSender", pattern }, { method: "post" })}
+      >
+        <X className="size-4" />
+      </IconButton>
+    </li>
   );
 }

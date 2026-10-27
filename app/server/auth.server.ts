@@ -76,9 +76,18 @@ export async function redirectWithError(session: Session, to: string, error: str
   });
 }
 
+/**
+ * Signs out of mail, and out of the Better Auth session of an OAuth flow. The
+ * agents that the workspace allowed stay connected.
+ */
 export async function signOut(request: Request) {
   const session = await getSession(request);
-  return redirect("/welcome", {
-    headers: { "Set-Cookie": await sessionStorage.destroySession(session) },
-  });
+  const headers = new Headers({ "Set-Cookie": await sessionStorage.destroySession(session) });
+  // Better Auth starts only for a browser that started an OAuth flow.
+  if (request.headers.get("Cookie")?.includes("agent-auth.session_token")) {
+    const { getAgentAuth } = await import("./agent-auth.server");
+    const result = await getAgentAuth().api.signOut({ headers: request.headers, returnHeaders: true });
+    for (const cookie of result.headers.getSetCookie()) headers.append("Set-Cookie", cookie);
+  }
+  return redirect("/welcome", { headers });
 }

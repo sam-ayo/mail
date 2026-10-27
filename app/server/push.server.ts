@@ -124,8 +124,10 @@ async function newThreadCategories(account: AccountRef, threads: ThreadSummary[]
 }
 
 /**
- * Sends notifications to the owner of the account for new inbox threads that
- * are not promotions. With AI sorting on, it sorts the threads first.
+ * Sends notifications to the owner of the account for new inbox threads. With
+ * AI sorting on, it sorts the threads first, and only Important threads get a
+ * notification. A thread with no category also gets one, because Jev did not
+ * sort it (an outage) or AI sorting is off.
  */
 export async function notifyNewThreads(account: Account, threads: ThreadSummary[]) {
   if (threads.length === 0) return;
@@ -133,7 +135,7 @@ export async function notifyNewThreads(account: Account, threads: ThreadSummary[
   try {
     if (await aiSortingOn(account.userId)) await sortThreads(account, threads);
     const categories = await newThreadCategories(account, threads);
-    now = threads.filter((_, i) => categories[i] !== "promotion");
+    now = threads.filter((_, i) => categories[i] === "important" || categories[i] === undefined);
   } catch (error) {
     // Without the categories, a notification for each thread is better than none.
     console.error("Cannot sort the new threads", error);

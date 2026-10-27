@@ -332,3 +332,61 @@ const countFormat = new Intl.NumberFormat(undefined, { notation: "compact", maxi
 export function formatCount(value: number) {
   return value < 1000 ? String(value) : countFormat.format(value);
 }
+
+/**
+ * Makes a pattern for the list of important senders from text that the person
+ * typed: a full address, or a domain with or without "@". Other text gives undefined.
+ */
+export function importantSenderPattern(text: string) {
+  const value = text.trim().toLowerCase().replace(/^mailto:/, "");
+  const domain = /^@?([a-z0-9-]+(?:\.[a-z0-9-]+)+)$/.exec(value)?.[1];
+  if (domain) return value.length <= 254 ? `@${domain}` : undefined;
+  return /^[^\s@<>()",;]+@[a-z0-9-]+(?:\.[a-z0-9-]+)+$/.test(value) && value.length <= 320 ? value : undefined;
+}
+
+/** The pattern matches the address. A domain pattern also matches its subdomains. */
+export function senderMatches(pattern: string, sender: string) {
+  if (!pattern.startsWith("@")) return sender === pattern;
+  return sender.endsWith(pattern) || sender.endsWith(`.${pattern.slice(1)}`);
+}
+
+/** A sender from the person's mail, with the number of conversations from it. */
+export interface KnownSender {
+  email: string;
+  count: number;
+}
+
+/**
+ * Suggestions for the list of important senders: addresses and domains from
+ * the person's mail that contain the text. Ones that start with the text come
+ * first, then the ones with more conversations. Text that starts with "@" gives
+ * only domains. Senders that the list already matches do not show. A full
+ * address or domain in the text also shows, so the person can pick it.
+ */
+export function suggestImportantSenders(known: KnownSender[], listed: string[], text: string, limit = 8) {
+  const value = text.trim().toLowerCase();
+  const term = value.replace(/^@/, "");
+  if (!term) return [];
+  const counts = new Map<string, number>();
+  for (const { email, count } of known) {
+    if (listed.some((pattern) => senderMatches(pattern, email))) continue;
+    if (!value.startsWith("@")) counts.set(email, (counts.get(email) ?? 0) + count);
+    const domain = `@${email.split("@").pop()}`;
+    counts.set(domain, (counts.get(domain) ?? 0) + count);
+  }
+  const starts = (pattern: string) => pattern.startsWith(term) || pattern.startsWith(`@${term}`);
+  const shown = [...counts]
+    .filter(([pattern]) => pattern.includes(term))
+    .sort(
+      ([a, countA], [b, countB]) =>
+        Number(starts(b)) - Number(starts(a)) || countB - countA || a.localeCompare(b),
+    )
+    .map(([pattern]) => pattern)
+    .slice(0, limit);
+  // The typed text comes last while a suggestion starts with it, because the person can still type.
+  const typed = importantSenderPattern(text);
+  if (!typed || listed.includes(typed) || shown.includes(typed)) return shown;
+  return shown.some((s) => s.startsWith(typed))
+    ? [...shown.slice(0, limit - 1), typed]
+    : [typed, ...shown.slice(0, limit - 1)];
+}

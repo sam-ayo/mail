@@ -1,6 +1,6 @@
 import { choice, noul, TypeSafeClient } from "@typesafe-ai/sdk";
 import type { ThreadCategory, ThreadSummary } from "~/lib/mail";
-import { THREAD_CATEGORIES, threadKey } from "~/lib/mail";
+import { importantSenderPattern, senderMatches, THREAD_CATEGORIES, threadKey } from "~/lib/mail";
 import type { Account } from "./accounts.server";
 import { listAccounts } from "./accounts.server";
 import { query, queryOne } from "./db.server";
@@ -184,10 +184,55 @@ export async function setAiSorting(userId: string, on: boolean) {
   await query("UPDATE users SET ai_sorting = $2 WHERE id = $1", [userId, on]);
 }
 
+/** The most patterns in the list of important senders of a person. */
+const IMPORTANT_SENDERS_MAX = 500;
+
+/** The senders whose mail always goes to Important, the newest first. */
+export async function listImportantSenders(userId: string) {
+  const rows = await query<{ pattern: string }>(
+    "SELECT pattern FROM important_senders WHERE user_id = $1 ORDER BY created_at DESC, pattern",
+    [userId],
+  );
+  return rows.map((row) => row.pattern);
+}
+
+/**
+ * Adds a sender to the list of important senders, and moves the person's
+ * conversations from that sender in Promotions to Important. Returns the
+ * pattern, or undefined if the text is not an address or a domain, or the list is full.
+ */
+export async function addImportantSender(userId: string, text: string) {
+  const pattern = importantSenderPattern(text);
+  if (!pattern) return undefined;
+  const added = await query(
+    `INSERT INTO important_senders (user_id, pattern)
+     SELECT $1, $2 WHERE (SELECT count(*) FROM important_senders WHERE user_id = $1) < $3
+     ON CONFLICT DO NOTHING RETURNING pattern`,
+    [userId, pattern, IMPORTANT_SENDERS_MAX],
+  );
+  if (added.length === 0 && !(await listImportantSenders(userId)).includes(pattern)) return undefined;
+  // The same match as senderMatches. right() does not read "_" and "%" as LIKE does.
+  await query(
+    `UPDATE thread_categories c SET category = 'important', updated_at = now()
+     FROM accounts a
+     WHERE a.id = c.account_id AND a.user_id = $1 AND c.category = 'promotion'
+       AND (c.sender = $2 OR (left($2, 1) = '@' AND (
+         right(c.sender, length($2)) = $2 OR right(c.sender, length($2)) = '.' || substr($2, 2))))`,
+    [userId, pattern],
+  );
+  return pattern;
+}
+
+/** Removes a sender from the list. Conversations that moved to Important stay there. */
+export async function removeImportantSender(userId: string, pattern: string) {
+  await query("DELETE FROM important_senders WHERE user_id = $1 AND pattern = $2", [userId, pattern]);
+}
+
 /**
  * Gives a category to each inbox conversation of the account that has none.
- * Mail from a sender that the person moved gets the same category. Jev sorts
- * the other mail. A failed Jev request leaves its conversation with no category.
+ * Mail from a sender in the list of important senders goes to Important. Mail
+ * from a sender that the person moved gets the same category. Jev sorts the
+ * other mail. A failed Jev request leaves its conversation with no category.
  */
 export async function sortThreads(account: Account, threads: ThreadSummary[]) {
   if (!aiSortingConfigured || account.provider === "demo" || threads.length === 0) return 0;
@@ -206,9 +251,12 @@ export async function sortThreads(account: Account, threads: ThreadSummary[]) {
       )
     ).map((row) => [row.sender, row.category]),
   );
+  const important = await listImportantSenders(account.userId);
   const items = await mapLimit(todo, 8, async (thread): Promise<CategoryInput | undefined> => {
     const sender = senderOf(thread);
-    let category = moved.get(sender);
+    let category = important.some((pattern) => senderMatches(pattern, sender))
+      ? ("important" as const)
+      : moved.get(sender);
     if (!category) {
       try {
         category = await categoryFromJev(await describe(account, thread));

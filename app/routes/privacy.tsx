@@ -87,7 +87,7 @@ export default function Privacy() {
 
       <h2>AI sorting</h2>
       <p>
-        AI sorting puts promotions in their own tab of your inbox, and sends no notification for them. It is on by default.
+        AI sorting puts promotions in their own tab of your inbox, and sends notifications only for Important mail. It is on by default.
       </p>
       <ul>
         <li>
