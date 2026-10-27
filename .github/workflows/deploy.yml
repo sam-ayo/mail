@@ -21,6 +21,12 @@ on:
     paths: *paths
   workflow_dispatch:
 
+# One run at a time for each branch. GitHub replaces a waiting run with a newer
+# one, so an older push cannot build last and deploy an old image.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: false
+
 env:
   IMAGE: ghcr.io/sam-ayo/mail
 
@@ -53,7 +59,6 @@ jobs:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
     needs: build
     runs-on: ubuntu-24.04
-    concurrency: deploy-vm
     permissions:
       contents: read
       packages: read
@@ -79,6 +84,8 @@ jobs:
             docker compose pull --quiet
             docker logout ghcr.io
             docker compose up -d --remove-orphans
+            # up -d does not restart an unchanged Caddy container, so load a changed Caddyfile.
+            docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
             docker image prune -f > /dev/null"
       - name: Wait until the app is healthy
         run: |
