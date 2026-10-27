@@ -95,7 +95,7 @@ const running = new Set<JobName>();
 
 /**
  * Runs the jobs each minute in this process. A server that runs all the time,
- * such as on Fly.io, uses this. On Vercel, a Cloudflare Worker and Vercel cron
+ * such as the Oracle Cloud VM, uses this. On Vercel, a Cloudflare Worker and Vercel cron
  * call the /api/cron routes. RUN_JOBS=1 turns it on.
  */
 export function startJobs() {

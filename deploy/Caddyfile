@@ -1,0 +1,20 @@
+# HTTPS for the app. Caddy gets the certificates from Let's Encrypt and
+# redirects HTTP to HTTPS. The headers are the same as in vercel.json.
+mail.samayo.me, mail.demo.samayo.me {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000; includeSubDomains"
+		X-Content-Type-Options "nosniff"
+		X-Frame-Options "DENY"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		Permissions-Policy "camera=(), microphone=(), geolocation=(), payment=(), usb=()"
+		Cross-Origin-Opener-Policy "same-origin"
+		-Server
+	}
+
+	reverse_proxy app:3000 {
+		# The inbox and the MCP server stream their responses. Send each part at once.
+		flush_interval -1
+	}
+}

@@ -1,0 +1,37 @@
+#cloud-config
+# First boot of the Oracle Cloud VM (Ubuntu 24.04, VM.Standard.A1.Flex).
+# Give this file as the user data when you create the VM. See deploy/README.md.
+
+package_update: true
+package_upgrade: true
+packages:
+  - unattended-upgrades
+  - fail2ban
+
+write_files:
+  # Install security updates each day. Restart at 08:00 UTC if an update needs it.
+  # Docker starts the containers again after the restart.
+  - path: /etc/apt/apt.conf.d/52mail-unattended
+    content: |
+      Unattended-Upgrade::Automatic-Reboot "true";
+      Unattended-Upgrade::Automatic-Reboot-Time "08:00";
+  - path: /etc/docker/daemon.json
+    content: |
+      { "log-driver": "json-file", "log-opts": { "max-size": "10m", "max-file": "5" } }
+  # Only key logins over SSH. The Oracle image already turns off passwords; this makes it sure.
+  - path: /etc/ssh/sshd_config.d/60-mail.conf
+    content: |
+      PasswordAuthentication no
+      PermitRootLogin no
+
+runcmd:
+  # The Oracle Ubuntu image blocks all ports except 22 in iptables. Open HTTP and HTTPS.
+  - iptables -I INPUT 5 -p tcp -m state --state NEW --dport 80 -j ACCEPT
+  - iptables -I INPUT 5 -p tcp -m state --state NEW --dport 443 -j ACCEPT
+  - iptables -I INPUT 5 -p udp --dport 443 -j ACCEPT
+  - netfilter-persistent save
+  - curl -fsSL https://get.docker.com | sh
+  - usermod -aG docker ubuntu
+  - install -d -o ubuntu -g ubuntu -m 750 /opt/mail
+  - systemctl enable --now docker fail2ban
+  - systemctl reload ssh

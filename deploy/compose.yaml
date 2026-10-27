@@ -1,0 +1,45 @@
+# Runs the app on the Oracle Cloud VM. The deploy workflow copies this file and
+# the Caddyfile to /opt/mail and sets IMAGE_TAG in /opt/mail/.env.
+# The app secrets are in /opt/mail/app.env (mode 600). See deploy/README.md.
+services:
+  app:
+    image: ghcr.io/sam-ayo/mail:${IMAGE_TAG:?Set IMAGE_TAG in /opt/mail/.env}
+    restart: unless-stopped
+    # Node as PID 1 does not stop on SIGTERM. The init process passes the signal.
+    init: true
+    env_file: app.env
+    environment:
+      APP_URL: https://mail.samayo.me
+      PORT: "3000"
+      HOST: 0.0.0.0
+      # This server runs the mail check each minute and the daily cache job. See app/server/jobs.server.ts.
+      RUN_JOBS: "1"
+    healthcheck:
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://127.0.0.1:3000/welcome"]
+      interval: 30s
+      timeout: 5s
+      start_period: 20s
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+
+  caddy:
+    image: caddy:2
+    restart: unless-stopped
+    depends_on: [app]
+    ports:
+      - "80:80"
+      - "443:443"
+      - "443:443/udp"
+    volumes:
+      - ./Caddyfile:/etc/caddy/Caddyfile:ro
+      # The TLS certificates. Keep this volume, or Caddy asks Let's Encrypt for new ones.
+      - caddy_data:/data
+      - caddy_config:/config
+    logging:
+      driver: json-file
+      options: { max-size: 10m, max-file: "5" }
+
+volumes:
+  caddy_data:
+  caddy_config:

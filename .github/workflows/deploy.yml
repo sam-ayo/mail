@@ -1,0 +1,92 @@
+name: Deploy
+
+# Builds the app image for the Oracle Cloud VM (ARM), and deploys it from main.
+# A pull request only builds the image, to check the Dockerfile.
+# The deploy needs the repository variable DEPLOY_HOST and the secrets
+# DEPLOY_SSH_KEY and DEPLOY_KNOWN_HOSTS. Without DEPLOY_HOST, it skips the deploy.
+on:
+  push:
+    branches: [main]
+    paths: &paths
+      - "**"
+      - "!worker/**"
+      - "!migrations/**"
+      - "!docs/**"
+      - "!directory/**"
+      - "!.agents/**"
+      - "!**/*.md"
+      - "!.github/**"
+      - .github/workflows/deploy.yml
+  pull_request:
+    paths: *paths
+  workflow_dispatch:
+
+env:
+  IMAGE: ghcr.io/sam-ayo/mail
+
+jobs:
+  build:
+    # The VM has an ARM CPU. GitHub gives ARM machines to public repositories for free.
+    runs-on: ubuntu-24.04-arm
+    permissions:
+      contents: read
+      packages: write
+    steps:
+      - uses: actions/checkout@v7
+      - uses: docker/setup-buildx-action@v3
+      - if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+      - uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ env.IMAGE }}:${{ github.sha }},${{ env.IMAGE }}:latest
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+  deploy:
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
+    needs: build
+    runs-on: ubuntu-24.04
+    concurrency: deploy-vm
+    permissions:
+      contents: read
+      packages: read
+    env:
+      HOST: ubuntu@${{ vars.DEPLOY_HOST }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Set up SSH
+        run: |
+          install -m 700 -d ~/.ssh
+          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
+          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          chmod 600 ~/.ssh/id_ed25519
+      - name: Copy the Compose file and the Caddyfile
+        run: scp deploy/compose.yaml deploy/Caddyfile "$HOST:/opt/mail/"
+      - name: Start the new image
+        # The job token pulls the image. It ends with the job, so no registry token stays on the VM.
+        run: |
+          echo "${{ secrets.GITHUB_TOKEN }}" | ssh "$HOST" docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          ssh "$HOST" "set -e
+            cd /opt/mail
+            echo IMAGE_TAG=${{ github.sha }} > .env
+            docker compose pull --quiet
+            docker logout ghcr.io
+            docker compose up -d --remove-orphans
+            docker image prune -f > /dev/null"
+      - name: Wait until the app is healthy
+        run: |
+          for _ in $(seq 1 30); do
+            status=$(ssh "$HOST" "docker inspect -f '{{.State.Health.Status}}' \$(docker compose -f /opt/mail/compose.yaml ps -q app)")
+            echo "app: $status"
+            [ "$status" = healthy ] && exit 0
+            sleep 5
+          done
+          ssh "$HOST" "docker compose -f /opt/mail/compose.yaml logs --tail 50 app"
+          exit 1
