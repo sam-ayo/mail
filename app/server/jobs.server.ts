@@ -51,7 +51,8 @@ async function claim(name: JobName): Promise<string | null> {
 async function release(name: JobName, runId: string, succeeded: boolean) {
   if (!runId) return;
   await query(
-    `UPDATE job_runs SET running_until = NULL ${succeeded ? ", ran_at = started_at" : ""}
+    // Clear run_id too, so a renewal that is still in progress cannot restore the lease.
+    `UPDATE job_runs SET running_until = NULL, run_id = NULL ${succeeded ? ", ran_at = started_at" : ""}
      WHERE name = $1 AND run_id = $2`,
     [name, runId],
   );
