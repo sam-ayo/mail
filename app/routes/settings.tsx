@@ -1,10 +1,11 @@
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning, X } from "~/components/icons";
-import { data, Form, Link, useFetcher, useFetchers, useSubmit } from "react-router";
+import { data, Form, Link, useFetcher, useFetchers, useNavigate, useSubmit } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
+import { useMediaQuery, usePaneSwipeBack } from "~/components/touch";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
 import { AccountIcon, Avatar, Button, IconButton, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
@@ -105,8 +106,13 @@ export async function action({ request, context }: Route.ActionArgs) {
 }
 
 export default function Settings({ loaderData }: Route.ComponentProps) {
+  // On a phone, a swipe from the left edge goes back to the mail, as the
+  // back button does.
+  const navigate = useNavigate();
+  const phone = useMediaQuery("(max-width: 47.99rem)");
+  const swipeBack = usePaneSwipeBack({ enabled: phone, onBack: () => navigate("/mail/all/inbox") });
   return (
-    <div className="flex-1 overflow-y-auto">
+    <div ref={swipeBack.pane} className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-4 pt-2 pb-10 md:px-6 md:pt-10">
         {/* On a phone, a back button as in iOS. */}
         <Link
