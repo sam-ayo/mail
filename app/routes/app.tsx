@@ -252,7 +252,7 @@ function Shell() {
         <NavDrawer
           scope={scope}
           folder={folder}
-          threadOpen={Boolean(params.threadId)}
+          canOpen={Boolean(params.folder) && !params.threadId}
           dark={dark}
           onToggleTheme={toggleTheme}
           onShowShortcuts={() => setShortcutsOpen(true)}
@@ -271,22 +271,24 @@ function Shell() {
 /**
  * On small screens the sidebar is a drawer. Swipe right from the left edge to
  * open it. Swipe left or tap outside it to close it. A tap on a row in the
- * drawer does not close it. A tap on "New message" closes it. When a conversation is open, the same swipe
- * goes back to the list, so the swipe area is off. The open state is here and
+ * drawer does not close it. A tap on "New message" closes it. The drawer opens
+ * on the message list only. When a conversation is open, the same swipe goes
+ * back to the list. On other pages, such as Settings, the drawer stays closed,
+ * and a move to such a page closes it. The open state is here and
  * not in the shell, so an open or a close does not render the message list
  * again while the drawer moves. The drawer stays mounted for the same reason.
  */
 function NavDrawer({
   scope,
   folder,
-  threadOpen,
+  canOpen,
   dark,
   onToggleTheme,
   onShowShortcuts,
 }: {
   scope: string;
   folder?: Folder;
-  threadOpen: boolean;
+  canOpen: boolean;
   dark: boolean;
   onToggleTheme(): void;
   onShowShortcuts(): void;
@@ -306,6 +308,11 @@ function NavDrawer({
     composeAfterClose.current = false;
     openCompose();
   }
+
+  // A tap on Settings in the drawer goes to a page without the drawer.
+  useEffect(() => {
+    if (!canOpen) setNavOpen(false);
+  }, [canOpen]);
 
   // The list header opens the sidebar drawer on small screens.
   useEffect(() => {
@@ -341,7 +348,7 @@ function NavDrawer({
     >
       <Drawer.SwipeArea
         ref={swipeArea}
-        disabled={threadOpen}
+        disabled={!canOpen}
         className="fixed inset-y-0 left-0 z-30 w-5 md:hidden"
       />
       {/* After a swipe, the drawer must leave at the speed of the finger.
