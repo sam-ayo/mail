@@ -8,7 +8,7 @@ import { reconnectUrl } from "~/components/sidebar";
 import { useMediaQuery, usePaneSwipeBack } from "~/components/touch";
 import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
 import { AccountIcon, Avatar, Button, IconButton, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
-import { ACCOUNT_COLORS, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
+import { ACCOUNT_COLORS, PREFETCH_PARAM, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
 import {
   addCustomColor,
   deleteAccount,
@@ -110,7 +110,12 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
   // back button does.
   const navigate = useNavigate();
   const phone = useMediaQuery("(max-width: 47.99rem)");
-  const swipeBack = usePaneSwipeBack({ enabled: phone, onBack: () => navigate("/mail/all/inbox") });
+  const swipeBack = usePaneSwipeBack({ enabled: phone, onBack: () => navigate("/mail/all/inbox"), leaveEarly: true });
+  // The inbox loads now, so it shows at once after a swipe or a tap on Mail.
+  const { load } = useFetcher();
+  useEffect(() => {
+    if (phone) load(`/mail/all/inbox?${PREFETCH_PARAM}`);
+  }, [phone, load]);
   return (
     <div ref={swipeBack.pane} className="flex-1 overflow-y-auto">
       <div className="mx-auto max-w-4xl px-4 pt-2 pb-10 md:px-6 md:pt-10">

@@ -104,21 +104,68 @@ function project(velocity: number) {
   return ((velocity / 1000) * deceleration) / (1 - deceleration);
 }
 
+/** The colour behind an element: its own, or that of the first parent with one. */
+function backgroundOf(element: HTMLElement) {
+  for (let node: HTMLElement | null = element; node; node = node.parentElement) {
+    const color = getComputedStyle(node).backgroundColor;
+    if (color !== "transparent" && color !== "rgba(0, 0, 0, 0)") return color;
+  }
+  return "";
+}
+
+/**
+ * Slides a copy of the pane out from `from` px, at the speed of the finger,
+ * and hides the pane. The next page can then load and show under the copy.
+ */
+function slideCopyOut(element: HTMLElement, from: number, velocity: number) {
+  const rect = element.getBoundingClientRect();
+  const copy = element.cloneNode(true) as HTMLElement;
+  copy.inert = true;
+  Object.assign(copy.style, {
+    position: "fixed",
+    top: `${rect.top}px`,
+    left: `${rect.left - from}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+    zIndex: "50",
+    background: backgroundOf(element),
+    transition: "none",
+    transform: `translateX(${from}px)`,
+  });
+  document.body.append(copy);
+  copy.scrollTop = element.scrollTop;
+  element.style.visibility = "hidden";
+  // The copy is not in the pane, so the spring continues after the pane
+  // unmounts.
+  spring({
+    from,
+    to: rect.width,
+    velocity,
+    rest: 4,
+    onUpdate: (x) => (copy.style.transform = `translateX(${x}px)`),
+    onDone: () => copy.remove(),
+  });
+}
+
 /**
  * A pane that slides in from the right, as a pushed screen in iOS. A swipe
  * from the left edge drags it back out, and `back` slides it out. The pane
  * stays out of view until `reset`, so it does not show again while the route
  * changes. The `under` element moves and the `dim` element fades with the
- * pane. Their styles give their positions while the pane is open.
+ * pane. Their styles give their positions while the pane is open. With
+ * `leaveEarly`, `onBack` runs when the swipe ends, and a copy of the pane
+ * slides out. Use it when nothing is under the pane, so the next page loads
+ * during the slide.
  */
 export function usePaneSwipeBack(options: {
   enabled: boolean;
   onBack(): void;
   under?: React.RefObject<HTMLElement | null>;
+  leaveEarly?: boolean;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const dim = useRef<HTMLDivElement>(null);
-  const { enabled, onBack, under } = options;
+  const { enabled, onBack, under, leaveEarly = false } = options;
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   const closing = useRef(false);
@@ -164,6 +211,12 @@ export function usePaneSwipeBack(options: {
       if (!element) return;
       stop.current?.();
       closing.current = out;
+      if (out && leaveEarly) {
+        stop.current = null;
+        slideCopyOut(element, offset.current, velocity);
+        onBackRef.current();
+        return;
+      }
       stop.current = spring({
         from: offset.current,
         to: out ? element.offsetWidth : 0,
@@ -179,7 +232,7 @@ export function usePaneSwipeBack(options: {
         },
       });
     },
-    [place, clear],
+    [place, clear, leaveEarly],
   );
 
   const back = useCallback(() => {
