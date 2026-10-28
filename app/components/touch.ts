@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useSyncExternalStore } from "react";
+import { useLocation, useNavigate } from "react-router";
 
 // Touch gestures for phones, as in the iOS Mail app. A web app on the Home
 // Screen has no browser back gesture and no pull-to-refresh, so the app makes
@@ -114,58 +115,20 @@ function backgroundOf(element: HTMLElement) {
 }
 
 /**
- * Slides a copy of the pane out from `from` px, at the speed of the finger,
- * and hides the pane. The next page can then load and show under the copy.
- */
-function slideCopyOut(element: HTMLElement, from: number, velocity: number) {
-  const rect = element.getBoundingClientRect();
-  const copy = element.cloneNode(true) as HTMLElement;
-  copy.inert = true;
-  Object.assign(copy.style, {
-    position: "fixed",
-    top: `${rect.top}px`,
-    left: `${rect.left - from}px`,
-    width: `${rect.width}px`,
-    height: `${rect.height}px`,
-    zIndex: "50",
-    background: backgroundOf(element),
-    transition: "none",
-    transform: `translateX(${from}px)`,
-  });
-  document.body.append(copy);
-  copy.scrollTop = element.scrollTop;
-  element.style.visibility = "hidden";
-  // The copy is not in the pane, so the spring continues after the pane
-  // unmounts.
-  spring({
-    from,
-    to: rect.width,
-    velocity,
-    rest: 4,
-    onUpdate: (x) => (copy.style.transform = `translateX(${x}px)`),
-    onDone: () => copy.remove(),
-  });
-}
-
-/**
  * A pane that slides in from the right, as a pushed screen in iOS. A swipe
  * from the left edge drags it back out, and `back` slides it out. The pane
  * stays out of view until `reset`, so it does not show again while the route
  * changes. The `under` element moves and the `dim` element fades with the
- * pane. Their styles give their positions while the pane is open. With
- * `leaveEarly`, `onBack` runs when the swipe ends, and a copy of the pane
- * slides out. Use it when nothing is under the pane, so the next page loads
- * during the slide.
+ * pane. Their styles give their positions while the pane is open.
  */
 export function usePaneSwipeBack(options: {
   enabled: boolean;
   onBack(): void;
   under?: React.RefObject<HTMLElement | null>;
-  leaveEarly?: boolean;
 }) {
   const pane = useRef<HTMLDivElement>(null);
   const dim = useRef<HTMLDivElement>(null);
-  const { enabled, onBack, under, leaveEarly = false } = options;
+  const { enabled, onBack, under } = options;
   const onBackRef = useRef(onBack);
   onBackRef.current = onBack;
   const closing = useRef(false);
@@ -211,12 +174,6 @@ export function usePaneSwipeBack(options: {
       if (!element) return;
       stop.current?.();
       closing.current = out;
-      if (out && leaveEarly) {
-        stop.current = null;
-        slideCopyOut(element, offset.current, velocity);
-        onBackRef.current();
-        return;
-      }
       stop.current = spring({
         from: offset.current,
         to: out ? element.offsetWidth : 0,
@@ -232,7 +189,7 @@ export function usePaneSwipeBack(options: {
         },
       });
     },
-    [place, clear, leaveEarly],
+    [place, clear],
   );
 
   const back = useCallback(() => {
@@ -322,6 +279,172 @@ export function usePaneSwipeBack(options: {
   useEffect(() => () => stop.current?.(), []);
 
   return { pane, dim, back, reset };
+}
+
+/**
+ * A copy of a page over the screen, with a dim layer under it. The page
+ * hides. The copy moves with the finger while the next page loads and shows
+ * under it. The parent of the page moves and dims with the copy, as the list
+ * under a pushed screen in iOS.
+ */
+function pageCopy(page: HTMLElement) {
+  const rect = page.getBoundingClientRect();
+  const box = {
+    position: "fixed",
+    top: `${rect.top}px`,
+    left: `${rect.left}px`,
+    width: `${rect.width}px`,
+    height: `${rect.height}px`,
+  };
+  const dim = document.createElement("div");
+  dim.className = "pointer-events-none bg-black/10 dark:bg-black/40";
+  Object.assign(dim.style, { ...box, zIndex: "49" });
+  const copy = page.cloneNode(true) as HTMLElement;
+  copy.inert = true;
+  Object.assign(copy.style, {
+    ...box,
+    zIndex: "50",
+    background: backgroundOf(page),
+    boxShadow: "-1px 0 16px rgb(0 0 0 / 0.12)",
+    transition: "none",
+  });
+  document.body.append(dim, copy);
+  copy.scrollTop = page.scrollTop;
+  page.style.visibility = "hidden";
+  const under = page.parentElement;
+  return {
+    page,
+    width: rect.width,
+    scrollTop: page.scrollTop,
+    x: 0,
+    place(x: number) {
+      this.x = x;
+      const progress = Math.min(1, x / rect.width);
+      copy.style.transform = `translateX(${x}px)`;
+      dim.style.opacity = String(1 - progress);
+      if (under) {
+        under.style.transition = "none";
+        under.style.transform = `translateX(${-UNDER_SHIFT * rect.width * (1 - progress)}px)`;
+      }
+    },
+    remove() {
+      copy.remove();
+      dim.remove();
+      if (under) under.style.transition = under.style.transform = "";
+    },
+  };
+}
+
+/** The copy of a page that a swipe moved back in. It goes when the page shows again. */
+let returning: ReturnType<typeof pageCopy> | null = null;
+
+/**
+ * A swipe from the left edge goes back from a page to `to`, as the back
+ * gesture in iOS. The next page loads at the start of the swipe and shows
+ * under a copy of this page. A swipe that does not go far enough comes back
+ * to this page.
+ */
+export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
+  const { enabled, to } = options;
+  const page = useRef<HTMLDivElement>(null);
+  const navigate = useNavigate();
+  const location = useLocation();
+  const path = location.pathname;
+
+  // After a swipe that came back, the copy stays until this page shows again.
+  useLayoutEffect(() => {
+    if (!returning || location.pathname !== path) return;
+    const element = page.current;
+    if (element && element !== returning.page) element.scrollTop = returning.scrollTop;
+    returning.page.style.visibility = "";
+    returning.remove();
+    returning = null;
+  }, [location.key, location.pathname, path]);
+
+  useEffect(() => {
+    const element = page.current;
+    if (!element || !enabled) return;
+    const onStart = (event: TouchEvent) => {
+      const touch = event.touches[0];
+      if (event.touches.length !== 1 || touch.clientX > 28 || returning) return;
+      // The page unmounts during the swipe, so the listeners are on the
+      // element under the finger. A touch keeps its element after the element
+      // leaves the page.
+      const target = event.target as EventTarget;
+      const start = { x: touch.clientX, y: touch.clientY };
+      let history = [{ x: touch.clientX, time: event.timeStamp }];
+      let copy: ReturnType<typeof pageCopy> | null = null;
+
+      const stopListening = () => {
+        target.removeEventListener("touchmove", onMove);
+        target.removeEventListener("touchend", onEnd);
+        target.removeEventListener("touchcancel", onEnd);
+      };
+      const onMove = (event: Event) => {
+        const touch = (event as TouchEvent).touches[0];
+        if (!copy) {
+          const dx = touch.clientX - start.x;
+          const dy = touch.clientY - start.y;
+          if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          if (dx <= Math.abs(dy)) {
+            stopListening();
+            return;
+          }
+          // The copy starts where the page is, so it does not jump to the finger.
+          start.x = touch.clientX;
+          copy = pageCopy(element);
+          copy.place(0);
+          navigate(to);
+        }
+        event.preventDefault();
+        history.push({ x: touch.clientX, time: event.timeStamp });
+        while (history.length > 2 && event.timeStamp - history[0].time > 100) history.shift();
+        copy.place(Math.max(0, touch.clientX - start.x));
+      };
+      const onEnd = (event: Event) => {
+        stopListening();
+        const moving = copy;
+        if (!moving) return;
+        const first = history[0];
+        const lastX = (event as TouchEvent).changedTouches[0]?.clientX ?? history[history.length - 1].x;
+        const elapsed = event.timeStamp - first.time;
+        const velocity = elapsed > 0 ? ((lastX - first.x) / elapsed) * 1000 : 0;
+        const out = velocity > -100 && moving.x + project(velocity) > moving.width / 2;
+        spring({
+          from: moving.x,
+          to: out ? moving.width : 0,
+          velocity,
+          rest: out ? 4 : 0.5,
+          onUpdate: (x) => moving.place(out ? x : Math.max(0, x)),
+          onDone: () => {
+            if (out) {
+              moving.remove();
+              return;
+            }
+            returning = moving;
+            // Before the next page shows, a move to this page stops its load.
+            // After, the page comes back from the history.
+            if (window.location.pathname === path) navigate(path, { replace: true });
+            else navigate(-1);
+            // The copy does not stay if this page does not show again.
+            setTimeout(() => {
+              if (returning !== moving) return;
+              moving.page.style.visibility = "";
+              moving.remove();
+              returning = null;
+            }, 5000);
+          },
+        });
+      };
+      target.addEventListener("touchmove", onMove, { passive: false });
+      target.addEventListener("touchend", onEnd);
+      target.addEventListener("touchcancel", onEnd);
+    };
+    element.addEventListener("touchstart", onStart, { passive: true });
+    return () => element.removeEventListener("touchstart", onStart);
+  }, [enabled, navigate, path, to]);
+
+  return page;
 }
 
 /** How far the content moves for a pull. The content moves less than the finger. */
