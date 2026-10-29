@@ -374,6 +374,12 @@ export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
       const start = { x: touch.clientX, y: touch.clientY };
       let history = [{ x: touch.clientX, time: event.timeStamp }];
       let copy: ReturnType<typeof pageCopy> | null = null;
+      // Safari has its own swipe back from the left edge. It goes back in the
+      // history and shows an old picture of the last page, with the drawer
+      // open. A prevented touch stops it. A prevented touch gives no click, so
+      // a tap clicks the element here.
+      if (event.cancelable) event.preventDefault();
+      let tap = true;
 
       const stopListening = () => {
         target.removeEventListener("touchmove", onMove);
@@ -386,6 +392,7 @@ export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
           const dx = touch.clientX - start.x;
           const dy = touch.clientY - start.y;
           if (Math.abs(dx) < 8 && Math.abs(dy) < 8) return;
+          tap = false;
           if (dx <= Math.abs(dy)) {
             stopListening();
             return;
@@ -404,7 +411,12 @@ export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
       const onEnd = (event: Event) => {
         stopListening();
         const moving = copy;
-        if (!moving) return;
+        if (!moving) {
+          if (tap && event.type === "touchend") {
+            target.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, view: window }));
+          }
+          return;
+        }
         const first = history[0];
         const lastX = (event as TouchEvent).changedTouches[0]?.clientX ?? history[history.length - 1].x;
         const elapsed = event.timeStamp - first.time;
@@ -440,7 +452,7 @@ export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
       target.addEventListener("touchend", onEnd);
       target.addEventListener("touchcancel", onEnd);
     };
-    element.addEventListener("touchstart", onStart, { passive: true });
+    element.addEventListener("touchstart", onStart, { passive: false });
     return () => element.removeEventListener("touchstart", onStart);
   }, [enabled, navigate, path, to]);
 
