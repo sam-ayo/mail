@@ -150,7 +150,7 @@ export function Sidebar({
         </button>
       </div>
 
-      <div className="flex-1 overflow-y-auto px-2.5 pb-2">
+      <div className="flex-1 overflow-y-auto overscroll-contain px-2.5 pb-2">
         <SectionTitle>{accounts.length > 1 ? "All accounts" : "Mailbox"}</SectionTitle>
         <ul className="space-y-px">
           {FOLDERS.map((name) => (

@@ -88,7 +88,7 @@ export function ShortcutsDialog({ open, onClose }: { open: boolean; onClose(): v
     <Dialog.Root open={open} onOpenChange={(next) => !next && onClose()}>
       <Dialog.Portal>
         <Dialog.Backdrop className="fixed inset-0 z-50 min-h-dvh bg-zinc-950/30 transition-opacity duration-200 ease-out data-ending-style:opacity-0 data-starting-style:opacity-0" />
-        <Dialog.Popup className="fixed inset-x-4 top-[12vh] z-50 mx-auto max-h-[76vh] max-w-4xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5 outline-none transition-[scale,opacity] duration-200 ease-out data-ending-style:scale-[0.96] data-ending-style:opacity-0 data-starting-style:scale-[0.96] data-starting-style:opacity-0 dark:bg-zinc-900 dark:ring-white/10">
+        <Dialog.Popup className="fixed inset-x-4 top-[12vh] z-50 mx-auto max-h-[76dvh] max-w-4xl overflow-y-auto overscroll-contain rounded-2xl bg-white p-6 shadow-2xl ring-1 ring-black/5 outline-none transition-[scale,opacity] duration-200 ease-out data-ending-style:scale-[0.96] data-ending-style:opacity-0 data-starting-style:scale-[0.96] data-starting-style:opacity-0 dark:bg-zinc-900 dark:ring-white/10">
           <div className="mb-4 flex items-center justify-between">
             <Dialog.Title className="text-lg font-semibold">Keyboard shortcuts</Dialog.Title>
             <Dialog.Close

@@ -2,6 +2,17 @@
 
 @custom-variant dark (&:where(.dark, .dark *));
 
+/* A tap on a touch screen sets :hover and keeps it until the next tap. The
+   built-in hover variant checks only (hover: hover). Some Android phones and
+   styluses report hover, so this variant also requires a fine pointer. */
+@custom-variant hover {
+  @media (hover: hover) and (pointer: fine) {
+    &:hover {
+      @slot;
+    }
+  }
+}
+
 @theme {
   --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif, "Apple Color Emoji",
     "Segoe UI Emoji", "Segoe UI Symbol", "Noto Color Emoji";
@@ -46,6 +57,15 @@
   transition-property: color, background-color, border-color, box-shadow, opacity;
   transition-duration: 160ms;
   transition-timing-function: var(--ease-out);
+
+  /* A touch screen shows no hover colour, so a tap had no feedback. The
+     control dims while the finger is on it, as an iOS button does. */
+  @media (hover: none) {
+    &:active:not(:disabled) {
+      opacity: 0.6;
+      transition-duration: 100ms;
+    }
+  }
 }
 
 html,
@@ -356,6 +376,12 @@ button,
   -webkit-user-select: none;
   user-select: none;
   -webkit-touch-callout: none;
+}
+
+/* A link does not wait for a second tap. Link text stays selectable,
+   because some links are in text. */
+a {
+  touch-action: manipulation;
 }
 
 /* A touch screen has no keyboard, so the shortcut hints do not show. */

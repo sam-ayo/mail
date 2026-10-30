@@ -75,7 +75,18 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
                 Use a hosted address
               </summary>
               <Form method="post" action="/connect/hosted" className="mt-3 flex flex-col gap-2">
-                <input name="email" type="email" required placeholder="Address" autoComplete="username" className={inputClass} />
+                <input
+                  name="email"
+                  type="email"
+                  required
+                  placeholder="Address"
+                  autoComplete="username"
+                  autoCapitalize="none"
+                  autoCorrect="off"
+                  spellCheck={false}
+                  enterKeyHint="next"
+                  className={inputClass}
+                />
                 <input
                   name="password"
                   type="password"

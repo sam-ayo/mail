@@ -53,7 +53,7 @@ export function AttachmentViewer({
                 </a>
               </div>
               {shown.mimeType.startsWith("image/") ? (
-                <div className="grid min-h-0 flex-1 place-items-center overflow-auto bg-zinc-50 p-4 dark:bg-zinc-950">
+                <div className="grid min-h-0 flex-1 place-items-center overflow-auto overscroll-contain bg-zinc-50 p-4 dark:bg-zinc-950">
                   <img src={shown.preview} alt={shown.filename} className="max-h-full max-w-full object-contain" />
                 </div>
               ) : shown.mimeType === "application/pdf" ? (

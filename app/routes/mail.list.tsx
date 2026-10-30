@@ -1062,7 +1062,7 @@ function ThreadPlaceholder({ thread }: { thread: ThreadSummary }) {
     <article aria-busy="true" className="flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
       {/* The same height as the header of the conversation. */}
       <header className="h-[49px] shrink-0 border-b border-zinc-200 dark:border-zinc-800" />
-      <div className="flex-1 overflow-y-auto">
+      <div className="flex-1 overflow-y-auto overscroll-contain">
         <div className="mx-auto max-w-6xl px-6 py-6">
           <h1 dir="auto" className="mb-6 text-xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere]">
             {thread.subject}

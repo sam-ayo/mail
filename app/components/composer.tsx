@@ -279,6 +279,7 @@ export function Composer({
             <input
               value={draft.subject}
               onChange={(event) => set({ subject: event.target.value })}
+              enterKeyHint="next"
               className="w-full bg-transparent py-2 font-medium outline-none"
             />
           </Row>
@@ -687,7 +688,7 @@ export function ComposeWindow() {
         </header>
         {!minimized && (
           <div
-            className={cx("overflow-y-auto", fill ? "min-h-0 flex-1" : "max-h-[80vh]")}
+            className={cx("overflow-y-auto overscroll-contain", fill ? "min-h-0 flex-1" : "max-h-[80dvh]")}
             onKeyDown={(event) => {
               if ((event.metaKey || event.ctrlKey) && event.shiftKey && event.key.toLowerCase() === "e") {
                 event.preventDefault();

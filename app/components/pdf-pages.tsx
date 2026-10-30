@@ -47,7 +47,7 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
   }, [url]);
 
   return (
-    <div className="min-h-0 flex-1 overflow-auto bg-zinc-100 p-2 dark:bg-zinc-950">
+    <div className="min-h-0 flex-1 overflow-auto overscroll-contain bg-zinc-100 p-2 dark:bg-zinc-950">
       {failed && (
         <p className="p-6 text-center text-sm text-zinc-500">
           Could not show {title}. Use the download button to open it.
