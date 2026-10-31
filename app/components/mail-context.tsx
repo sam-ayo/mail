@@ -146,8 +146,10 @@ export function MailProvider({
     refreshCounts();
   }, [refreshCounts, accounts.length]);
 
-  // Check for new mail every 20 seconds while the tab is visible. Also check
-  // when you come back to the tab, because a hidden tab does not check.
+  // Each check keeps a Vercel function instance alive, and the Hobby plan limits
+  // that time. Web push tells you about new mail, so check only every 90 seconds
+  // while the tab is visible. Also check when you come back to the tab, because a
+  // hidden tab does not check.
   const idle = pendingActions === 0 && revalidator.state === "idle";
   const idleRef = useRef(idle);
   idleRef.current = idle;
@@ -160,7 +162,7 @@ export function MailProvider({
       revalidator.revalidate();
       refreshCounts();
     };
-    const interval = setInterval(() => check(10_000), 20_000);
+    const interval = setInterval(() => check(60_000), 90_000);
     const onReturn = () => check(5_000);
     document.addEventListener("visibilitychange", onReturn);
     window.addEventListener("focus", onReturn);
