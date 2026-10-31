@@ -98,15 +98,20 @@ export function Composer({
   }, []);
 
   // Grow the body field with its content. A field that fills its parent scrolls instead.
-  useEffect(() => {
+  // The change occurs before the paint. To measure, the field becomes short for a moment.
+  // The form keeps its height during the measurement, so the page around it does not scroll.
+  useLayoutEffect(() => {
     const element = bodyRef.current;
     if (!element) return;
     if (fill) {
       element.style.height = "";
       return;
     }
+    const form = element.form;
+    if (form) form.style.minHeight = `${form.offsetHeight}px`;
     element.style.height = "auto";
     element.style.height = `${Math.max(element.scrollHeight, variant === "inline" ? 120 : 340)}px`;
+    if (form) form.style.minHeight = "";
   }, [draft.body, variant, fill, preview]);
 
   function togglePreview() {
