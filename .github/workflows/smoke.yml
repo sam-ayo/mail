@@ -41,14 +41,14 @@ jobs:
             [[ "$status" == 401 ]]
           done
 
-      # The Worker runs each minute. Cloudflare analytics show its runs in the last 15 minutes.
+      # The Worker runs each 20 minutes. Cloudflare analytics show its runs in the last 45 minutes.
       - name: Worker cron runs
         env:
           CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
         run: |
           body=$(jq -n \
             --arg account "$CLOUDFLARE_ACCOUNT_ID" --arg worker "$WORKER_NAME" \
-            --arg since "$(date -u -d '-15 minutes' +%Y-%m-%dT%H:%M:%SZ)" \
+            --arg since "$(date -u -d '-45 minutes' +%Y-%m-%dT%H:%M:%SZ)" \
             --arg until "$(date -u +%Y-%m-%dT%H:%M:%SZ)" \
             '{query: "query($account: string!, $worker: string!, $since: Time!, $until: Time!) {
                 viewer { accounts(filter: {accountTag: $account}) {
@@ -62,6 +62,6 @@ jobs:
             -H "Authorization: Bearer $CLOUDFLARE_API_TOKEN" -H 'Content-Type: application/json' -d "$body")
           requests=$(jq '[.data.viewer.accounts[0].workersInvocationsAdaptive[].sum.requests] | add // 0' <<<"$result")
           errors=$(jq '[.data.viewer.accounts[0].workersInvocationsAdaptive[].sum.errors] | add // 0' <<<"$result")
-          echo "Worker runs in the last 15 minutes: $requests, errors: $errors"
-          [[ "$requests" -gt 0 ]] || { echo "::error::The Worker cron did not run in the last 15 minutes"; exit 1; }
+          echo "Worker runs in the last 45 minutes: $requests, errors: $errors"
+          [[ "$requests" -gt 0 ]] || { echo "::error::The Worker cron did not run in the last 45 minutes"; exit 1; }
           [[ "$errors" -le $((requests / 2)) ]] || { echo "::error::Most Worker runs failed. Look at Workers Logs."; exit 1; }

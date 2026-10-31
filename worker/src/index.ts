@@ -1,6 +1,6 @@
 import { env } from "cloudflare:workers";
 
-// The cron trigger in cloudflare.config.ts runs this each minute.
+// The cron trigger in cloudflare.config.ts runs this each 20 minutes.
 export default {
   async scheduled() {
     const response = await fetch(env.CHECK_URL, {
