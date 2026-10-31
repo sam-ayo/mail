@@ -13,43 +13,27 @@ on:
     paths: *paths
   workflow_dispatch:
 
-env:
-  NEON_PROJECT_ID: morning-pond-76593373
-
 jobs:
-  # Applies the new migrations to a copy of the production database.
-  # A migration that fails on the real schema or data then fails the pull request, not production.
+  # Applies all the migrations to an empty database with the Postgres version of production.
+  # A migration that fails then fails the pull request, not production.
   test:
     if: github.event_name == 'pull_request'
     runs-on: ubuntu-24.04
+    services:
+      postgres:
+        image: postgres:17
+        env:
+          POSTGRES_PASSWORD: postgres
+        ports: ["5432:5432"]
+        options: >-
+          --health-cmd pg_isready --health-interval 2s --health-timeout 5s --health-retries 15
+    env:
+      DATABASE_URL: postgres://postgres:postgres@localhost:5432/postgres
     steps:
       - uses: actions/checkout@v7
-      - id: expiry
-        run: echo "at=$(date -u -d '+1 hour' +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
-      - id: branch
-        uses: neondatabase/create-branch-action@v6
-        with:
-          api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          parent_branch: main
-          branch_name: ci/pr-${{ github.event.number }}-${{ github.run_id }}-${{ github.run_attempt }}
-          database: mail
-          role: mail_owner
-          # Neon deletes the branch at this time if the delete step below does not run.
-          expires_at: ${{ steps.expiry.outputs.at }}
       - run: scripts/migrate.sh
-        env:
-          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
       - name: Run the migrations again (they must not run twice)
         run: scripts/migrate.sh | tee /dev/stderr | grep -qx "Done. 0 file(s) recorded."
-        env:
-          DATABASE_URL: ${{ steps.branch.outputs.db_url }}
-      - if: always() && steps.branch.outputs.branch_id
-        uses: neondatabase/delete-branch-action@v3
-        with:
-          api_key: ${{ secrets.NEON_API_KEY }}
-          project_id: ${{ env.NEON_PROJECT_ID }}
-          branch: ${{ steps.branch.outputs.branch_id }}
 
   # Vercel deploys main from GitHub by itself. Write migrations that the code
   # in production now can still use, because the new code can go live first.
@@ -59,11 +43,9 @@ jobs:
     concurrency: migrate-production
     steps:
       - uses: actions/checkout@v7
+      # MIGRATIONS_DATABASE_URL uses the Supabase session pooler (port 5432). The direct
+      # database host has only an IPv6 address, and GitHub runners have only IPv4.
       - name: Apply the migrations to production
         env:
-          NEON_API_KEY: ${{ secrets.NEON_API_KEY }}
-        run: |
-          DATABASE_URL="$(npx -y neonctl@8 connection-string main \
-            --project-id "$NEON_PROJECT_ID" --database-name mail --role-name mail_owner)"
-          echo "::add-mask::$DATABASE_URL"
-          DATABASE_URL="$DATABASE_URL" scripts/migrate.sh
+          DATABASE_URL: ${{ secrets.MIGRATIONS_DATABASE_URL }}
+        run: scripts/migrate.sh

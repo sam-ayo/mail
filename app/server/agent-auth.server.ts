@@ -2,7 +2,6 @@ import { createHmac } from "node:crypto";
 import { cimd } from "@better-auth/cimd";
 import { fetchClientMetadataResource } from "@better-auth/cimd/node";
 import { mcp } from "@better-auth/mcp";
-import { Pool } from "@neondatabase/serverless";
 import { betterAuth, type BetterAuthPlugin } from "better-auth";
 import { APIError, createAuthEndpoint } from "better-auth/api";
 import { setSessionCookie } from "better-auth/cookies";
@@ -10,6 +9,7 @@ import { jwt } from "better-auth/plugins";
 import * as z from "zod";
 import { MAIL_SCOPES, type MailScope } from "~/lib/agents";
 import { MCP_RESOURCE } from "./agent-connections.server";
+import { pool } from "./db.server";
 import { env } from "./env.server";
 
 /**
@@ -50,12 +50,6 @@ const workspaceSignIn = () =>
   }) satisfies BetterAuthPlugin;
 
 function createAgentAuth() {
-  // An idle connection of the pool can get a WebSocket error. With no listener,
-  // the error stops the Node.js process and all the requests in it. The pool
-  // opens a new connection for the next query.
-  const pool = new Pool({ connectionString: env.databaseUrl });
-  pool.on("error", (error: Error) => console.error("Better Auth database pool:", error));
-
   return betterAuth({
     appName: "mail",
     baseURL: env.appUrl,
