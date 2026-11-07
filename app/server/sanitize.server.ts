@@ -30,9 +30,13 @@ const QUOTE_MARKERS = /class="[^"]*(gmail_quote|yahoo_quoted)|type="cite"|id="(d
 // and the inverted light text shows on a white background.
 // The frame always uses the light colour scheme. If the email also applied
 // its own dark styles, the inversion would turn its light text dark again.
+// The frame is as tall as the email, so its document must not scroll. A wide
+// email gets a scale transform, but its layout keeps the full height. If the
+// document could scroll, the wheel or the finger would scroll the email inside
+// the frame, and the conversation would not move.
 const BASE_STYLES = `
 html,body{margin:0;padding:0;background:#fff;color:#18181b}
-html{overflow-x:hidden}
+html,html:root{overflow:hidden !important}
 html body,html:root{height:auto !important;min-height:0 !important}
 body{font:14px/1.55 -apple-system,BlinkMacSystemFont,"Inter","Segoe UI",sans-serif;overflow-wrap:anywhere;padding:4px 2px}
 img{height:auto}
