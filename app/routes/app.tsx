@@ -145,7 +145,7 @@ function Shell() {
     "g ,": () => navigate("/settings"),
     ...accountKeys,
     z: () => undoLast(),
-    "mod+\\": () => toggleSidebar(),
+    "mod+\\": () => toggleSidebar(false),
   });
 
   const commands = useMemo<Command[]>(() => {
@@ -188,7 +188,7 @@ function Shell() {
         group: "View",
         hint: SIDEBAR_SHORTCUT,
         icon: SidebarSimple,
-        run: toggleSidebar,
+        run: () => toggleSidebar(false),
       },
       { id: "theme", label: dark ? "Use light theme" : "Use dark theme", group: "View", icon: Moon, run: toggleTheme },
       ...(themeMode === "system"

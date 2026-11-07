@@ -386,7 +386,9 @@ function isCollapsed() {
   return document.documentElement.classList.contains(COLLAPSED_CLASS);
 }
 
-export function setSidebarCollapsed(collapsed: boolean) {
+/** The shortcut and the command palette change the sidebar many times a day,
+    so they set `animate` to false. Motion after a key press feels slow. */
+export function setSidebarCollapsed(collapsed: boolean, animate = true) {
   const content = document.querySelector<HTMLElement>("[data-sidebar-content]");
   // The position of the content now, with the slide that is in progress.
   const from = content?.getBoundingClientRect().left;
@@ -395,7 +397,8 @@ export function setSidebarCollapsed(collapsed: boolean) {
   [content, ...centered].forEach((element) => element?.getAnimations().forEach((animation) => animation.cancel()));
   document.documentElement.classList.toggle(COLLAPSED_CLASS, collapsed);
   if (!collapsed) endPeek();
-  if (content && from !== undefined) slideContent(content, from, centered, centeredFrom);
+  if (!animate) finishSidebarTransitions();
+  else if (content && from !== undefined) slideContent(content, from, centered, centeredFrom);
   localStorage.setItem(SIDEBAR_COLLAPSED_KEY, collapsed ? "1" : "0");
   window.dispatchEvent(new Event(COLLAPSED_EVENT));
 }
@@ -431,6 +434,16 @@ function slideContent(content: HTMLElement, from: number, centered: HTMLElement[
   });
 }
 
+/** The panel slides with a "translate" transition, and the headers move with a
+    "padding-left" transition. The class change above starts them. */
+function finishSidebarTransitions() {
+  for (const animation of document.getAnimations()) {
+    if (animation instanceof CSSTransition && ["translate", "padding-left"].includes(animation.transitionProperty)) {
+      animation.finish();
+    }
+  }
+}
+
 let peekTimer: ReturnType<typeof setTimeout> | undefined;
 
 /** Brings a collapsed panel out over the content. Only a pointer that comes
@@ -453,8 +466,8 @@ function endPeek() {
   document.documentElement.classList.remove("sidebar-peek");
 }
 
-export function toggleSidebar() {
-  setSidebarCollapsed(!isCollapsed());
+export function toggleSidebar(animate = true) {
+  setSidebarCollapsed(!isCollapsed(), animate);
 }
 
 function subscribeCollapsed(onChange: () => void) {
@@ -476,7 +489,7 @@ export function SidebarButton() {
         label={collapsed ? "Show sidebar" : "Hide sidebar"}
         shortcut={SIDEBAR_SHORTCUT}
         className="size-7"
-        onClick={toggleSidebar}
+        onClick={() => toggleSidebar()}
       >
         {collapsed ? <SidebarSimple className="size-4" /> : <SidebarSimple className="size-4" />}
       </IconButton>
