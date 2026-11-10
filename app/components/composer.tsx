@@ -17,6 +17,7 @@ import { markdownToHtml } from "~/lib/markdown";
 import { useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
 import { useMediaQuery, useSheet } from "./touch";
+import { RecipientInput } from "./recipient-input";
 import { ResizeHandle } from "./resize-handle";
 import { Button, FileName, Hint, IconButton, cx } from "./ui";
 
@@ -187,7 +188,8 @@ export function Composer({
         if (event.key === "Enter" && !event.metaKey && !event.ctrlKey && target.tagName === "INPUT") {
           event.preventDefault();
           const fields = Array.from(
-            event.currentTarget.querySelectorAll<HTMLElement>("input:not([type=file]), textarea"),
+            // A recipient field has a hidden input for its value, with a tabindex of -1.
+            event.currentTarget.querySelectorAll<HTMLElement>("input:not([type=file]):not([tabindex='-1']), textarea"),
           );
           fields[fields.indexOf(target) + 1]?.focus();
           return;
@@ -226,10 +228,11 @@ export function Composer({
           </Row>
         )}
         <Row label="To">
-          <input
+          <RecipientInput
             ref={toRef}
             value={draft.to}
-            onChange={(event) => set({ to: event.target.value })}
+            onChange={(to) => set({ to })}
+            exclude={addresses(draft.cc, draft.bcc)}
             inputMode="email"
             autoCapitalize="none"
             autoCorrect="off"
@@ -252,10 +255,11 @@ export function Composer({
         {showCopies && (
           <>
             <Row label="Cc">
-              <input
+              <RecipientInput
                 ref={ccRef}
                 value={draft.cc}
-                onChange={(event) => set({ cc: event.target.value })}
+                onChange={(cc) => set({ cc })}
+                exclude={addresses(draft.to, draft.bcc)}
                 inputMode="email"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -265,10 +269,11 @@ export function Composer({
               />
             </Row>
             <Row label="Bcc">
-              <input
+              <RecipientInput
                 ref={bccRef}
                 value={draft.bcc}
-                onChange={(event) => set({ bcc: event.target.value })}
+                onChange={(bcc) => set({ bcc })}
+                exclude={addresses(draft.to, draft.cc)}
                 inputMode="email"
                 autoCapitalize="none"
                 autoCorrect="off"
@@ -399,6 +404,11 @@ export function Composer({
       </div>
     </form>
   );
+}
+
+/** The addresses in recipient fields. */
+function addresses(...fields: string[]) {
+  return fields.flatMap(parseAddressList).map((address) => address.email);
 }
 
 function Row({ label, children }: { label: string; children: React.ReactNode }) {

@@ -390,3 +390,57 @@ export function suggestImportantSenders(known: KnownSender[], listed: string[], 
     ? [...shown.slice(0, limit - 1), typed]
     : [typed, ...shown.slice(0, limit - 1)];
 }
+
+/** A person from the person's mail, for the suggestions of the recipient fields. */
+export interface Contact {
+  email: string;
+  name?: string;
+  /** A larger value is a person that the person writes to more often. */
+  count: number;
+}
+
+/** The part of a recipient field after the last comma or semicolon: the address that the person types now. */
+export function lastRecipient(value: string) {
+  const start = Math.max(value.lastIndexOf(","), value.lastIndexOf(";")) + 1;
+  return { start, text: value.slice(start).trim() };
+}
+
+/**
+ * Puts a contact in place of the address that the person types now. A comma
+ * and a space come after it, so the person can type the next address. The
+ * field separates addresses at commas, so a name loses its commas.
+ */
+export function insertRecipient(value: string, contact: Contact) {
+  const { start } = lastRecipient(value);
+  const before = value.slice(0, start).trimEnd();
+  const name = contact.name?.replace(/[",;<>]/g, "").trim();
+  const address = name ? `${name} <${contact.email}>` : contact.email;
+  return `${before}${before ? " " : ""}${address}, `;
+}
+
+/**
+ * Suggestions for a recipient field: contacts whose address or name has a word
+ * that starts with the text, then contacts whose address contains the text.
+ * People that the person writes to more often come first in each group.
+ * Addresses that the message already has do not show.
+ */
+export function suggestContacts(contacts: Contact[], text: string, exclude: string[], limit = 6) {
+  const term = text.trim().toLowerCase().replace(/^["<]+/, "");
+  if (!term) return [];
+  const skip = new Set(exclude.map((e) => e.toLowerCase()));
+  const words = (contact: Contact) =>
+    [contact.email, ...contact.email.split(/[@._+-]/), ...(contact.name?.toLowerCase().split(/[\s.,'"()-]+/) ?? [])];
+  const rank = (contact: Contact) => {
+    if (skip.has(contact.email)) return 0;
+    const name = contact.name?.toLowerCase() ?? "";
+    if (contact.email.startsWith(term) || name.startsWith(term)) return 3;
+    if (words(contact).some((w) => w.startsWith(term))) return 2;
+    return contact.email.includes(term) || name.includes(term) ? 1 : 0;
+  };
+  return contacts
+    .map((contact) => ({ contact, rank: rank(contact) }))
+    .filter((c) => c.rank > 0)
+    .sort((a, b) => b.rank - a.rank || b.contact.count - a.contact.count || a.contact.email.localeCompare(b.contact.email))
+    .slice(0, limit)
+    .map((c) => c.contact);
+}
