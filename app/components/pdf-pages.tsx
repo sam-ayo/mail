@@ -1,15 +1,65 @@
 import { useEffect, useRef, useState } from "react";
+import type { PDFDocumentProxy, PDFPageProxy, PageViewport } from "pdfjs-dist";
 import "./pdf-xfa.css";
+
+const SAFE_URL = /^(https?|mailto):/i;
 
 /** Opens XFA form links in a new tab. It does not accept a script URL. */
 const xfaLinks = {
   addLinkAttributes(link: HTMLAnchorElement, href: string) {
-    if (!/^(https?|mailto):/i.test(href)) return;
+    if (!SAFE_URL.test(href)) return;
     link.href = href;
     link.target = "_blank";
     link.rel = "noopener noreferrer";
   },
 };
+
+/**
+ * Puts a link on a page for each link annotation of the page. A web link
+ * opens in a new tab. A link to a part of the PDF scrolls to its page.
+ */
+async function addLinks(
+  pdf: PDFDocumentProxy,
+  page: PDFPageProxy,
+  viewport: PageViewport,
+  sheet: HTMLElement,
+  sheets: HTMLElement[],
+) {
+  const annotations = await page.getAnnotations({ intent: "display" });
+  for (const annotation of annotations) {
+    if (annotation.subtype !== "Link" || !annotation.rect) continue;
+    const link = document.createElement("a");
+    if (typeof annotation.url === "string" && SAFE_URL.test(annotation.url)) {
+      link.href = annotation.url;
+      link.target = "_blank";
+      link.rel = "noopener noreferrer";
+      link.title = annotation.url;
+    } else if (annotation.dest) {
+      const dest = annotation.dest;
+      link.href = "#";
+      link.addEventListener("click", async (event) => {
+        event.preventDefault();
+        const explicit = typeof dest === "string" ? await pdf.getDestination(dest) : dest;
+        const target = explicit?.[0];
+        if (target == null) return;
+        const index = typeof target === "number" ? target : await pdf.getPageIndex(target);
+        sheets[index]?.scrollIntoView({ block: "start" });
+      });
+    } else {
+      continue;
+    }
+    // Use percentages, so the links stay on their text when the page changes size.
+    const [left, bottom, right, top] = annotation.rect;
+    const [x1, y1] = viewport.convertToViewportPoint(left, bottom);
+    const [x2, y2] = viewport.convertToViewportPoint(right, top);
+    link.className = "absolute";
+    link.style.left = `${(Math.min(x1, x2) / viewport.width) * 100}%`;
+    link.style.top = `${(Math.min(y1, y2) / viewport.height) * 100}%`;
+    link.style.width = `${(Math.abs(x2 - x1) / viewport.width) * 100}%`;
+    link.style.height = `${(Math.abs(y2 - y1) / viewport.height) * 100}%`;
+    sheet.append(link);
+  }
+}
 
 /**
  * Draws each page of a PDF on a canvas. iOS shows only the first page of a
@@ -39,6 +89,7 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
       const pdf = await task.promise;
       const width = root.clientWidth;
       const ratio = window.devicePixelRatio || 1;
+      const sheets: HTMLElement[] = [];
       for (let n = 1; n <= pdf.numPages && !cancelled; n++) {
         const page = await pdf.getPage(n);
         const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
@@ -52,6 +103,7 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
           const layer = document.createElement("div");
           sheet.append(layer);
           root.append(sheet);
+          sheets[n - 1] = sheet;
           pdfjs.XfaLayer.render({
             viewport: viewport.clone({ dontFlip: true }),
             div: layer,
@@ -62,13 +114,18 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
           });
           continue;
         }
+        const sheet = document.createElement("div");
+        sheet.className = "relative shrink-0 bg-white shadow-sm";
         const canvas = document.createElement("canvas");
         canvas.width = Math.floor(viewport.width * ratio);
         canvas.height = Math.floor(viewport.height * ratio);
-        canvas.className = "block w-full bg-white shadow-sm";
-        root.append(canvas);
+        canvas.className = "block w-full";
+        sheet.append(canvas);
+        root.append(sheet);
+        sheets[n - 1] = sheet;
         await page.render({ canvas, viewport, transform: ratio === 1 ? undefined : [ratio, 0, 0, ratio, 0, 0] })
           .promise;
+        if (!cancelled) await addLinks(pdf, page, viewport, sheet, sheets);
       }
     })().catch(() => !cancelled && setFailed(true));
 
