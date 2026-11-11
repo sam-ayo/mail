@@ -230,9 +230,45 @@ export function displayName(address: Address) {
   return address.name || address.email.split("@")[0];
 }
 
+/**
+ * Reads the addresses in a recipient field. A name can have a comma, for
+ * example "Doe, Jane <jane@example.com>". Thus a comma in
+ * quotes or in angle brackets does not separate addresses, and a part with
+ * no "@" joins the part after it.
+ */
 export function parseAddressList(input: string): Address[] {
-  return input
-    .split(/[,;]/)
+  const parts: string[] = [];
+  let current = "";
+  let quoted = false;
+  let angled = false;
+  for (const char of input) {
+    if (char === '"') quoted = !quoted;
+    else if (char === "<" && !quoted) angled = true;
+    else if (char === ">" && !quoted) angled = false;
+    if ((char === "," || char === ";") && !quoted && !angled) {
+      parts.push(current);
+      current = "";
+    } else {
+      current += char;
+    }
+  }
+  parts.push(current);
+
+  const merged: string[] = [];
+  let pending = "";
+  for (const part of parts) {
+    const text = pending ? `${pending},${part}` : part;
+    if (!text.trim()) continue;
+    if (text.includes("@")) {
+      merged.push(text);
+      pending = "";
+    } else {
+      pending = text;
+    }
+  }
+  if (pending.trim()) merged.push(pending);
+
+  return merged
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
