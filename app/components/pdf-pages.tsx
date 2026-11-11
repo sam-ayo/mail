@@ -1,8 +1,21 @@
 import { useEffect, useRef, useState } from "react";
+import "./pdf-xfa.css";
+
+/** Opens XFA form links in a new tab. It does not accept a script URL. */
+const xfaLinks = {
+  addLinkAttributes(link: HTMLAnchorElement, href: string) {
+    if (!/^(https?|mailto):/i.test(href)) return;
+    link.href = href;
+    link.target = "_blank";
+    link.rel = "noopener noreferrer";
+  },
+};
 
 /**
  * Draws each page of a PDF on a canvas. iOS shows only the first page of a
  * PDF in an iframe, so the viewer cannot use the browser's own PDF view.
+ * An XFA form (an Adobe LiveCycle form) has no page content of its own, so
+ * the viewer draws its pages as HTML.
  */
 export function PdfPages({ url, title }: { url: string; title: string }) {
   const container = useRef<HTMLDivElement>(null);
@@ -21,7 +34,7 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
         import("pdfjs-dist/build/pdf.worker.min.mjs?url"),
       ]);
       pdfjs.GlobalWorkerOptions.workerSrc = worker.default;
-      const task = pdfjs.getDocument({ url });
+      const task = pdfjs.getDocument({ url, enableXfa: true, standardFontDataUrl: "/pdfjs-fonts/" });
       destroy = () => void task.destroy();
       const pdf = await task.promise;
       const width = root.clientWidth;
@@ -29,6 +42,26 @@ export function PdfPages({ url, title }: { url: string; title: string }) {
       for (let n = 1; n <= pdf.numPages && !cancelled; n++) {
         const page = await pdf.getPage(n);
         const viewport = page.getViewport({ scale: width / page.getViewport({ scale: 1 }).width });
+        if (pdf.isPureXfa) {
+          const xfaHtml = await page.getXfa();
+          if (cancelled || !xfaHtml) continue;
+          const sheet = document.createElement("div");
+          sheet.className = "relative shrink-0 overflow-hidden bg-white shadow-sm";
+          sheet.style.width = `${viewport.width}px`;
+          sheet.style.height = `${viewport.height}px`;
+          const layer = document.createElement("div");
+          sheet.append(layer);
+          root.append(sheet);
+          pdfjs.XfaLayer.render({
+            viewport: viewport.clone({ dontFlip: true }),
+            div: layer,
+            xfaHtml,
+            annotationStorage: pdf.annotationStorage,
+            linkService: xfaLinks as unknown as Parameters<typeof pdfjs.XfaLayer.render>[0]["linkService"],
+            intent: "display",
+          });
+          continue;
+        }
         const canvas = document.createElement("canvas");
         canvas.width = Math.floor(viewport.width * ratio);
         canvas.height = Math.floor(viewport.height * ratio);

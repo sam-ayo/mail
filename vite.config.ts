@@ -1,6 +1,8 @@
 import { reactRouter } from "@react-router/dev/vite";
 import tailwindcss from "@tailwindcss/vite";
 import { mcpUse } from "mcp-use/vite";
+import { createReadStream, readdirSync, readFileSync } from "node:fs";
+import { fileURLToPath } from "node:url";
 import { defineConfig, type Plugin, type PluginOption } from "vite";
 
 /**
@@ -51,11 +53,37 @@ const bundleServerDependencies: Plugin = {
   },
 };
 
+/**
+ * Serve the standard fonts of pdf.js at /pdfjs-fonts/. pdf.js uses them in
+ * place of fonts that a PDF does not include. XFA forms need them to measure
+ * text; without them, the lines of a form overlap. pdf.js loads each font
+ * from this folder by its file name, so the names must not get a hash.
+ */
+const pdfFontsDir = fileURLToPath(new URL("node_modules/pdfjs-dist/standard_fonts/", import.meta.url));
+const pdfFonts: Plugin = {
+  name: "pdfjs-standard-fonts",
+  configureServer(server) {
+    server.middlewares.use("/pdfjs-fonts/", (req, res, next) => {
+      const name = decodeURIComponent((req.url ?? "").split("?")[0]).replace(/^\//, "");
+      if (!readdirSync(pdfFontsDir).includes(name)) return next();
+      res.setHeader("Content-Type", "application/octet-stream");
+      createReadStream(pdfFontsDir + name).pipe(res);
+    });
+  },
+  generateBundle() {
+    if (this.environment.name !== "client") return;
+    for (const name of readdirSync(pdfFontsDir)) {
+      this.emitFile({ type: "asset", fileName: `pdfjs-fonts/${name}`, source: readFileSync(pdfFontsDir + name) });
+    }
+  },
+};
+
 export default defineConfig({
   // mcpUse() must come before the framework plugins. See app/mcp/server.ts.
   plugins: [
     notInChildCompiler(mcpUse({ entry: "app/mcp/server.ts", viewsDir: "app/mcp/views" })),
     viewRefreshPreamble,
+    pdfFonts,
     tailwindcss(),
     // This must come before reactRouter(), which reads `resolve.noExternal`.
     bundleServerDependencies,
