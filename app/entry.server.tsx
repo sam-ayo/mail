@@ -8,6 +8,11 @@ import { isbot } from "isbot";
 import type { RenderToPipeableStreamOptions } from "react-dom/server";
 import { renderToPipeableStream } from "react-dom/server";
 import { themeScript } from "./lib/theme-script";
+import { env } from "./server/env.server";
+import { startJobs } from "./server/jobs.server";
+
+// A server that runs all the time (the Oracle Cloud VM) runs the scheduled jobs itself.
+if (process.env.RUN_JOBS === "1") startJobs();
 
 // React Router rejects a streamed promise after this time, in pages and in data
 // requests. The message list streams, and a slow mail server can take more
@@ -70,7 +75,8 @@ export default function handleRequest(
   }
 
   const nonce = randomBytes(16).toString("base64");
-  responseHeaders.set("Content-Security-Policy", contentSecurityPolicy(nonce, new URL(request.url).protocol === "https:"));
+  // Use APP_URL, not request.url: behind a proxy such as Caddy, request.url starts with http: even for HTTPS.
+  responseHeaders.set("Content-Security-Policy", contentSecurityPolicy(nonce, env.appUrl.startsWith("https:")));
 
   return new Promise((resolve, reject) => {
     let shellRendered = false;
