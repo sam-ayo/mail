@@ -3,7 +3,6 @@ name: Smoke test
 # Checks that production works: after each production deploy and each hour.
 # The app on the Oracle VM does the mail check itself, so no step checks the Worker.
 on:
-  deployment_status:
   workflow_run:
     workflows: [Deploy]
     branches: [main]
@@ -17,9 +16,8 @@ env:
 
 jobs:
   smoke:
-    if: >-
-      github.event_name != 'deployment_status' ||
-      (github.event.deployment_status.state == 'success' && github.event.deployment.environment == 'Production')
+    # After a Deploy run, only a successful one is a new production version.
+    if: github.event_name != 'workflow_run' || github.event.workflow_run.conclusion == 'success'
     runs-on: ubuntu-24.04
     steps:
       - name: Pages load

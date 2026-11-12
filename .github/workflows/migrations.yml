@@ -35,7 +35,7 @@ jobs:
       - name: Run the migrations again (they must not run twice)
         run: scripts/migrate.sh | tee /dev/stderr | grep -qx "Done. 0 file(s) recorded."
 
-  # Vercel deploys main from GitHub by itself. Write migrations that the code
+  # The Deploy workflow puts main on the VM at the same time. Write migrations that the code
   # in production now can still use, because the new code can go live first.
   migrate:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
