@@ -69,6 +69,36 @@ function decodeCursor(cursor: string | null): Record<string, string> | null {
   }
 }
 
+// The list of all accounts waits for each account. One mail server that does
+// not answer must not hold the mail of the other accounts.
+/** The time that a list waits for one account. A normal answer takes less than one second. */
+const LIST_TIMEOUT_MS = 8000;
+/** The shorter wait for an account that was slow a short time ago. */
+const SLOW_LIST_TIMEOUT_MS = 2000;
+const SLOW_ACCOUNT_MS = 2 * 60_000;
+/** The time until which each slow account gets the shorter wait. */
+const slowAccounts = new Map<string, number>();
+
+async function withListLimit<T>(account: Account, list: Promise<T>): Promise<T> {
+  const slow = (slowAccounts.get(account.id) ?? 0) > Date.now();
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  const limit = new Promise<never>((_, reject) => {
+    timer = setTimeout(() => {
+      slowAccounts.set(account.id, Date.now() + SLOW_ACCOUNT_MS);
+      reject(new ProviderError("The mail server did not answer in time. Try again later.", 504));
+    }, slow ? SLOW_LIST_TIMEOUT_MS : LIST_TIMEOUT_MS);
+  });
+  // The list can fail after the limit. That error has no other listener.
+  list.catch(() => {});
+  try {
+    const result = await Promise.race([list, limit]);
+    slowAccounts.delete(account.id);
+    return result;
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
 export interface ThreadListResult {
   threads: ThreadSummary[];
   nextCursor?: string;
@@ -99,12 +129,15 @@ export async function listThreads(
   const results = await Promise.all(
     active.map(async (account) => {
       try {
-        const page = await providerFor(account).listThreads({
-          folder: options.folder,
-          query: options.query || undefined,
-          cursor: cursors?.[account.id],
-          limit,
-        });
+        const page = await withListLimit(
+          account,
+          providerFor(account).listThreads({
+            folder: options.folder,
+            query: options.query || undefined,
+            cursor: cursors?.[account.id],
+            limit,
+          }),
+        );
         return { account, page };
       } catch (error) {
         return { account, error: toAccountError(account, error) };

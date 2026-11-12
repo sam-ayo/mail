@@ -16,6 +16,12 @@ import { ProviderAuthError, ProviderError } from "./types";
 
 const API = "https://graph.microsoft.com/v1.0/me";
 
+// In a Microsoft fault, Graph answers each call with a 5xx error after 20 to 30 seconds.
+/** The time limit of one read. A normal read takes less than one second. */
+const READ_TIMEOUT_MS = 10_000;
+/** No retry starts after this time from the first try. */
+const RETRY_BUDGET_MS = 10_000;
+
 type WellKnownFolder = "inbox" | "sentitems" | "drafts" | "archive" | "junkemail" | "deleteditems";
 
 const WELL_KNOWN: Record<Exclude<Folder, "starred">, WellKnownFolder> = {
@@ -91,20 +97,33 @@ export function createOutlookProvider(account: Account): MailProvider {
   const folderIds = folderIdCache.get(account.id) ?? new Map<WellKnownFolder, string>();
   folderIdCache.set(account.id, folderIds);
 
-  async function request<T>(pathOrUrl: string, init: RequestInit = {}, attempt = 0): Promise<T> {
+  async function request<T>(
+    pathOrUrl: string,
+    init: RequestInit = {},
+    attempt = 0,
+    retryUntil = Date.now() + RETRY_BUDGET_MS,
+  ): Promise<T> {
     const url = pathOrUrl.startsWith("https://") ? pathOrUrl : `${API}${pathOrUrl}`;
+    const read = !init.method || init.method === "GET";
     const response = await fetch(url, {
       ...init,
+      // A change, such as a send, has no time limit: a stop in the middle does not tell if it took effect.
+      signal: read ? AbortSignal.timeout(READ_TIMEOUT_MS) : init.signal,
       headers: {
         Authorization: `Bearer ${await tokens.get()}`,
         "Content-Type": "application/json",
         Prefer: 'outlook.body-content-type="html"',
         ...init.headers,
       },
+    }).catch((error) => {
+      if (error instanceof Error && error.name === "TimeoutError") {
+        throw new ProviderError("Microsoft did not answer in time", 504);
+      }
+      throw error;
     });
     if (response.status === 401 && attempt === 0) {
       await tokens.refresh();
-      return request(pathOrUrl, init, attempt + 1);
+      return request(pathOrUrl, init, attempt + 1, retryUntil);
     }
     if (response.status === 401) {
       await setAccountStatus(account.id, "reauth_required");
@@ -112,8 +131,10 @@ export function createOutlookProvider(account: Account): MailProvider {
     }
     if ((response.status === 429 || response.status >= 500) && attempt < 3) {
       const retryAfter = Number(response.headers.get("Retry-After")) || 2 ** attempt;
-      await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
-      return request(pathOrUrl, init, attempt + 1);
+      if (Date.now() + retryAfter * 1000 < retryUntil) {
+        await new Promise((resolve) => setTimeout(resolve, retryAfter * 1000));
+        return request(pathOrUrl, init, attempt + 1, retryUntil);
+      }
     }
     if (!response.ok) {
       const body = (await response.json().catch(() => ({}))) as {
