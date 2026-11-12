@@ -4,7 +4,7 @@
 // all of the quota, so the interval must stay much longer than 5 minutes.
 // Deploy with: pnpm install && cf deploy
 // Set the secret with: cf workers secrets update CRON_SECRET --worker relay-mail-cron --text <value>
-import { bindings, defineConfig, triggers } from "cf/config";
+import { bindings, defineConfig } from "cf/config";
 import * as entrypoint from "./src/index.ts" with { type: "cf-worker" };
 
 export default defineConfig({
@@ -17,7 +17,9 @@ export default defineConfig({
     previewUrls: false,
     // Workers Logs keep each run and its result, so a failed check shows in the dashboard.
     observability: { enabled: true },
-    triggers: [triggers.scheduled({ schedule: "*/20 * * * *" })],
+    // No cron trigger. The app on the Oracle VM does the mail check itself (RUN_JOBS=1).
+    // To start the Worker again, add: triggers.scheduled({ schedule: "*/20 * * * *" })
+    triggers: [],
     env: {
       CHECK_URL: bindings.text("https://mail.samayo.me/api/cron/check-mail"),
       CRON_SECRET: bindings.secret(),
