@@ -18,3 +18,22 @@ mail.samayo.me, mail.demo.samayo.me {
 		flush_interval -1
 	}
 }
+
+# The personal site (repository sam-ayo/me). It runs from /opt/me and is on
+# the network of this Compose project with the name "me".
+www.samayo.me {
+	encode zstd gzip
+
+	header {
+		Strict-Transport-Security "max-age=63072000"
+		X-Content-Type-Options "nosniff"
+		Referrer-Policy "strict-origin-when-cross-origin"
+		-Server
+	}
+
+	reverse_proxy me:3000
+}
+
+samayo.me {
+	redir https://www.samayo.me{uri} permanent
+}
