@@ -40,22 +40,27 @@ export async function action({ request }: Route.ActionArgs) {
   }
 
   try {
-    await sendMessage(userId, text("accountId"), {
-      to,
-      cc,
-      bcc,
-      subject: text("subject"),
-      html: text("html"),
-      text: text("text"),
-      reply,
-      attachments: await Promise.all(
-        files.map(async (file) => ({
-          filename: file.name,
-          contentType: file.type || "application/octet-stream",
-          content: Buffer.from(await file.arrayBuffer()),
-        })),
-      ),
-    });
+    await sendMessage(
+      userId,
+      text("accountId"),
+      {
+        to,
+        cc,
+        bcc,
+        subject: text("subject"),
+        html: text("html"),
+        text: text("text"),
+        reply,
+        attachments: await Promise.all(
+          files.map(async (file) => ({
+            filename: file.name,
+            contentType: file.type || "application/octet-stream",
+            content: Buffer.from(await file.arrayBuffer()),
+          })),
+        ),
+      },
+      text("draftId") || undefined,
+    );
     return Response.json({ ok: true });
   } catch (error) {
     return Response.json({ error: `The message did not send: ${errorMessage(error)}` }, { status: 502 });

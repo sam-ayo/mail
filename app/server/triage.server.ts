@@ -130,14 +130,16 @@ async function describe(account: Account, summary: ThreadSummary): Promise<Triag
   try {
     const thread = await providerFor(account).getThread(summary.id);
     const own = account.email.toLowerCase();
-    const theirs = thread.messages.filter((m) => m.from.email.toLowerCase() !== own);
-    const latest = theirs.at(-1) ?? thread.messages.at(-1);
+    // A draft is not a reply yet.
+    const messages = thread.messages.filter((m) => !m.draftId);
+    const theirs = messages.filter((m) => m.from.email.toLowerCase() !== own);
+    const latest = theirs.at(-1) ?? messages.at(-1);
     if (!latest) return base;
     const text = latest.text?.trim() || (latest.html ? htmlToText(latest.html) : latest.snippet);
     return {
       ...base,
-      you_replied: theirs.length < thread.messages.length,
-      mailing_list: thread.messages.some((m) => m.unsubscribe),
+      you_replied: theirs.length < messages.length,
+      mailing_list: messages.some((m) => m.unsubscribe),
       body: text.replace(/\s+/g, " ").slice(0, BODY_CHARS),
     };
   } catch {

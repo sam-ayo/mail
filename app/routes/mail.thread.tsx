@@ -12,6 +12,7 @@ import {
   DotsThree,
   DownloadSimple,
   EnvelopeSimple,
+  PencilSimple,
   FileText,
   Info,
   ShieldWarning,
@@ -22,9 +23,11 @@ import {
 } from "~/components/icons";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useEffect, useMemo, useState } from "react";
-import { data, isRouteErrorResponse, useOutletContext, useRouteError } from "react-router";
+import { data, isRouteErrorResponse, useOutletContext, useRevalidator, useRouteError } from "react-router";
+import { toast } from "sonner";
 import { AttachmentViewer, type ViewedAttachment } from "~/components/attachment-viewer";
 import { Composer, formatSize } from "~/components/composer";
+import { useConfirm } from "~/components/confirm-dialog";
 import { EmailFrame } from "~/components/email-frame";
 import { setListCollapsed } from "~/components/list-panel";
 import { LocalDate } from "~/components/local-date";
@@ -32,9 +35,9 @@ import { UnsubscribeDialog, isUnsubscribed } from "~/components/unsubscribe-dial
 import { useHotkeys } from "~/components/hotkeys";
 import { applyPatch, replyRequest, useMail } from "~/components/mail-context";
 import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
-import { AccountIcon, Avatar, FileName, Hint, IconButton, cx } from "~/components/ui";
+import { AccountIcon, Avatar, Button, FileName, Hint, IconButton, cx } from "~/components/ui";
 import type { ComposeDraft } from "~/lib/compose";
-import { draftFor } from "~/lib/compose";
+import { draftFor, draftFromMessage } from "~/lib/compose";
 import type { RenderedMessage, RenderedThread } from "~/lib/mail";
 import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
@@ -191,8 +194,10 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
 type ReplyMode = "reply" | "replyAll" | "forward";
 
 export default function ThreadView({ loaderData }: Route.ComponentProps) {
-  const { account, patches, runAction } = useMail();
+  const { account, patches, runAction, compose, openCompose, discardDraft, serverDraftId } = useMail();
   const list = useOutletContext<ListOutletContext>();
+  const revalidator = useRevalidator();
+  const confirm = useConfirm();
 
   // Cached data shows first. Newer data from the server replaces it when it arrives.
   const [fresh, setFresh] = useState<{ from: typeof loaderData; thread: RenderedThread; loadedAt: number }>();
@@ -269,13 +274,58 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
 
   function startReply(mode: ReplyMode, message?: RenderedMessage) {
     if (!owner) return;
-    const target = message ?? data.messages[data.messages.length - 1];
+    // A draft is not a message that a person can answer.
+    const target = message ?? data.messages.filter((m) => !m.draftId).at(-1) ?? data.messages[data.messages.length - 1];
     if (!target) return;
     saveDraft(draftFor(mode, target, owner));
+    showComposer();
+  }
+
+  function showComposer() {
     requestAnimationFrame(() =>
       document.getElementById("reply-composer")?.scrollIntoView({ behavior: "smooth", block: "end" }),
     );
   }
+
+  // A draft with no other message in the conversation is a new message, so it opens in the compose window.
+  const alone = (message: RenderedMessage) => !data.messages.some((m) => m.id !== message.id && !m.draftId);
+
+  /** Opens a draft from the mail server in a composer. */
+  async function editDraft(message: RenderedMessage) {
+    if (compose && serverDraftId(compose.id) === message.draftId) return list.closeThread();
+    let latest: RenderedMessage;
+    try {
+      // The conversation on the screen can be older than the draft on the mail server.
+      const params = new URLSearchParams({ accountId: data.accountId, threadId: data.id, draftId: message.draftId! });
+      const response = await fetch(`/api/drafts?${params}`);
+      const result = (await response.json()) as { message?: RenderedMessage; error?: string };
+      if (!response.ok || !result.message) throw new Error(result.error ?? "The draft did not open");
+      latest = result.message;
+    } catch (error) {
+      toast.error(error instanceof Error ? error.message : "The draft did not open");
+      revalidator.revalidate();
+      return;
+    }
+    const next = draftFromMessage(latest, data.accountId);
+    if (alone(message)) {
+      openCompose(next);
+      list.closeThread();
+    } else {
+      saveDraft(next);
+      showComposer();
+    }
+  }
+
+  async function discardServerDraft(message: RenderedMessage) {
+    if (!(await confirm({ title: "Discard this draft?", confirmLabel: "Discard", danger: true }))) return;
+    const standalone = alone(message);
+    await discardDraft(draftFromMessage(message, data.accountId));
+    if (standalone) list.closeThread();
+    revalidator.revalidate();
+  }
+
+  // The reply composer shows the draft that it edits, so the draft does not also show as a message.
+  const editedDraftId = draft ? (serverDraftId(draft.id) ?? draft.draftId) : undefined;
 
   // A reply that started from the list menu before the conversation opened.
   useEffect(() => {
@@ -466,29 +516,33 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
             {folded > 0 && (
               <EarlierMessages messages={data.messages.slice(0, folded)} onOpen={() => setShowEarlier(true)} />
             )}
-            {data.messages.map((message, i) => (
-              <MessageCard
-                key={message.id}
-                folded={i < folded}
-                accountId={data.accountId}
-                accountEmail={owner?.email}
-                threadId={data.id}
-                onArchive={removalActions ? undefined : () => list.actOnOpenThread("archive")}
-                message={message}
-                expanded={expanded.has(message.id)}
-                instant={instant}
-                onToggle={() => {
-                  setInstant(false);
-                  setExpanded((current) => {
-                    const next = new Set(current);
-                    if (next.has(message.id)) next.delete(message.id);
-                    else next.add(message.id);
-                    return next;
-                  });
-                }}
-                onReply={(mode) => startReply(mode, message)}
-              />
-            ))}
+            {data.messages.map((message, i) =>
+              message.draftId && message.draftId === editedDraftId ? null : (
+                <MessageCard
+                  key={message.id}
+                  folded={i < folded}
+                  onEditDraft={message.draftId ? () => editDraft(message) : undefined}
+                  onDiscardDraft={message.draftId ? () => discardServerDraft(message) : undefined}
+                  accountId={data.accountId}
+                  accountEmail={owner?.email}
+                  threadId={data.id}
+                  onArchive={removalActions ? undefined : () => list.actOnOpenThread("archive")}
+                  message={message}
+                  expanded={expanded.has(message.id)}
+                  instant={instant}
+                  onToggle={() => {
+                    setInstant(false);
+                    setExpanded((current) => {
+                      const next = new Set(current);
+                      if (next.has(message.id)) next.delete(message.id);
+                      else next.add(message.id);
+                      return next;
+                    });
+                  }}
+                  onReply={(mode) => startReply(mode, message)}
+                />
+              ),
+            )}
           </div>
 
           <div id="reply-composer" className="mt-6">
@@ -514,7 +568,10 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
                   key={draft.id}
                   draft={draft}
                   onChange={saveDraft}
-                  onDiscard={() => saveDraft(null)}
+                  onDiscard={() => {
+                    discardDraft(draft).then(() => revalidator.revalidate());
+                    saveDraft(null);
+                  }}
                   onSent={() => saveDraft(null)}
                   variant="inline"
                   autoFocus={draft.reply?.kind === "forward" ? "to" : "body"}
@@ -645,6 +702,8 @@ function MessageCard({
   onToggle,
   onReply,
   onArchive,
+  onEditDraft,
+  onDiscardDraft,
 }: {
   accountId: string;
   accountEmail?: string;
@@ -658,6 +717,9 @@ function MessageCard({
   onToggle(): void;
   onReply(mode: ReplyMode): void;
   onArchive?(): void;
+  /** Set for a draft. The draft opens in a composer. */
+  onEditDraft?(): void;
+  onDiscardDraft?(): void;
 }) {
   const [showQuotes, setShowQuotes] = useState(false);
   const [showDetails, setShowDetails] = useState(false);
@@ -668,6 +730,9 @@ function MessageCard({
   const recipients = [...message.to, ...message.cc];
 
   const menu = () => [
+    onEditDraft && { label: "Edit draft", icon: PencilSimple, onSelect: onEditDraft },
+    onDiscardDraft && { label: "Discard draft", icon: Trash, onSelect: onDiscardDraft },
+    onEditDraft && ("separator" as const),
     { label: "Reply", icon: ArrowBendUpLeft, onSelect: () => onReply("reply") },
     { label: "Reply all", icon: ArrowBendDoubleUpLeft, onSelect: () => onReply("replyAll") },
     { label: "Forward", icon: ArrowBendUpRight, onSelect: () => onReply("forward") },
@@ -721,6 +786,11 @@ function MessageCard({
                 <span dir="auto" className={cx("max-w-[60%] shrink-0 truncate text-sm", expanded ? "font-semibold" : "font-medium")}>
                   {displayName(message.from)}
                 </span>
+                {message.draftId && (
+                  <span className="shrink-0 rounded-md bg-amber-100 px-1.5 text-[11px] font-medium text-amber-800 dark:bg-amber-950 dark:text-amber-300">
+                    Draft
+                  </span>
+                )}
                 {expanded && <span className="truncate text-xs text-zinc-500 max-md:hidden">{message.from.email}</span>}
               </button>
               {expanded && canUnsubscribe && (
@@ -822,6 +892,19 @@ function MessageCard({
             )}
             <DetailRow label="Date" value={formatFullDate(message.date)} />
           </dl>
+        )}
+
+        {onEditDraft && (
+          <div className="flex gap-2 px-4 pb-3">
+            <Button onClick={onEditDraft} className="h-8">
+              <PencilSimple className="size-3.5" /> Edit draft
+            </Button>
+            {onDiscardDraft && (
+              <Button variant="ghost" onClick={onDiscardDraft} className="h-8">
+                <Trash className="size-3.5" /> Discard
+              </Button>
+            )}
+          </div>
         )}
 
         <div className="px-4 pb-4">

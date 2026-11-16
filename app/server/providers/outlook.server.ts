@@ -72,6 +72,10 @@ const LIST_FIELDS =
   "id,conversationId,parentFolderId,subject,bodyPreview,from,toRecipients,receivedDateTime,isRead,flag,hasAttachments,internetMessageId";
 const FULL_FIELDS = `${LIST_FIELDS},body,ccRecipients,bccRecipients,replyTo,isDraft,internetMessageHeaders`;
 
+// Outlook keeps only the HTML body of a draft. This property of the message
+// keeps the text part, which is the Markdown that the person wrote.
+const DRAFT_TEXT_PROPERTY = "String {7d5c0a3e-52f4-4b0e-9f0b-2f6c1e8a4d11} Name MailDraftText";
+
 // Graph conversation IDs are URL-safe base64 ("-" and "_"), with "=" padding.
 // URLs drop the padding. Do not change "-" or "_": Graph needs them as they are.
 const encodeId = (id: string) => id.replace(/=+$/, "");
@@ -189,6 +193,50 @@ export function createOutlookProvider(account: Account): MailProvider {
     };
   }
 
+  const notFound = (error: unknown) => error instanceof ProviderError && error.status === 404;
+
+  /** The fields of a message that a draft and a sent message have in common. */
+  const content = (message: OutgoingMessage) => ({
+    subject: message.subject,
+    body: { contentType: "HTML", content: message.html },
+    toRecipients: message.to.map(toRecipient),
+    ccRecipients: message.cc.map(toRecipient),
+    bccRecipients: message.bcc.map(toRecipient),
+  });
+
+  /** Makes an empty draft. createReply and createForward keep the conversation in Outlook. */
+  async function createDraft(message: OutgoingMessage) {
+    if (message.reply?.messageId) {
+      const endpoint = message.reply.kind === "forward" ? "createForward" : "createReply";
+      const draft = await request<{ id: string }>(
+        `/messages/${encodeURIComponent(message.reply.messageId)}/${endpoint}`,
+        { method: "POST", body: "{}" },
+      );
+      return draft.id;
+    }
+    return (await request<{ id: string }>("/messages", { method: "POST", body: "{}" })).id;
+  }
+
+  async function deleteDraft(draftId: string) {
+    try {
+      await request(`/messages/${encodeURIComponent(draftId)}`, { method: "DELETE" });
+    } catch (error) {
+      if (!notFound(error)) throw error;
+    }
+  }
+
+  /** The text part of a draft that the app saved. */
+  async function draftText(draftId: string) {
+    const params = new URLSearchParams({
+      $select: "id",
+      $expand: `singleValueExtendedProperties($filter=id eq '${DRAFT_TEXT_PROPERTY}')`,
+    });
+    const draft = await request<{ singleValueExtendedProperties?: { value: string }[] }>(
+      `/messages/${encodeURIComponent(draftId)}?${params}`,
+    );
+    return draft.singleValueExtendedProperties?.[0]?.value;
+  }
+
   async function sendDraft(draftId: string, message: OutgoingMessage) {
     await mapLimit(message.attachments, 3, (attachment) =>
       request(`/messages/${encodeURIComponent(draftId)}/attachments`, {
@@ -265,9 +313,12 @@ export function createOutlookProvider(account: Account): MailProvider {
             inline: a.isInline,
           }));
         }
+        // A draft from another mail app has no text part. That is not an error.
+        const text = m.isDraft ? await draftText(m.id).catch(() => undefined) : undefined;
         return {
           id: m.id,
           threadId,
+          draftId: m.isDraft ? m.id : undefined,
           from: toAddress(m.from),
           to: (m.toRecipients ?? []).map(toAddress),
           cc: (m.ccRecipients ?? []).map(toAddress),
@@ -277,7 +328,7 @@ export function createOutlookProvider(account: Account): MailProvider {
           date: m.receivedDateTime,
           snippet: m.bodyPreview,
           html,
-          text: m.body?.contentType === "text" ? m.body.content : undefined,
+          text: m.body?.contentType === "text" ? m.body.content : text,
           unread: !m.isRead,
           starred: m.flag?.flagStatus === "flagged",
           attachments,
@@ -353,53 +404,63 @@ export function createOutlookProvider(account: Account): MailProvider {
       }
     },
 
-    async send(message: OutgoingMessage) {
-      const recipients = {
-        toRecipients: message.to.map(toRecipient),
-        ccRecipients: message.cc.map(toRecipient),
-        bccRecipients: message.bcc.map(toRecipient),
-      };
-      if (message.reply) {
-        // createReply and createForward keep the conversation in Outlook.
-        const endpoint = message.reply.kind === "forward" ? "createForward" : "createReply";
-        const draft = await request<{ id: string }>(
-          `/messages/${encodeURIComponent(message.reply.messageId)}/${endpoint}`,
-          { method: "POST", body: "{}" },
-        );
-        await request(`/messages/${encodeURIComponent(draft.id)}`, {
-          method: "PATCH",
-          body: JSON.stringify({
-            subject: message.subject,
-            body: { contentType: "HTML", content: message.html },
-            ...recipients,
-          }),
-        });
-        return sendDraft(draft.id, message);
+    async send(message: OutgoingMessage, options?: { draftId?: string }) {
+      if (options?.draftId) {
+        // Send the draft itself, so a reply draft keeps its conversation.
+        try {
+          await request(`/messages/${encodeURIComponent(options.draftId)}`, {
+            method: "PATCH",
+            body: JSON.stringify(content(message)),
+          });
+          return await sendDraft(options.draftId, message);
+        } catch (error) {
+          // Another mail app deleted the draft. Send the message as a new one.
+          if (!notFound(error)) throw error;
+        }
       }
-      if (message.attachments.length === 0) {
+      if (!message.reply?.messageId && message.attachments.length === 0) {
         await request("/sendMail", {
           method: "POST",
-          body: JSON.stringify({
-            message: {
-              subject: message.subject,
-              body: { contentType: "HTML", content: message.html },
-              ...recipients,
-            },
-            saveToSentItems: true,
-          }),
+          body: JSON.stringify({ message: content(message), saveToSentItems: true }),
         });
         return;
       }
-      const draft = await request<{ id: string }>("/messages", {
-        method: "POST",
-        body: JSON.stringify({
-          subject: message.subject,
-          body: { contentType: "HTML", content: message.html },
-          ...recipients,
-        }),
+      const draftId = await createDraft(message);
+      await request(`/messages/${encodeURIComponent(draftId)}`, {
+        method: "PATCH",
+        body: JSON.stringify(content(message)),
       });
-      await sendDraft(draft.id, message);
+      await sendDraft(draftId, message);
     },
+
+    async saveDraft(message: OutgoingMessage, draftId?: string) {
+      const fields = content(message);
+      const write = (id: string, body: object) =>
+        request(`/messages/${encodeURIComponent(id)}`, { method: "PATCH", body: JSON.stringify(body) });
+      // If Graph rejects the text property, the draft saves with the HTML body only.
+      const save = (id: string) =>
+        write(id, {
+          ...fields,
+          singleValueExtendedProperties: [{ id: DRAFT_TEXT_PROPERTY, value: message.text }],
+        }).catch((error) => {
+          if (!(error instanceof ProviderError && error.status === 400)) throw error;
+          return write(id, fields);
+        });
+      if (draftId) {
+        try {
+          await save(draftId);
+          return { draftId };
+        } catch (error) {
+          // Another mail app deleted or sent the draft. Make a new one.
+          if (!notFound(error)) throw error;
+        }
+      }
+      const id = await createDraft(message);
+      await save(id);
+      return { draftId: id };
+    },
+
+    deleteDraft,
 
     async getAttachment(messageId: string, attachmentId: string) {
       const attachment = await request<GraphAttachment>(

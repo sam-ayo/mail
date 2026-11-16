@@ -1,7 +1,7 @@
 import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, useRevalidator } from "react-router";
 import type { ComposeDraft } from "~/lib/compose";
-import { buildOutgoing, newDraftId } from "~/lib/compose";
+import { buildOutgoing, newDraftId, savesDrafts } from "~/lib/compose";
 import type { AccountSummary, Folder, ThreadAction } from "~/lib/mail";
 import { removesFromFolder, threadKey } from "~/lib/mail";
 import { toast } from "sonner";
@@ -26,6 +26,64 @@ interface PendingSend {
   timer: ReturnType<typeof setTimeout>;
 }
 
+/** A draft on the mail server. */
+interface RemoteDraft {
+  accountId: string;
+  draftId: string;
+}
+
+export type DraftStatus = "saving" | "saved" | "error";
+
+/** The state of the save of one composer to the mail server. */
+interface DraftSync {
+  /** The content at the last save, or when the composer opened. */
+  saved: string;
+  latest: ComposeDraft;
+  remote?: RemoteDraft;
+  timer?: ReturnType<typeof setTimeout>;
+  running?: Promise<void>;
+  /** The content changed during a save. */
+  again?: boolean;
+  /** The message is in the send queue, or the person discarded it. No save starts. */
+  closed?: boolean;
+}
+
+/** The pause in the typing after which a draft saves. */
+const DRAFT_SAVE_MS = 1500;
+/** The server draft of each composer, so a reload does not make a second draft. */
+const DRAFT_IDS_STORAGE_KEY = "relay:draft-ids";
+
+function readDraftIds(): Record<string, RemoteDraft> {
+  try {
+    return JSON.parse(localStorage.getItem(DRAFT_IDS_STORAGE_KEY) ?? "{}") ?? {};
+  } catch {
+    return {};
+  }
+}
+
+function writeDraftId(composeId: string, remote: RemoteDraft | undefined) {
+  const ids = readDraftIds();
+  if (remote) ids[composeId] = remote;
+  else delete ids[composeId];
+  localStorage.setItem(DRAFT_IDS_STORAGE_KEY, JSON.stringify(ids));
+}
+
+/** The content of a draft that a save writes. */
+function draftContent(draft: ComposeDraft) {
+  return JSON.stringify([draft.accountId, draft.to, draft.cc, draft.bcc, draft.subject, draft.body, !!draft.quoted]);
+}
+
+async function draftRequest(method: "POST" | "DELETE", body: object) {
+  const response = await fetch("/api/drafts", {
+    method,
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  const result = (await response.json().catch(() => ({}))) as { draftId?: string; error?: string };
+  if (!response.ok) throw new Error(result.error ?? "The draft did not save");
+  return result;
+}
+
 interface MailContextValue {
   accounts: AccountSummary[];
   account(id: string): AccountSummary | undefined;
@@ -39,8 +97,19 @@ interface MailContextValue {
   compose: ComposeDraft | null;
   openCompose(draft?: Partial<ComposeDraft>): void;
   updateCompose(draft: ComposeDraft): void;
+  /** Closes the compose window. The draft stays on the mail server. */
   closeCompose(): void;
+  /** Closes the compose window and deletes its draft. */
+  discardCompose(): void;
   send(draft: ComposeDraft, files: File[]): void;
+  /** Saves the draft on the mail server after a pause. A composer calls this on each change. */
+  syncDraft(draft: ComposeDraft): void;
+  /** Deletes the draft from the mail server. */
+  discardDraft(draft: ComposeDraft): Promise<void>;
+  /** The save state of each composer that has a draft on the mail server. */
+  draftStatus: Record<string, DraftStatus>;
+  /** The current ID of the server draft of a composer. */
+  serverDraftId(composeId: string): string | undefined;
   unreadCounts: Record<string, number | null>;
   refreshCounts(): void;
   defaultAccountId: string | undefined;
@@ -126,7 +195,7 @@ export function MailProvider({
 
   const accountMap = useMemo(() => new Map(accounts.map((a) => [a.id, a])), [accounts]);
   // A new message comes from the account that is open in the sidebar.
-  const { scope } = useParams();
+  const { scope, folder } = useParams();
   const defaultAccountId =
     (scope && accountMap.has(scope) ? scope : undefined) ??
     accounts.find((a) => a.status === "active")?.id ??
@@ -249,6 +318,181 @@ export function MailProvider({
     [refreshCounts],
   );
 
+  const syncs = useRef(new Map<string, DraftSync>());
+  const [draftStatus, setDraftStatus] = useState<Record<string, DraftStatus>>({});
+  const setStatus = useCallback((composeId: string, status: DraftStatus | undefined) => {
+    setDraftStatus((current) => {
+      if (current[composeId] === status) return current;
+      const next = { ...current };
+      if (status) next[composeId] = status;
+      else delete next[composeId];
+      return next;
+    });
+  }, []);
+
+  // The Drafts list shows the drafts of the mail server, so it reloads after a change.
+  const folderRef = useRef(folder);
+  folderRef.current = folder;
+  const draftsChanged = useCallback(() => {
+    if (folderRef.current === "drafts") revalidator.revalidate();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  const syncOf = useCallback((draft: ComposeDraft) => {
+    let sync = syncs.current.get(draft.id);
+    if (!sync) {
+      const remote =
+        readDraftIds()[draft.id] ??
+        (draft.draftId ? { accountId: draft.accountId, draftId: draft.draftId } : undefined);
+      sync = { saved: draftContent(draft), latest: draft, remote };
+      syncs.current.set(draft.id, sync);
+    }
+    return sync;
+  }, []);
+
+  const forgetDraft = useCallback(
+    (composeId: string) => {
+      clearTimeout(syncs.current.get(composeId)?.timer);
+      syncs.current.delete(composeId);
+      writeDraftId(composeId, undefined);
+      setStatus(composeId, undefined);
+    },
+    [setStatus],
+  );
+
+  /** Saves the newest content. Only one save of a composer runs at a time, so it makes only one draft. */
+  const saveDraftNow = useCallback(
+    (composeId: string): Promise<void> => {
+      const sync = syncs.current.get(composeId);
+      if (!sync) return Promise.resolve();
+      clearTimeout(sync.timer);
+      sync.timer = undefined;
+      if (sync.running) {
+        sync.again = true;
+        return sync.running;
+      }
+      sync.running = (async () => {
+        do {
+          sync.again = false;
+          const draft = sync.latest;
+          const content = draftContent(draft);
+          const moved = sync.remote && sync.remote.accountId !== draft.accountId;
+          if (sync.closed || (content === sync.saved && !moved)) break;
+          setStatus(composeId, "saving");
+          try {
+            // The person changed the From address. The draft moves to the new account.
+            if (moved) {
+              await draftRequest("DELETE", sync.remote!).catch(() => {});
+              sync.remote = undefined;
+              writeDraftId(composeId, undefined);
+            }
+            if (!savesDrafts(accountMap.get(draft.accountId))) {
+              sync.saved = content;
+              setStatus(composeId, undefined);
+              continue;
+            }
+            const { html, text } = buildOutgoing(draft);
+            const result = await draftRequest("POST", {
+              accountId: draft.accountId,
+              draftId: sync.remote?.draftId,
+              to: draft.to,
+              cc: draft.cc,
+              bcc: draft.bcc,
+              subject: draft.subject,
+              html,
+              text,
+              reply: draft.reply,
+            });
+            sync.remote = { accountId: draft.accountId, draftId: result.draftId! };
+            sync.saved = content;
+            // A composer that closed during the save has no entry to keep.
+            if (syncs.current.get(composeId) === sync) {
+              writeDraftId(composeId, sync.remote);
+              setStatus(composeId, "saved");
+            }
+          } catch {
+            // The next change starts a new save.
+            if (syncs.current.get(composeId) === sync) setStatus(composeId, "error");
+            break;
+          }
+        } while (sync.again);
+      })().finally(() => {
+        sync.running = undefined;
+      });
+      return sync.running;
+    },
+    [accountMap, setStatus],
+  );
+
+  const syncDraft = useCallback(
+    (draft: ComposeDraft) => {
+      const sync = syncOf(draft);
+      sync.latest = draft;
+      if (sync.closed) return;
+      clearTimeout(sync.timer);
+      const moved = sync.remote && sync.remote.accountId !== draft.accountId;
+      if (draftContent(draft) === sync.saved && !moved) return;
+      sync.timer = setTimeout(() => saveDraftNow(draft.id), DRAFT_SAVE_MS);
+    },
+    [saveDraftNow, syncOf],
+  );
+
+  const discardDraft = useCallback(
+    async (draft: ComposeDraft) => {
+      const sync = syncOf(draft);
+      sync.closed = true;
+      clearTimeout(sync.timer);
+      forgetDraft(draft.id);
+      await sync.running;
+      if (!sync.remote) return;
+      try {
+        await draftRequest("DELETE", sync.remote);
+        draftsChanged();
+      } catch (error) {
+        toast.error(error instanceof Error ? error.message : "The draft is still on the mail server");
+      }
+    },
+    [draftsChanged, forgetDraft, syncOf],
+  );
+
+  const serverDraftId = useCallback((composeId: string) => syncs.current.get(composeId)?.remote?.draftId, []);
+
+  // A hidden tab can close with no more events. Save what waits.
+  useEffect(() => {
+    function onHide() {
+      if (document.visibilityState !== "hidden") return;
+      for (const [composeId, sync] of syncs.current) if (sync.timer) saveDraftNow(composeId);
+    }
+    document.addEventListener("visibilitychange", onHide);
+    return () => document.removeEventListener("visibilitychange", onHide);
+  }, [saveDraftNow]);
+
+  const composeRef = useRef(compose);
+  composeRef.current = compose;
+
+  /**
+   * Saves the last changes of a composer that closes. Then the draft is in the
+   * Drafts folder, and the composer has no more state.
+   */
+  const releaseDraft = useCallback(
+    (draft: ComposeDraft) => {
+      const sync = syncs.current.get(draft.id);
+      if (!sync || sync.closed) return;
+      saveDraftNow(draft.id).then(() => {
+        // The person opened the same composer again.
+        if (composeRef.current?.id === draft.id) return;
+        const failed = draftContent(sync.latest) !== sync.saved;
+        forgetDraft(draft.id);
+        if (failed) toast.error("The draft did not save");
+        else if (sync.remote) {
+          toast("Saved to Drafts", { id: "draft-saved" });
+          draftsChanged();
+        }
+      });
+    },
+    [draftsChanged, forgetDraft, saveDraftNow],
+  );
+
   // Keep the open compose window across reloads.
   useEffect(() => {
     const saved = localStorage.getItem(COMPOSE_STORAGE_KEY);
@@ -261,10 +505,17 @@ export function MailProvider({
     }
   }, []);
 
-  const updateCompose = useCallback((draft: ComposeDraft) => {
-    setCompose(draft);
-    localStorage.setItem(COMPOSE_STORAGE_KEY, JSON.stringify(draft));
-  }, []);
+  const updateCompose = useCallback(
+    (draft: ComposeDraft) => {
+      // The window shows one message. A different message that was open goes to Drafts.
+      const previous = composeRef.current;
+      if (previous && previous.id !== draft.id) releaseDraft(previous);
+      composeRef.current = draft;
+      setCompose(draft);
+      localStorage.setItem(COMPOSE_STORAGE_KEY, JSON.stringify(draft));
+    },
+    [releaseDraft],
+  );
 
   const openCompose = useCallback(
     (draft: Partial<ComposeDraft> = {}) => {
@@ -286,9 +537,20 @@ export function MailProvider({
   );
 
   const closeCompose = useCallback(() => {
+    const draft = composeRef.current;
+    composeRef.current = null;
     setCompose(null);
     localStorage.removeItem(COMPOSE_STORAGE_KEY);
-  }, []);
+    if (draft) releaseDraft(draft);
+  }, [releaseDraft]);
+
+  const discardCompose = useCallback(() => {
+    const draft = composeRef.current;
+    composeRef.current = null;
+    setCompose(null);
+    localStorage.removeItem(COMPOSE_STORAGE_KEY);
+    if (draft) discardDraft(draft);
+  }, [discardDraft]);
 
   const deliver = useCallback(
     async (id: string) => {
@@ -296,6 +558,10 @@ export function MailProvider({
       if (!pending) return;
       sends.current.delete(id);
       const { draft, files } = pending;
+      const sync = syncs.current.get(id);
+      // A save that started before the send must end first, so the send can remove its draft.
+      await sync?.running;
+      const remote = sync?.remote;
       const { html, text } = buildOutgoing(draft);
       const form = new FormData();
       form.set("accountId", draft.accountId);
@@ -306,6 +572,7 @@ export function MailProvider({
       form.set("html", html);
       form.set("text", text);
       if (draft.reply) form.set("reply", JSON.stringify(draft.reply));
+      if (remote?.accountId === draft.accountId) form.set("draftId", remote.draftId);
       files.forEach((file) => form.append("attachments", file));
 
       toast.loading("Sending…", { id: `send-${id}`, action: undefined });
@@ -314,8 +581,12 @@ export function MailProvider({
         const result = (await response.json()) as { error?: string };
         if (!response.ok) throw new Error(result.error ?? "The message did not send");
         toast.success("Message sent", { id: `send-${id}`, duration: 4000 });
+        // The draft of a different account does not go with the send.
+        if (remote && remote.accountId !== draft.accountId) draftRequest("DELETE", remote).catch(() => {});
+        forgetDraft(id);
         revalidator.revalidate();
       } catch (error) {
+        if (sync) sync.closed = false;
         toast.error(error instanceof Error ? error.message : "The message did not send", {
           id: `send-${id}`,
           duration: Infinity,
@@ -323,13 +594,20 @@ export function MailProvider({
         });
       }
     },
-    [revalidator, updateCompose],
+    [forgetDraft, revalidator, updateCompose],
   );
 
   const send = useCallback(
     (draft: ComposeDraft, files: File[]) => {
       const timer = setTimeout(() => deliver(draft.id), UNDO_SEND_SECONDS * 1000);
       sends.current.set(draft.id, { draft, files, timer });
+      // The send has the full message, so no more saves are necessary.
+      const sync = syncs.current.get(draft.id);
+      if (sync) {
+        clearTimeout(sync.timer);
+        sync.timer = undefined;
+        sync.closed = true;
+      }
       setCompose((current) => {
         if (current?.id === draft.id) {
           localStorage.removeItem(COMPOSE_STORAGE_KEY);
@@ -347,6 +625,7 @@ export function MailProvider({
             if (!pending) return;
             clearTimeout(pending.timer);
             sends.current.delete(draft.id);
+            if (sync) sync.closed = false;
             updateCompose(draft);
           },
         },
@@ -379,7 +658,12 @@ export function MailProvider({
     openCompose,
     updateCompose,
     closeCompose,
+    discardCompose,
     send,
+    syncDraft,
+    discardDraft,
+    draftStatus,
+    serverDraftId,
     unreadCounts,
     refreshCounts,
     defaultAccountId,

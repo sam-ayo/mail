@@ -102,6 +102,8 @@ export interface Message {
   attachments: Attachment[];
   messageIdHeader?: string;
   references?: string[];
+  /** Set if the message is a draft that the app can change. The mail server gives the ID. */
+  draftId?: string;
   /** Set if the message is from a mailing list that has a List-Unsubscribe header. */
   unsubscribe?: Unsubscribe;
 }

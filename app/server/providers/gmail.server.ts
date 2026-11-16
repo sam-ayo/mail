@@ -220,6 +220,38 @@ export function createGmailProvider(account: Account): MailProvider {
     };
   }
 
+  /** The request body of a draft. A reply draft stays in the conversation of the original. */
+  async function draftBody(message: OutgoingMessage) {
+    const raw = await buildMime({ name: account.name, email: account.email }, message, { keepBcc: true });
+    return JSON.stringify({
+      message: {
+        raw: raw.toString("base64url"),
+        threadId: message.reply?.kind === "reply" ? message.reply.threadId || undefined : undefined,
+      },
+    });
+  }
+
+  async function deleteDraft(draftId: string) {
+    try {
+      await request(`/drafts/${encodeURIComponent(draftId)}`, { method: "DELETE" });
+    } catch (error) {
+      if (!(error instanceof ProviderError && error.status === 404)) throw error;
+    }
+  }
+
+  /**
+   * The draft ID of each draft message. Gmail gives a draft an ID that is not
+   * the ID of its message, and a thread does not include it.
+   */
+  async function draftIds(messages: GmailMessage[]) {
+    const ids = new Map<string, string>();
+    if (!messages.some((m) => m.labelIds?.includes("DRAFT"))) return ids;
+    const params = new URLSearchParams({ maxResults: "500", fields: "drafts(id,message/id)" });
+    const list = await request<{ drafts?: { id: string; message: { id: string } }[] }>(`/drafts?${params}`);
+    for (const draft of list.drafts ?? []) ids.set(draft.message.id, draft.id);
+    return ids;
+  }
+
   const modify = (threadId: string, addLabelIds: string[], removeLabelIds: string[]) =>
     request(`/threads/${encodeURIComponent(threadId)}/modify`, {
       method: "POST",
@@ -274,9 +306,11 @@ export function createGmailProvider(account: Account): MailProvider {
 
     async getThread(threadId: string): Promise<Thread> {
       const thread = await request<GmailThread>(`/threads/${encodeURIComponent(threadId)}?format=full`);
+      const drafts = await draftIds(thread.messages);
       const messages = thread.messages
-        .filter((m) => !m.labelIds?.includes("DRAFT") || thread.messages.length === 1)
-        .map(toMessage);
+        // A draft that the app cannot change shows only if it is alone in the conversation.
+        .filter((m) => !m.labelIds?.includes("DRAFT") || drafts.has(m.id) || thread.messages.length === 1)
+        .map((m) => ({ ...toMessage(m), draftId: drafts.get(m.id) }));
       return {
         accountId: account.id,
         id: thread.id,
@@ -309,7 +343,7 @@ export function createGmailProvider(account: Account): MailProvider {
       }
     },
 
-    async send(message: OutgoingMessage) {
+    async send(message: OutgoingMessage, options?: { draftId?: string }) {
       const raw = await buildMime({ name: account.name, email: account.email }, message, {
         keepBcc: true,
       });
@@ -317,10 +351,32 @@ export function createGmailProvider(account: Account): MailProvider {
         method: "POST",
         body: JSON.stringify({
           raw: raw.toString("base64url"),
-          threadId: message.reply?.kind === "reply" ? message.reply.threadId : undefined,
+          threadId: message.reply?.kind === "reply" ? message.reply.threadId || undefined : undefined,
         }),
       });
+      // The message is sent. A draft that stays must not make the send fail.
+      if (options?.draftId) await deleteDraft(options.draftId).catch(() => {});
     },
+
+    async saveDraft(message: OutgoingMessage, draftId?: string) {
+      const body = await draftBody(message);
+      if (draftId) {
+        try {
+          const draft = await request<{ id: string }>(`/drafts/${encodeURIComponent(draftId)}`, {
+            method: "PUT",
+            body,
+          });
+          return { draftId: draft.id };
+        } catch (error) {
+          // Another mail app deleted or sent the draft. Make a new one.
+          if (!(error instanceof ProviderError && error.status === 404)) throw error;
+        }
+      }
+      const draft = await request<{ id: string }>("/drafts", { method: "POST", body });
+      return { draftId: draft.id };
+    },
+
+    deleteDraft,
 
     async getAttachment(messageId: string, partId: string) {
       // Gmail attachment IDs change on each request. The part ID is stable,

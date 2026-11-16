@@ -266,6 +266,7 @@ export const getThread = server.tool(
           `Date: ${m.date}`,
           `Subject: ${m.subject}`,
           m.unread ? "Unread: yes" : null,
+          m.draftId ? "Draft: yes (not sent)" : null,
           ...m.attachments
             .filter((a) => !a.inline)
             .map((a) => `Attachment: ${a.filename} (${a.mimeType}, ${a.size} bytes, attachment_id: ${a.id})`),

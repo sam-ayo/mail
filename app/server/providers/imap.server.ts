@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { ImapFlow } from "imapflow";
 import type { FetchMessageObject, ListResponse, MessageAddressObject } from "imapflow";
 import { simpleParser } from "mailparser";
@@ -287,6 +288,13 @@ export function createImapProvider(account: Account): MailProvider {
     );
   }
 
+  /** Deletes a draft. Only a message in the Drafts folder is a draft. */
+  async function deleteDraft(draftId: string) {
+    const { path, uid } = decodeThreadId(draftId);
+    if (path !== (await folderPath("drafts"))) throw new ProviderError("The message is not a draft", 400);
+    await withMailbox(path, (imap) => imap.messageDelete(String(uid), { uid: true }));
+  }
+
   return {
     async listThreads({ folder, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
       const flaggedFolder = folder === "starred" ? await folderPath("starred") : undefined;
@@ -322,12 +330,14 @@ export function createImapProvider(account: Account): MailProvider {
 
     async getThread(threadId: string): Promise<Thread> {
       const { message, parsed } = await parseMessage(threadId);
-      const result = messageFromParsed(parsed, {
+      const isDraft = decodeThreadId(threadId).path === (await folderPath("drafts"));
+      const result: Message = messageFromParsed(parsed, {
         id: threadId,
         threadId,
         unread: !message.flags?.has("\\Seen"),
         starred: !!message.flags?.has("\\Flagged"),
       });
+      if (isDraft) result.draftId = threadId;
       return {
         accountId: account.id,
         id: threadId,
@@ -359,7 +369,7 @@ export function createImapProvider(account: Account): MailProvider {
       }
     },
 
-    async send(message: OutgoingMessage) {
+    async send(message: OutgoingMessage, options?: { draftId?: string }) {
       const from = { name: account.name, email: account.email };
       const transport = nodemailer.createTransport({
         host: credentials.smtp.host,
@@ -392,7 +402,34 @@ export function createImapProvider(account: Account): MailProvider {
           await imap.append(sent, await buildMime(from, message, { keepBcc: true }), ["\\Seen"]);
         }
       }
+      // The message is sent. A draft that stays must not make the send fail.
+      if (options?.draftId) await deleteDraft(options.draftId).catch(() => {});
     },
+
+    // IMAP cannot change a message. A save adds the new draft, then deletes the old one.
+    async saveDraft(message: OutgoingMessage, draftId?: string) {
+      const path = await folderPath("drafts", true);
+      if (!path) throw new ProviderError("The account has no Drafts folder", 400);
+      const from = { name: account.name, email: account.email };
+      const messageId = `<${randomUUID()}@${account.email.split("@").pop()}>`;
+      const raw = await buildMime(from, message, { keepBcc: true, messageId });
+      const { client: imap } = await client();
+      const added = await imap.append(path, raw, ["\\Draft", "\\Seen"]);
+      let uid = added ? added.uid : undefined;
+      if (!uid) {
+        // The server does not tell the UID of the new message. Find it by its Message-ID.
+        const found = await withMailbox(path, (box) =>
+          box.search({ header: { "message-id": messageId } }, { uid: true }),
+        );
+        uid = found ? found.at(-1) : undefined;
+      }
+      if (!uid) throw new ProviderError("The mail server did not save the draft");
+      const saved = encodeThreadId(path, uid);
+      if (draftId && draftId !== saved) await deleteDraft(draftId).catch(() => {});
+      return { draftId: saved };
+    },
+
+    deleteDraft,
 
     async getAttachment(messageId: string, attachmentId: string) {
       const { parsed } = await parseMessage(messageId);

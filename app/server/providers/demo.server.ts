@@ -734,7 +734,7 @@ export function createDemoProvider(account: Account): MailProvider {
   function summarize(thread: DemoThread, folder: Folder): ThreadSummary {
     const last = thread.messages[thread.messages.length - 1];
     const people =
-      folder === "sent"
+      folder === "sent" || folder === "drafts"
         ? thread.messages.flatMap((m) => m.to)
         : thread.messages.map((m) => m.from);
     const seen = new Set<string>();
@@ -781,6 +781,7 @@ export function createDemoProvider(account: Account): MailProvider {
     async getThread(threadId: string): Promise<Thread> {
       const thread = find(threadId);
       const messages = structuredClone(thread.messages);
+      if (thread.location === "drafts") messages.forEach((m) => (m.draftId = thread.id));
       return {
         accountId: account.id,
         id: thread.id,
@@ -818,7 +819,8 @@ export function createDemoProvider(account: Account): MailProvider {
       }
     },
 
-    async send(message: OutgoingMessage) {
+    async send(message: OutgoingMessage, options?: { draftId?: string }) {
+      if (options?.draftId && threads.get(options.draftId)?.location === "drafts") threads.delete(options.draftId);
       const existing =
         message.reply?.kind === "reply" ? threads.get(message.reply.threadId) : undefined;
       const id = existing?.id ?? randomUUID();
@@ -877,6 +879,37 @@ export function createDemoProvider(account: Account): MailProvider {
           attachments: new Map(thread.attachments),
         });
       }
+    },
+
+    // A demo draft is a conversation of its own in Drafts.
+    async saveDraft(message: OutgoingMessage, draftId?: string) {
+      const id = draftId && threads.get(draftId)?.location === "drafts" ? draftId : randomUUID();
+      const draft: Message = {
+        id,
+        threadId: id,
+        from: me,
+        to: message.to,
+        cc: message.cc,
+        bcc: message.bcc,
+        replyTo: [],
+        subject: message.subject,
+        date: new Date().toISOString(),
+        snippet: snippetFromText(message.text),
+        text: message.text,
+        html: message.html,
+        unread: false,
+        starred: false,
+        attachments: [],
+        references: message.reply?.messageIdHeader
+          ? [...(message.reply.references ?? []), message.reply.messageIdHeader]
+          : undefined,
+      };
+      threads.set(id, { id, location: "drafts", messages: [draft], attachments: new Map() });
+      return { draftId: id };
+    },
+
+    async deleteDraft(draftId: string) {
+      if (threads.get(draftId)?.location === "drafts") threads.delete(draftId);
     },
 
     async getAttachment(messageId: string, attachmentId: string) {

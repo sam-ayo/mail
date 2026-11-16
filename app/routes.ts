@@ -28,6 +28,7 @@ export default [
   route("api/important-senders", "routes/api.important-senders.ts"),
   route("api/contacts", "routes/api.contacts.ts"),
   route("api/send", "routes/api.send.ts"),
+  route("api/drafts", "routes/api.drafts.ts"),
   route("api/attachments/:accountId", "routes/api.attachments.ts"),
   route("api/counts", "routes/api.counts.ts"),
   route("api/avatar", "routes/api.avatar.ts"),

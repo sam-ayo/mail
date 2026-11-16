@@ -239,9 +239,32 @@ export async function modifyThread(
   return { threadId: result?.threadId ?? threadId };
 }
 
-export async function sendMessage(userId: string, accountId: string, message: OutgoingMessage) {
+/** With a draft ID, the provider also removes that draft from the mail server. */
+export async function sendMessage(
+  userId: string,
+  accountId: string,
+  message: OutgoingMessage,
+  draftId?: string,
+) {
   const account = await requireAccount(userId, accountId);
-  await providerFor(account).send(message);
+  await providerFor(account).send(message, { draftId });
+}
+
+/** Saves a draft on the mail server. Returns the draft ID, which can change with each save. */
+export async function saveDraft(
+  userId: string,
+  accountId: string,
+  message: OutgoingMessage,
+  draftId?: string,
+) {
+  const provider = providerFor(await requireAccount(userId, accountId));
+  if (!provider.saveDraft) throw new ProviderError("This account does not save drafts", 400);
+  return provider.saveDraft(message, draftId);
+}
+
+export async function deleteDraft(userId: string, accountId: string, draftId: string) {
+  const provider = providerFor(await requireAccount(userId, accountId));
+  await provider.deleteDraft?.(draftId);
 }
 
 export async function getAttachment(

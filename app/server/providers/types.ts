@@ -60,7 +60,17 @@ export interface MailProvider {
    * message UID, so an undo needs the new ID.
    */
   modifyThread(threadId: string, action: ThreadAction): Promise<{ threadId?: string } | void>;
-  send(message: OutgoingMessage): Promise<void>;
+  /** With a draft ID, the provider also removes that draft from the mail server. */
+  send(message: OutgoingMessage, options?: { draftId?: string }): Promise<void>;
+  /**
+   * Saves the message as a draft on the mail server. With a draft ID, the
+   * message replaces that draft. The ID can change with each save, so the
+   * caller must keep the ID from the answer. Attachments are not saved.
+   * A provider with no Drafts folder does not have this method.
+   */
+  saveDraft?(message: OutgoingMessage, draftId?: string): Promise<{ draftId: string }>;
+  /** Deletes a draft. A draft that does not exist is not an error. */
+  deleteDraft?(draftId: string): Promise<void>;
   getAttachment(messageId: string, attachmentId: string): Promise<AttachmentContent>;
   /** The unread items in the inbox, with their conversations. */
   inboxUnread(limit: number): Promise<UnreadInbox>;

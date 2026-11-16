@@ -72,7 +72,7 @@ export function Composer({
   autoFocus = "to",
   fill = false,
 }: ComposerProps) {
-  const { accounts, send } = useMail();
+  const { accounts, send, syncDraft, draftStatus } = useMail();
   const confirm = useConfirm();
   const [files, setFiles] = useState<File[]>([]);
   const [error, setError] = useState<string | null>(null);
@@ -87,6 +87,9 @@ export function Composer({
   const fileRef = useRef<HTMLInputElement>(null);
 
   const set = (patch: Partial<ComposeDraft>) => onChange({ ...draft, ...patch });
+  // Each change saves to the Drafts folder of the mail server after a pause.
+  useEffect(() => syncDraft(draft), [draft, syncDraft]);
+  const saveStatus = draftStatus[draft.id];
   const activeAccounts = accounts.filter((a) => a.status === "active");
 
   useEffect(() => {
@@ -398,6 +401,14 @@ export function Composer({
         >
           {preview ? <PencilSimple className="size-4" /> : <MarkdownLogo className="size-4" />}
         </IconButton>
+        {saveStatus && (
+          <span
+            role="status"
+            className={cx("truncate pl-1 text-xs", saveStatus === "error" ? "text-red-600" : "text-zinc-400")}
+          >
+            {saveStatus === "saving" ? "Saving…" : saveStatus === "saved" ? "Saved to Drafts" : "Draft not saved"}
+          </span>
+        )}
         <div className="flex-1" />
         <Button type="submit" variant="primary" className="h-8">
           <PaperPlaneTilt className="size-3.5" /> Send
@@ -451,7 +462,7 @@ function readSize(): WindowSize {
 
 /** The floating window for a new message or a forward. */
 export function ComposeWindow() {
-  const { compose, updateCompose, closeCompose, account } = useMail();
+  const { compose, updateCompose, closeCompose, discardCompose, account } = useMail();
   const [minimizedState, setMinimized] = useState(false);
   const [expandedState, setExpandedState] = useState(false);
   // On a phone the window is a sheet over the full screen, as in iOS Mail. It
@@ -719,7 +730,7 @@ export function ComposeWindow() {
               key={draft.id}
               draft={draft}
               onChange={updateCompose}
-              onDiscard={closeCompose}
+              onDiscard={discardCompose}
               variant="window"
               fill={fill}
             />
