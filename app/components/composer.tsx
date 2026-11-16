@@ -12,7 +12,7 @@ import {
 import { useEffect, useLayoutEffect, useRef, useState } from "react";
 import { flushSync } from "react-dom";
 import type { ComposeDraft } from "~/lib/compose";
-import { parseAddressList, textOn } from "~/lib/mail";
+import { isEmail, parseAddressList, textOn } from "~/lib/mail";
 import { markdownToHtml } from "~/lib/markdown";
 import { useConfirm } from "./confirm-dialog";
 import { useMail } from "./mail-context";
@@ -21,7 +21,6 @@ import { RecipientInput } from "./recipient-input";
 import { ResizeHandle } from "./resize-handle";
 import { Button, FileName, Hint, IconButton, cx } from "./ui";
 
-const EMAIL = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
 
 /**
  * Puts Markdown marks around the selected text in a field. With no selection, the
@@ -124,7 +123,7 @@ export function Composer({
   async function submit() {
     const recipients = [draft.to, draft.cc, draft.bcc].flatMap(parseAddressList);
     if (recipients.length === 0) return setError("Add at least one recipient.");
-    const invalid = recipients.find((r) => !EMAIL.test(r.email));
+    const invalid = recipients.find((r) => !isEmail(r.email));
     if (invalid) return setError(`“${invalid.email}” is not a valid email address.`);
     if (!draft.subject.trim() && !draft.body.trim()) {
       return setError("Add a subject or a message.");
@@ -227,8 +226,9 @@ export function Composer({
             </select>
           </Row>
         )}
-        <Row label="To">
+        <Row label="To" group>
           <RecipientInput
+            aria-label="To"
             ref={toRef}
             value={draft.to}
             onChange={(to) => set({ to })}
@@ -238,7 +238,7 @@ export function Composer({
             autoCorrect="off"
             spellCheck={false}
             enterKeyHint="next"
-            className="w-full bg-transparent py-2 outline-none"
+            className="bg-transparent py-1 outline-none"
             placeholder="name@example.com"
             autoComplete="off"
           />
@@ -254,8 +254,9 @@ export function Composer({
         </Row>
         {showCopies && (
           <>
-            <Row label="Cc">
+            <Row label="Cc" group>
               <RecipientInput
+                aria-label="Cc"
                 ref={ccRef}
                 value={draft.cc}
                 onChange={(cc) => set({ cc })}
@@ -265,11 +266,12 @@ export function Composer({
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="next"
-                className="w-full bg-transparent py-2 outline-none"
+                className="bg-transparent py-1 outline-none"
               />
             </Row>
-            <Row label="Bcc">
+            <Row label="Bcc" group>
               <RecipientInput
+                aria-label="Bcc"
                 ref={bccRef}
                 value={draft.bcc}
                 onChange={(bcc) => set({ bcc })}
@@ -279,7 +281,7 @@ export function Composer({
                 autoCorrect="off"
                 spellCheck={false}
                 enterKeyHint="next"
-                className="w-full bg-transparent py-2 outline-none"
+                className="bg-transparent py-1 outline-none"
               />
             </Row>
           </>
@@ -411,12 +413,14 @@ function addresses(...fields: string[]) {
   return fields.flatMap(parseAddressList).map((address) => address.email);
 }
 
-function Row({ label, children }: { label: string; children: React.ReactNode }) {
+/** A row with `group` has more than one control, so a label element must not contain it. */
+function Row({ label, group, children }: { label: string; group?: boolean; children: React.ReactNode }) {
+  const Element = group ? "div" : "label";
   return (
-    <label className="flex items-center gap-3">
+    <Element className="flex items-center gap-3">
       <span className="w-14 shrink-0 text-zinc-400">{label}</span>
       {children}
-    </label>
+    </Element>
   );
 }
 

@@ -156,7 +156,7 @@ export function Avatar({
   /** Shows the company logo of the domain, instead of the image for the email. */
   domain?: string;
   color?: string;
-  size?: "sm" | "md" | "lg";
+  size?: "xs" | "sm" | "md" | "lg";
 }) {
   const hue = [...email].reduce((sum, char) => sum + char.charCodeAt(0), 0) % 360;
   const src = domain
@@ -171,6 +171,7 @@ export function Avatar({
     <span
       className={cx(
         "relative grid shrink-0 place-items-center overflow-hidden rounded-full font-semibold text-white select-none",
+        size === "xs" && "size-5 text-[9px]",
         size === "sm" && "size-6 text-[10px]",
         size === "md" && "size-8 text-xs",
         size === "lg" && "size-10 text-sm",

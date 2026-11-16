@@ -234,7 +234,7 @@ export function displayName(address: Address) {
  * Reads the addresses in a recipient field. A name can have a comma, for
  * example "Doe, Jane <jane@example.com>". Thus a comma in
  * quotes or in angle brackets does not separate addresses, and a part with
- * no "@" joins the part after it.
+ * no "@" and no angle bracket joins the part after it.
  */
 export function parseAddressList(input: string): Address[] {
   const parts: string[] = [];
@@ -259,7 +259,7 @@ export function parseAddressList(input: string): Address[] {
   for (const part of parts) {
     const text = pending ? `${pending},${part}` : part;
     if (!text.trim()) continue;
-    if (text.includes("@")) {
+    if (text.includes("@") || text.includes("<")) {
       merged.push(text);
       pending = "";
     } else {
@@ -272,13 +272,35 @@ export function parseAddressList(input: string): Address[] {
     .map((part) => part.trim())
     .filter(Boolean)
     .map((part) => {
-      const match = part.match(/^(.*)<([^>]+)>$/);
+      const match = part.match(/^(.*)<([^>]+)>[\s.,;:]*$/);
       if (match) {
         const name = match[1].trim().replace(/^"|"$/g, "");
-        return { name: name || undefined, email: match[2].trim() };
+        return { name: name || undefined, email: cleanEmail(match[2]) };
       }
-      return { email: part };
+      return { email: cleanEmail(part) };
     });
+}
+
+/**
+ * Removes the characters that come with an address from a sentence, a link, or
+ * a web page: a "mailto:" prefix, brackets, quotes, punctuation at the end, and
+ * characters that do not show. The mail providers reject an address that has them.
+ */
+function cleanEmail(text: string) {
+  return text
+    .replace(/[\u00AD\u200B-\u200F\u2060\uFEFF]/g, "")
+    .trim()
+    .replace(/^[<"'([]+/, "")
+    .replace(/^mailto:/i, "")
+    .replace(/[>"')\].,;:]+$/, "")
+    .trim();
+}
+
+const EMAIL = /^[^\s@<>()[\],;:"]+@[^\s@<>()[\],;:"]+\.[^\s@<>()[\],;:".]+$/;
+
+/** The address has the form that the mail providers accept. */
+export function isEmail(email: string) {
+  return EMAIL.test(email) && !email.includes("..");
 }
 
 export function formatListDate(iso: string, now = new Date()) {
@@ -435,10 +457,38 @@ export interface Contact {
   count: number;
 }
 
-/** The part of a recipient field after the last comma or semicolon: the address that the person types now. */
+/**
+ * The part of a recipient field after the last comma or semicolon: the address
+ * that the person types now. A comma in quotes or in angle brackets is part of
+ * an address, as in `parseAddressList`.
+ */
 export function lastRecipient(value: string) {
-  const start = Math.max(value.lastIndexOf(","), value.lastIndexOf(";")) + 1;
+  let start = 0;
+  let quoted = false;
+  let angled = false;
+  for (let index = 0; index < value.length; index++) {
+    const char = value[index];
+    if (char === '"') quoted = !quoted;
+    else if (char === "<" && !quoted) angled = true;
+    else if (char === ">" && !quoted) angled = false;
+    else if ((char === "," || char === ";") && !quoted && !angled) start = index + 1;
+  }
   return { start, text: value.slice(start).trim() };
+}
+
+/**
+ * The text of a recipient field for the addresses. A comma and a space come
+ * after each address. Text with no "@" gets angle brackets, so that
+ * `parseAddressList` does not read it as part of the name of the next address.
+ */
+export function formatRecipients(addresses: Address[]) {
+  return addresses
+    .map((address) => {
+      if (!address.name) return address.email.includes("@") ? `${address.email}, ` : `<${address.email}>, `;
+      const name = address.name.replace(/["<>]/g, "").trim();
+      return `${/[,;]/.test(name) ? `"${name}"` : name} <${address.email}>, `;
+    })
+    .join("");
 }
 
 /**

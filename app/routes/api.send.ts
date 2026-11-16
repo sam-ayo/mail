@@ -1,5 +1,5 @@
 import type { ReplyContext } from "~/lib/compose";
-import { parseAddressList } from "~/lib/mail";
+import { isEmail, parseAddressList } from "~/lib/mail";
 import { requireUserId } from "~/server/auth.server";
 import { sendMessage } from "~/server/mail.server";
 import { errorMessage } from "~/server/util.server";
@@ -17,6 +17,11 @@ export async function action({ request }: Route.ActionArgs) {
   const bcc = parseAddressList(text("bcc"));
   if (to.length + cc.length + bcc.length === 0) {
     return Response.json({ error: "Add at least one recipient." }, { status: 400 });
+  }
+
+  const invalid = [...to, ...cc, ...bcc].find((address) => !isEmail(address.email));
+  if (invalid) {
+    return Response.json({ error: `“${invalid.email}” is not a valid email address.` }, { status: 400 });
   }
 
   const files = form.getAll("attachments").filter((value): value is File => value instanceof File);
