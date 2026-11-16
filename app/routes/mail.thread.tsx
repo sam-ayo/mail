@@ -772,7 +772,13 @@ function MessageCard({
     >
       <ContextMenu items={menu}>
         <div
-          onClick={onToggle}
+          onClick={(event) => {
+            // A drag that starts on the address and ends at a different element
+            // sends its click to this header. That click must not close the message.
+            const selection = window.getSelection();
+            if (selection && !selection.isCollapsed && event.currentTarget.contains(selection.anchorNode)) return;
+            onToggle();
+          }}
           className={cx(
             "flex cursor-pointer items-start gap-3 rounded-xl px-4 py-3 transition-colors max-md:rounded-none",
             !expanded && "hover:bg-zinc-50 dark:hover:bg-zinc-900",
