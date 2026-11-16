@@ -782,8 +782,8 @@ function MessageCard({
           <div className="min-w-0 flex-1">
             {/* The click goes up to the header, which opens or closes the message. */}
             <div className="flex items-baseline gap-2">
-              <button type="button" aria-expanded={expanded} className="flex min-w-0 flex-1 items-baseline gap-2 text-left">
-                <span dir="auto" className={cx("max-w-[60%] shrink-0 truncate text-sm", expanded ? "font-semibold" : "font-medium")}>
+              <button type="button" aria-expanded={expanded} className="flex max-w-[60%] min-w-0 shrink-0 items-baseline gap-2 text-left">
+                <span dir="auto" className={cx("min-w-0 truncate text-sm", expanded ? "font-semibold" : "font-medium")}>
                   {displayName(message.from)}
                 </span>
                 {message.draftId && (
@@ -791,8 +791,35 @@ function MessageCard({
                     Draft
                   </span>
                 )}
-                {expanded && <span className="truncate text-xs text-zinc-500 max-md:hidden">{message.from.email}</span>}
               </button>
+              {/* The empty space after the address stays a part of the header, so a click there opens or closes the message. */}
+              <span className="flex min-w-0 flex-1 max-md:hidden">
+                {/* Not a button element, because some browsers do not let a person select the text of a button.
+                    The important flag is necessary, because app.css stops text selection on each button role. */}
+                {expanded && (
+                  <span
+                    role="button"
+                    tabIndex={0}
+                    title="Copy address"
+                    aria-label={`Copy address ${message.from.email}`}
+                    onClick={(event) => {
+                      event.stopPropagation();
+                      // A drag across the address selects it. Only a plain click copies.
+                      if (window.getSelection()?.isCollapsed === false) return;
+                      copyText(message.from.email, "the address");
+                    }}
+                    onKeyDown={(event) => {
+                      if (event.key !== "Enter" && event.key !== " ") return;
+                      event.preventDefault();
+                      event.stopPropagation();
+                      copyText(message.from.email, "the address");
+                    }}
+                    className="min-w-0 cursor-text truncate rounded-sm text-xs text-zinc-500 select-text! hover:text-zinc-900 dark:hover:text-zinc-100"
+                  >
+                    {message.from.email}
+                  </span>
+                )}
+              </span>
               {expanded && canUnsubscribe && (
                 <button
                   type="button"
