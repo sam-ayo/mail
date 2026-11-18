@@ -187,6 +187,19 @@ export async function findAccountOwner(provider: ProviderKind, email: string) {
 }
 
 /**
+ * The workspace of the mailbox, and if the mailbox is a sign-in account of
+ * that workspace. Only a sign-in account opens the workspace in a new
+ * browser. Other accounts can be shared mailboxes that other people use.
+ */
+export async function findAccountWorkspace(provider: ProviderKind, email: string) {
+  const row = await queryOne<{ user_id: string; can_sign_in: boolean }>(
+    "SELECT user_id, can_sign_in FROM accounts WHERE provider = $1 AND email = $2",
+    [provider, email.toLowerCase()],
+  );
+  return row ? { userId: row.user_id, canSignIn: row.can_sign_in } : undefined;
+}
+
+/**
  * Inserts the account, or refreshes its credentials if it exists. A person who
  * signs in to a mailbox proves that they own it, so the account moves to the
  * current user.
@@ -197,6 +210,8 @@ export async function upsertAccount(input: {
   email: string;
   name: string;
   credentials: Credentials;
+  /** For a new account only: the account can open the workspace in a new browser. */
+  canSignIn?: boolean;
 }): Promise<string> {
   const email = input.email.toLowerCase();
   const credentials = encrypt(JSON.stringify(input.credentials));
@@ -223,6 +238,7 @@ export async function insertAccount(input: {
   email: string;
   name: string;
   credentials: Credentials;
+  canSignIn?: boolean;
 }): Promise<string> {
   const email = input.email.toLowerCase();
   const credentials = encrypt(JSON.stringify(input.credentials));
@@ -232,8 +248,8 @@ export async function insertAccount(input: {
   ))!;
   const id = randomUUID();
   await query(
-    `INSERT INTO accounts (id, user_id, provider, email, name, color, credentials, position)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8)`,
+    `INSERT INTO accounts (id, user_id, provider, email, name, color, credentials, position, can_sign_in)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
     [
       id,
       input.userId,
@@ -243,6 +259,7 @@ export async function insertAccount(input: {
       ACCOUNT_COLORS[count % ACCOUNT_COLORS.length],
       credentials,
       count,
+      input.canSignIn ?? false,
     ],
   );
   return id;

@@ -5,7 +5,7 @@ import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
 import {
   createUser,
-  findAccountOwner,
+  findAccountWorkspace,
   isDemoUser,
   mergeUsers,
   resolveUser,
@@ -55,12 +55,25 @@ export async function connectAccount(
   let current = await resolveUser(session.get("userId"));
   // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.
   if (current && input.provider !== "demo" && (await isDemoUser(current))) current = undefined;
-  const owner = await findAccountOwner(input.provider, input.email);
-  // The mailbox is in another workspace. Join the two, so that each browser
-  // keeps all its accounts.
-  if (current && owner && current !== owner) await mergeUsers(current, owner);
-  const userId = owner ?? current ?? (await createUser());
-  const accountId = await upsertAccount({ userId, ...input });
+  const owner = await findAccountWorkspace(input.provider, input.email);
+  if (owner && owner.userId !== current) {
+    // Only a sign-in account opens its workspace, or joins it to the workspace
+    // of this browser. Other accounts can be shared mailboxes: a person with
+    // access to a team address must not see the other mailboxes.
+    if (!owner.canSignIn && input.provider !== "demo") {
+      return redirectWithError(
+        session,
+        "/welcome",
+        `${input.email} is already in another workspace. Sign in with the main account of that workspace.`,
+      );
+    }
+    // The mailbox is in another workspace. Join the two, so that each browser
+    // keeps all its accounts.
+    if (current) await mergeUsers(current, owner.userId);
+  }
+  const newWorkspace = !owner && !current;
+  const userId = owner?.userId ?? current ?? (await createUser());
+  const accountId = await upsertAccount({ userId, ...input, canSignIn: newWorkspace });
   // Drop a pooled connection that still uses an old password.
   if (input.provider === "imap") closeImapConnection(accountId);
   session.set("userId", userId);
