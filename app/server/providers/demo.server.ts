@@ -664,7 +664,8 @@ function seed(account: Account) {
       location: s.location ?? "inbox",
       messages: [first],
       attachments: new Map(),
-      category: s.category,
+      // AI sorting does not sort demo mail, so the other demo mail is important.
+      category: s.category ?? "important",
     };
     if (s.attachment) {
       const attachmentId = nextId();
@@ -877,6 +878,7 @@ export function createDemoProvider(account: Account): MailProvider {
           location: "inbox",
           messages: [{ ...structuredClone(sent), id: randomUUID(), threadId: copyId, unread: true }],
           attachments: new Map(thread.attachments),
+          category: "important",
         });
       }
     },

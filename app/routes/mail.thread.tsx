@@ -252,8 +252,9 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     if (data.unread || row?.unread) {
       runAction(row ? threadRefs(row) : [{ accountId: data.accountId, threadId: data.id }], "read", {
         quiet: true,
-        // The unread counts are for the important mail in the inbox.
-        counted: list.folder === "inbox" && row?.category !== "promotion",
+        // The unread counts are for the mail in Important. The server count
+        // corrects the count of mail with no category later.
+        counted: list.folder === "inbox" && row?.category === "important",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

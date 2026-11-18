@@ -20,7 +20,7 @@ import { createOutlookProvider } from "./providers/outlook.server";
 import type { MailProvider, OutgoingMessage } from "./providers/types";
 import { ProviderAuthError, ProviderError } from "./providers/types";
 import { emailDocument, hasQuotedHtml, sanitizeEmailHtml } from "./sanitize.server";
-import { categoriesFor } from "./triage.server";
+import { aiSortingOn, categoriesFor } from "./triage.server";
 import { errorMessage, parseAddresses } from "./util.server";
 
 export function providerFor(account: Account): MailProvider {
@@ -360,15 +360,20 @@ function unsubscribeEmail(mailto: string): OutgoingMessage {
   return { to, cc: [], bcc: [], subject: fields.get("subject") || "Unsubscribe", text, html, attachments: [] };
 }
 
-/** The unread conversations of each account that the count looks at for Promotions. */
+/** The unread conversations of each account that the count looks at for their categories. */
 const UNREAD_SCAN = 500;
 
 /**
- * Inbox unread counts, with no mail in Promotions. A slow or failed account
- * gets `null`, not an error.
+ * Inbox unread counts of the important mail. With AI sorting on, only mail in
+ * Important counts. Mail that AI sorting did not sort yet does not count. With
+ * AI sorting off, all unread inbox mail counts, except mail in Promotions. A
+ * slow or failed account gets `null`, not an error.
  */
 export async function unreadCounts(userId: string): Promise<Record<string, number | null>> {
-  const accounts = (await listAccounts(userId)).filter((a) => a.status === "active");
+  const [accounts, sorting] = await Promise.all([
+    listAccounts(userId).then((all) => all.filter((a) => a.status === "active")),
+    aiSortingOn(userId).catch(() => false),
+  ]);
   const entries = await Promise.all(
     accounts.map(async (account) => {
       const timeout = new Promise<null>((resolve) => setTimeout(() => resolve(null), 4000));
@@ -378,9 +383,10 @@ export async function unreadCounts(userId: string): Promise<Record<string, numbe
           const categories = await categoriesFor(threads.map(({ id }) => ({ accountId: account.id, id }))).catch(
             () => new Map<string, ThreadCategory>(),
           );
-          const promotions = threads.filter(
-            ({ id, category }) => (categories.get(threadKey(account.id, id)) ?? category) === "promotion",
-          ).length;
+          const categoryOf = ({ id, category }: { id: string; category?: ThreadCategory }) =>
+            categories.get(threadKey(account.id, id)) ?? category;
+          if (sorting) return threads.filter((thread) => categoryOf(thread) === "important").length;
+          const promotions = threads.filter((thread) => categoryOf(thread) === "promotion").length;
           return Math.max(0, total - promotions);
         })
         .catch(() => null);
