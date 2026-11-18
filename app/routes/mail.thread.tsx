@@ -23,7 +23,7 @@ import {
 } from "~/components/icons";
 import { Collapsible } from "@base-ui/react/collapsible";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
-import { data, isRouteErrorResponse, useOutletContext, useRevalidator, useRouteError } from "react-router";
+import { data, isRouteErrorResponse, useOutletContext, useParams, useRevalidator, useRouteError } from "react-router";
 import { toast } from "sonner";
 import { AttachmentViewer, type ViewedAttachment } from "~/components/attachment-viewer";
 import { Composer, formatSize } from "~/components/composer";
@@ -40,7 +40,7 @@ import { AccountIcon, Avatar, Button, FileName, Hint, IconButton, cx } from "~/c
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor, draftFromMessage } from "~/lib/compose";
 import type { AccountSummary, RenderedMessage, RenderedThread, ThreadSummary } from "~/lib/mail";
-import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
+import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatCount, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { timed } from "~/server/timing.server";
 import { loadThread } from "~/server/mail.server";
@@ -213,7 +213,7 @@ export const meta: Route.MetaFunction = ({ loaderData }) => [
 type ReplyMode = "reply" | "replyAll" | "forward";
 
 export default function ThreadView({ loaderData }: Route.ComponentProps) {
-  const { account, patches, runAction, compose, openCompose, discardDraft, serverDraftId } = useMail();
+  const { account, patches, runAction, compose, openCompose, discardDraft, serverDraftId, unreadCounts } = useMail();
   const list = useOutletContext<ListOutletContext>();
   const revalidator = useRevalidator();
   const confirm = useConfirm();
@@ -252,6 +252,8 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     if (data.unread || row?.unread) {
       runAction(row ? threadRefs(row) : [{ accountId: data.accountId, threadId: data.id }], "read", {
         quiet: true,
+        // The unread counts are for the important mail in the inbox.
+        counted: list.folder === "inbox" && row?.category !== "promotion",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -371,6 +373,13 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     return () => window.removeEventListener("mail:reply", onReply);
   });
 
+  // The server counts unread inbox mail that is not a promotion, for each account.
+  const { scope } = useParams();
+  const importantUnread =
+    scope === "all"
+      ? Object.values(unreadCounts).reduce<number>((sum, n) => sum + (n ?? 0), 0)
+      : (unreadCounts[scope ?? ""] ?? 0);
+
   const removalActions =
     list.folder === "archive" || list.folder === "trash" || list.folder === "spam";
   const index = list.threads.findIndex((t) => threadKey(t.accountId, t.id) === key);
@@ -485,6 +494,15 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         >
           <CaretLeft className="size-6 shrink-0" />
           <span className="truncate text-[17px]">{FOLDER_LABELS[list.folder]}</span>
+          {/* During a swipe through the inbox, the count of unread important
+              mail shows how much mail is left to read. */}
+          {list.folder === "inbox" && importantUnread > 0 && (
+            <span className="ml-1.5 shrink-0 rounded-full bg-accent-600 px-1.5 py-px text-xs leading-4 font-semibold text-white tabular-nums dark:bg-accent-500"
+            >
+              {formatCount(importantUnread)}
+              <span className="sr-only"> unread important</span>
+            </span>
+          )}
         </button>
         <div className="mx-1 h-5 w-px bg-zinc-200 max-md:hidden lg:hidden dark:bg-zinc-800" />
         <div className="flex-1 md:hidden" />

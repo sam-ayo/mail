@@ -91,8 +91,12 @@ interface MailContextValue {
   runAction(
     targets: ThreadRef[],
     action: ThreadAction,
-    /** `count` is the number of conversations for the toast, if it differs from `targets`. */
-    options?: { folder?: Folder; quiet?: boolean; count?: number },
+    /**
+     * `count` is the number of conversations for the toast, if it differs from `targets`.
+     * `counted` tells that the targets are in the unread counts. Then a read or
+     * an unread action changes the counts at once, before the server answers.
+     */
+    options?: { folder?: Folder; quiet?: boolean; count?: number; counted?: boolean },
   ): Promise<void>;
   compose: ComposeDraft | null;
   openCompose(draft?: Partial<ComposeDraft>): void;
@@ -202,12 +206,16 @@ export function MailProvider({
     accounts[0]?.id;
   const account = useCallback((id: string) => accountMap.get(id), [accountMap]);
 
+  // A local change to the counts makes the server counts from an older
+  // request out of date. Each local change increments this version.
+  const countsVersion = useRef(0);
   const refreshCounts = useCallback(() => {
+    const version = countsVersion.current;
     fetch("/api/counts")
       .then((response) =>
         response.ok ? (response.json() as Promise<Record<string, number | null>>) : null,
       )
-      .then((counts) => counts && setUnreadCounts(counts))
+      .then((counts) => counts && version === countsVersion.current && setUnreadCounts(counts))
       .catch(() => {});
   }, []);
 
@@ -256,6 +264,18 @@ export function MailProvider({
         for (const key of keys) next[key] = { ...current[key], ...patch, at };
         return next;
       });
+      if (options.counted && (action === "read" || action === "unread")) {
+        countsVersion.current += 1;
+        const delta = action === "read" ? -1 : 1;
+        setUnreadCounts((current) => {
+          const next = { ...current };
+          for (const { accountId } of targets) {
+            const count = next[accountId];
+            if (typeof count === "number") next[accountId] = Math.max(0, count + delta);
+          }
+          return next;
+        });
+      }
       setPendingActions((n) => n + 1);
 
       try {
@@ -310,6 +330,8 @@ export function MailProvider({
           return next;
         });
         toast.error(error instanceof Error ? error.message : "The action failed");
+        // The server counts replace the local change.
+        if (options.counted) refreshCounts();
       } finally {
         setPendingActions((n) => n - 1);
       }
