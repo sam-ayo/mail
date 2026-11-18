@@ -459,6 +459,84 @@ export function usePageSwipeBack(options: { enabled: boolean; to: string }) {
   return page;
 }
 
+/**
+ * A swipe to the side opens the next or the previous conversation, as in
+ * Gmail. The pager is a horizontal scroller with snap points: the previous
+ * conversation, the open one, and the next one. Safari sends no touch events
+ * from the sandboxed email frame to the app, but a native scroll moves over
+ * the frame too. When the pager stops on a page next to the open one,
+ * `onPage` opens that conversation. A new conversation shows at the center.
+ */
+export function useThreadPager(options: {
+  enabled: boolean;
+  /** The open conversation. */
+  current: string;
+  hasPrevious: boolean;
+  onPage(offset: 1 | -1): void;
+}) {
+  const { enabled, current, hasPrevious } = options;
+  const pager = useRef<HTMLDivElement>(null);
+  const onPageRef = useRef(options.onPage);
+  onPageRef.current = options.onPage;
+  const center = enabled && hasPrevious ? 1 : 0;
+  const opening = useRef(false);
+
+  useLayoutEffect(() => {
+    const element = pager.current;
+    if (!element) return;
+    opening.current = false;
+    element.scrollLeft = center * element.clientWidth;
+  }, [current, center]);
+
+  useEffect(() => {
+    const element = pager.current;
+    if (!element || !enabled) return;
+
+    const settle = () => {
+      const width = element.clientWidth;
+      if (opening.current || !width) return;
+      const page = Math.round(element.scrollLeft / width);
+      // A finger that holds the pager between two pages does not open a page.
+      if (page === center || Math.abs(element.scrollLeft - page * width) > 2) return;
+      opening.current = true;
+      onPageRef.current(page > center ? 1 : -1);
+    };
+
+    // Safari before 26.2 sends no scrollend event. Then a pause in the scroll events is the end.
+    const native = "onscrollend" in window;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    const onScroll = () => {
+      clearTimeout(timer);
+      timer = setTimeout(settle, 150);
+    };
+
+    // A swipe from the left edge goes back to the list (see usePaneSwipeBack).
+    // The pager stays still for that swipe, so it does not also open the
+    // previous conversation.
+    const onStart = (event: TouchEvent) => {
+      if (event.touches.length === 1 && event.touches[0].clientX <= 28) element.style.overflowX = "hidden";
+    };
+    const onEnd = (event: TouchEvent) => {
+      if (event.touches.length === 0) element.style.overflowX = "";
+    };
+
+    element.addEventListener(native ? "scrollend" : "scroll", native ? settle : onScroll, { passive: true });
+    element.addEventListener("touchstart", onStart, { passive: true });
+    element.addEventListener("touchend", onEnd);
+    element.addEventListener("touchcancel", onEnd);
+    return () => {
+      clearTimeout(timer);
+      element.removeEventListener(native ? "scrollend" : "scroll", native ? settle : onScroll);
+      element.removeEventListener("touchstart", onStart);
+      element.removeEventListener("touchend", onEnd);
+      element.removeEventListener("touchcancel", onEnd);
+      element.style.overflowX = "";
+    };
+  }, [enabled, center]);
+
+  return pager;
+}
+
 /** How far the content moves for a pull. The content moves less than the finger. */
 function resist(distance: number) {
   return Math.min(120, distance * 0.5);
