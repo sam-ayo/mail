@@ -21,15 +21,17 @@ on:
     paths: *paths
   workflow_dispatch:
 
+# A new push to a branch cancels the run for an older push, also in the
+# middle of a deploy. Then the new run builds and deploys the latest commit.
+concurrency:
+  group: deploy-${{ github.ref }}
+  cancel-in-progress: true
+
 env:
   IMAGE: ghcr.io/sam-ayo/mail
 
 jobs:
   build:
-    # A new push cancels an older build. The older run then skips its deploy.
-    concurrency:
-      group: build-${{ github.ref }}
-      cancel-in-progress: true
     # The VM has an ARM CPU. GitHub gives ARM machines to public repositories for free.
     runs-on: ubuntu-24.04-arm
     permissions:
@@ -56,11 +58,6 @@ jobs:
   deploy:
     if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main' && vars.DEPLOY_HOST != ''
     needs: build
-    # A deploy that started always finishes, so the VM is never half updated.
-    # GitHub replaces a waiting deploy with a newer one, so the latest push deploys last.
-    concurrency:
-      group: deploy-${{ github.ref }}
-      cancel-in-progress: false
     runs-on: ubuntu-24.04
     permissions:
       contents: read
