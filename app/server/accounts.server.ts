@@ -130,38 +130,6 @@ export async function resolveUserAccounts(id: string | undefined) {
   return { id: rows[0].resolved_id, demo: rows[0].user_demo, accounts };
 }
 
-/**
- * Moves the accounts and devices of one workspace into another. This occurs
- * when a browser connects a mailbox that another workspace has. Before, the
- * mailbox moved, and the other browser lost it.
- */
-export async function mergeUsers(from: string, into: string) {
-  const { count } = (await queryOne<{ count: number }>(
-    "SELECT COUNT(*)::int AS count FROM accounts WHERE user_id = $1",
-    [into],
-  ))!;
-  await query("UPDATE accounts SET user_id = $1, position = position + $2 WHERE user_id = $3", [
-    into,
-    count,
-    from,
-  ]);
-  await query("UPDATE push_subscriptions SET user_id = $1 WHERE user_id = $2", [into, from]);
-  await query("UPDATE users SET ai_sorting = ai_sorting OR (SELECT ai_sorting FROM users WHERE id = $2) WHERE id = $1", [
-    into,
-    from,
-  ]);
-  // The added colors of the two workspaces join, in their order and without duplicates.
-  await query(
-    `UPDATE users SET custom_colors = ARRAY(
-       SELECT color FROM unnest(custom_colors || (SELECT custom_colors FROM users WHERE id = $2))
-         WITH ORDINALITY AS added(color, position)
-       GROUP BY color ORDER BY min(position)
-     ) WHERE id = $1`,
-    [into, from],
-  );
-  await query("UPDATE users SET merged_into = $1 WHERE id = $2 OR merged_into = $2", [into, from]);
-}
-
 export async function listAccounts(userId: string): Promise<Account[]> {
   const rows = await query<AccountRow>(
     "SELECT * FROM accounts WHERE user_id = $1 ORDER BY position, created_at",
@@ -187,22 +155,23 @@ export async function findAccountOwner(provider: ProviderKind, email: string) {
 }
 
 /**
- * The workspace of the mailbox, and if the mailbox is a sign-in account of
- * that workspace. Only a sign-in account opens the workspace in a new
- * browser. Other accounts can be shared mailboxes that other people use.
+ * The workspaces that have the mailbox, and if the mailbox is a sign-in
+ * account of each. Only a sign-in account opens its workspace in a new
+ * browser. A shared mailbox, for example a team address, can be in the
+ * workspace of each person who uses it.
  */
-export async function findAccountWorkspace(provider: ProviderKind, email: string) {
-  const row = await queryOne<{ user_id: string; can_sign_in: boolean }>(
-    "SELECT user_id, can_sign_in FROM accounts WHERE provider = $1 AND email = $2",
+export async function findAccountWorkspaces(provider: ProviderKind, email: string) {
+  const rows = await query<{ user_id: string; can_sign_in: boolean }>(
+    "SELECT user_id, can_sign_in FROM accounts WHERE provider = $1 AND email = $2 ORDER BY created_at",
     [provider, email.toLowerCase()],
   );
-  return row ? { userId: row.user_id, canSignIn: row.can_sign_in } : undefined;
+  return rows.map((row) => ({ userId: row.user_id, canSignIn: row.can_sign_in }));
 }
 
 /**
- * Inserts the account, or refreshes its credentials if it exists. A person who
- * signs in to a mailbox proves that they own it, so the account moves to the
- * current user.
+ * Inserts the account in the workspace, or refreshes its credentials if the
+ * workspace has it. Other workspaces that have the same mailbox keep their
+ * own account and credentials.
  */
 export async function upsertAccount(input: {
   userId: string;
@@ -216,15 +185,15 @@ export async function upsertAccount(input: {
   const email = input.email.toLowerCase();
   const credentials = encrypt(JSON.stringify(input.credentials));
   const existing = await queryOne<{ id: string }>(
-    "SELECT id FROM accounts WHERE provider = $1 AND email = $2",
-    [input.provider, email],
+    "SELECT id FROM accounts WHERE user_id = $1 AND provider = $2 AND email = $3",
+    [input.userId, input.provider, email],
   );
 
   if (existing) {
     await query(
-      `UPDATE accounts SET user_id = $1, name = $2, credentials = $3, status = 'active'
-       WHERE id = $4`,
-      [input.userId, input.name, credentials, existing.id],
+      `UPDATE accounts SET name = $1, credentials = $2, status = 'active'
+       WHERE id = $3`,
+      [input.name, credentials, existing.id],
     );
     return existing.id;
   }

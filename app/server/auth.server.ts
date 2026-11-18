@@ -5,9 +5,8 @@ import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
 import {
   createUser,
-  findAccountWorkspace,
+  findAccountWorkspaces,
   isDemoUser,
-  mergeUsers,
   resolveUser,
   resolveUserAccounts,
   upsertAccount,
@@ -55,24 +54,25 @@ export async function connectAccount(
   let current = await resolveUser(session.get("userId"));
   // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.
   if (current && input.provider !== "demo" && (await isDemoUser(current))) current = undefined;
-  const owner = await findAccountWorkspace(input.provider, input.email);
-  if (owner && owner.userId !== current) {
-    // Only a sign-in account opens its workspace, or joins it to the workspace
-    // of this browser. Other accounts can be shared mailboxes: a person with
-    // access to a team address must not see the other mailboxes.
-    if (!owner.canSignIn && input.provider !== "demo") {
+  if (!current) {
+    // A browser with no workspace. Only a sign-in account opens its workspace.
+    // Other accounts can be shared mailboxes: a person who uses a team address
+    // must not see the other mailboxes of a workspace that has it.
+    const workspaces = await findAccountWorkspaces(input.provider, input.email);
+    const owner = workspaces.find((w) => w.canSignIn || input.provider === "demo");
+    if (owner) current = owner.userId;
+    else if (workspaces.length > 0) {
       return redirectWithError(
         session,
         "/welcome",
-        `${input.email} is already in another workspace. Sign in with the main account of that workspace.`,
+        `${input.email} is in a workspace of another person. Sign in with your own account first. Then add ${input.email}.`,
       );
     }
-    // The mailbox is in another workspace. Join the two, so that each browser
-    // keeps all its accounts.
-    if (current) await mergeUsers(current, owner.userId);
   }
-  const newWorkspace = !owner && !current;
-  const userId = owner?.userId ?? current ?? (await createUser());
+  // A browser with a workspace adds the mailbox to it, after a sign-in to the
+  // mailbox. Other workspaces that have the mailbox keep their own account.
+  const newWorkspace = !current;
+  const userId = current ?? (await createUser());
   const accountId = await upsertAccount({ userId, ...input, canSignIn: newWorkspace });
   // Drop a pooled connection that still uses an old password.
   if (input.provider === "imap") closeImapConnection(accountId);
