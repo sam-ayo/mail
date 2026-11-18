@@ -2,7 +2,7 @@
 
 The app runs on one Oracle Cloud "Always Free" VM. Caddy gives HTTPS, and Docker Compose runs the app and Caddy. The app runs the scheduled jobs itself (`RUN_JOBS=1`).
 
-- `compose.yaml`: the app and Caddy.
+- `compose.yaml`: two app containers (`app-a` and `app-b`) and Caddy. The deploy replaces one app container at a time, so the site does not stop.
 - `Caddyfile`: HTTPS for `mail.samayo.me` and `mail.demo.samayo.me`, and the security headers.
 - `cloud-init.yaml`: the first boot of the VM. It installs Docker, security updates, and fail2ban, and opens ports 80 and 443.
 - `.github/workflows/deploy.yml`: builds the ARM image, pushes it to GHCR, and deploys it on each push to `main`.
@@ -56,6 +56,7 @@ Before the DNS change, Caddy cannot get certificates. After the change, it gets 
 ```sh
 cd /opt/mail
 docker compose ps                 # state and health
-docker compose logs -f app        # app logs
-docker compose restart app        # restart the app
+docker compose logs -f app-a app-b   # app logs
+docker compose restart app-a         # restart one app container, then the other
+docker compose restart app-b
 ```

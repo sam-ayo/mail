@@ -13,7 +13,12 @@ mail.samayo.me, mail.demo.samayo.me {
 		-Server
 	}
 
-	reverse_proxy app:3000 {
+	# Two app containers. When the deploy replaces one, Caddy cannot connect to it.
+	# Then Caddy tries the other one for up to 30 seconds, so the user gets no 502.
+	reverse_proxy app-a:3000 app-b:3000 {
+		lb_try_duration 30s
+		lb_try_interval 250ms
+		fail_duration 10s
 		# The inbox and the MCP server stream their responses. Send each part at once.
 		flush_interval -1
 	}

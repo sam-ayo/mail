@@ -74,26 +74,28 @@ jobs:
           chmod 600 ~/.ssh/id_ed25519
       - name: Copy the Compose file and the Caddyfile
         run: scp deploy/compose.yaml deploy/Caddyfile "$HOST:/opt/mail/"
-      - name: Start the new image
+      - name: Start the new image, one app container at a time
         # The job token pulls the image. It ends with the job, so no registry token stays on the VM.
+        # The script replaces app-a, waits until it is healthy, and then does the same for app-b.
+        # Caddy sends requests to the other container meanwhile, so the site does not stop.
         run: |
           echo "${{ secrets.GITHUB_TOKEN }}" | ssh "$HOST" docker login ghcr.io -u "${{ github.actor }}" --password-stdin
           ssh "$HOST" "set -e
             cd /opt/mail
             echo IMAGE_TAG=${{ github.sha }} > .env
-            docker compose pull --quiet
+            docker compose pull --quiet app-a app-b
             docker logout ghcr.io
-            docker compose up -d --remove-orphans
-            # up -d does not restart an unchanged Caddy container, so load a changed Caddyfile.
+            for service in app-a app-b; do
+              docker compose up -d --no-deps \$service
+              for i in \$(seq 1 60); do
+                status=\$(docker inspect -f '{{.State.Health.Status}}' \$(docker compose ps -q \$service))
+                [ \"\$status\" = healthy ] && break
+                [ \$i = 60 ] && { echo \"\$service is \$status\"; docker compose logs --tail 50 \$service; exit 1; }
+                sleep 2
+              done
+              echo \"\$service: healthy\"
+            done
+            # Load a changed Caddyfile before Compose removes containers that Caddy can still use.
             docker compose exec -T caddy caddy reload --config /etc/caddy/Caddyfile
+            docker compose up -d --remove-orphans
             docker image prune -f > /dev/null"
-      - name: Wait until the app is healthy
-        run: |
-          for _ in $(seq 1 30); do
-            status=$(ssh "$HOST" "docker inspect -f '{{.State.Health.Status}}' \$(docker compose -f /opt/mail/compose.yaml ps -q app)")
-            echo "app: $status"
-            [ "$status" = healthy ] && exit 0
-            sleep 5
-          done
-          ssh "$HOST" "docker compose -f /opt/mail/compose.yaml logs --tail 50 app"
-          exit 1
