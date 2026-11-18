@@ -19,8 +19,8 @@ export type MenuEntry =
 /**
  * A right-click menu. A long press opens it on touch screens. `items` is a
  * function, so a list of many rows builds menu items only for the open menu.
- * The menu opens with no delay and a very short fade, because people open it
- * many times a day.
+ * People open the menu many times a day, so it opens with no delay and a very
+ * short fade. It grows a small amount from the pointer, not from its center.
  */
 export function ContextMenu({
   items,
@@ -40,7 +40,7 @@ export function ContextMenu({
       <Base.Trigger render={children} />
       <Base.Portal>
         <Base.Positioner className="z-[60] outline-none">
-          <Base.Popup className="min-w-52 origin-(--transform-origin) rounded-xl bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 outline-none transition-opacity duration-100 data-ending-style:opacity-0 data-starting-style:opacity-0 dark:bg-zinc-900 dark:ring-white/10">
+          <Base.Popup className="min-w-52 origin-(--transform-origin) rounded-xl bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 outline-none transition-[scale,opacity] duration-100 ease-out data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-starting-style:scale-[0.97] data-starting-style:opacity-0 dark:bg-zinc-900 dark:ring-white/10">
             <MenuItems items={items()} />
           </Base.Popup>
         </Base.Positioner>

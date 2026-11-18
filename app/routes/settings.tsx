@@ -957,7 +957,7 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
           {items.length > 0 && (
             <Autocomplete.Portal>
               <Autocomplete.Positioner sideOffset={4} align="start" className="z-[60] outline-none">
-                <Autocomplete.Popup className="max-h-72 w-(--anchor-width) overflow-y-auto overscroll-contain rounded-xl bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 outline-none dark:bg-zinc-900 dark:ring-white/10">
+                <Autocomplete.Popup className="max-h-72 w-(--anchor-width) overflow-y-auto overscroll-contain rounded-xl bg-white p-1 text-sm shadow-xl ring-1 ring-black/5 outline-none origin-(--transform-origin) transition-[scale,opacity] duration-[125ms] ease-out data-ending-style:scale-[0.97] data-ending-style:opacity-0 data-starting-style:scale-[0.97] data-starting-style:opacity-0 dark:bg-zinc-900 dark:ring-white/10">
                   <Autocomplete.List>
                     {(item: string) => (
                       <Autocomplete.Item
