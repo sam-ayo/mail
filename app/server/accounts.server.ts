@@ -3,6 +3,7 @@ import type { AccountStatus, AccountSummary, ProviderKind } from "~/lib/mail";
 import { ACCOUNT_COLORS } from "~/lib/mail";
 import { decrypt, encrypt } from "./crypto.server";
 import { query, queryOne } from "./db.server";
+import { composioDisconnect, isComposioCredentials, type ComposioCredentials } from "./oauth/composio.server";
 
 export interface OAuthCredentials {
   accessToken: string;
@@ -28,7 +29,7 @@ export interface DemoCredentials {
   look?: ProviderKind;
 }
 
-export type Credentials = OAuthCredentials | ImapCredentials | DemoCredentials;
+export type Credentials = OAuthCredentials | ComposioCredentials | ImapCredentials | DemoCredentials;
 
 export interface Account extends AccountSummary {
   userId: string;
@@ -298,5 +299,13 @@ export async function removeCustomColor(userId: string, color: string) {
 }
 
 export async function deleteAccount(userId: string, accountId: string) {
-  await query("DELETE FROM accounts WHERE user_id = $1 AND id = $2", [userId, accountId]);
+  const rows = await query<{ credentials: string }>(
+    "DELETE FROM accounts WHERE user_id = $1 AND id = $2 RETURNING credentials",
+    [userId, accountId],
+  );
+  // A Gmail account that Composio connected also leaves Composio.
+  for (const row of rows) {
+    const credentials: unknown = JSON.parse(decrypt(row.credentials));
+    if (isComposioCredentials(credentials)) await composioDisconnect(credentials);
+  }
 }

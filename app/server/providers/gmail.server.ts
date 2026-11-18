@@ -10,6 +10,7 @@ import type {
 } from "~/lib/mail";
 import type { Account } from "../accounts.server";
 import { setAccountStatus } from "../accounts.server";
+import { composioProxy, isComposioCredentials } from "../oauth/composio.server";
 import { createTokenSource } from "../oauth/tokens.server";
 import { loadSummaries, saveSummaries } from "../summary-cache.server";
 import { buildMime, decodeEntities, mapLimit, parseAddresses, parseListUnsubscribe } from "../util.server";
@@ -101,21 +102,47 @@ function uniqueAddresses(addresses: Address[]) {
 }
 
 export function createGmailProvider(account: Account): MailProvider {
-  const tokens = createTokenSource(account);
+  const composio = isComposioCredentials(account.credentials) ? account.credentials : undefined;
+  const tokens = composio ? undefined : createTokenSource(account);
+
+  /** Sends the request through Composio, which adds the Google token. */
+  async function composioFetch(path: string, init: RequestInit): Promise<Response> {
+    try {
+      const result = await composioProxy(composio!, `${API}${path}`, {
+        method: init.method,
+        body: typeof init.body === "string" ? init.body : undefined,
+      });
+      const headers = new Headers(result.headers);
+      headers.set("Content-Type", "application/json");
+      const body = result.status === 204 || result.data == null ? null : JSON.stringify(result.data);
+      return new Response(body, { status: result.status, headers });
+    } catch (error) {
+      if (error instanceof ProviderAuthError) await setAccountStatus(account.id, "reauth_required");
+      throw error;
+    }
+  }
 
   async function request<T>(path: string, init: RequestInit = {}, attempt = 0): Promise<T> {
+    if (composio) {
+      const response = await composioFetch(path, init);
+      return handle<T>(response, path, init, attempt);
+    }
     const response = await fetch(`${API}${path}`, {
       ...init,
       headers: {
-        Authorization: `Bearer ${await tokens.get()}`,
+        Authorization: `Bearer ${await tokens!.get()}`,
         "Content-Type": "application/json",
         ...init.headers,
       },
     });
     if (response.status === 401 && attempt === 0) {
-      await tokens.refresh();
+      await tokens!.refresh();
       return request(path, init, attempt + 1);
     }
+    return handle<T>(response, path, init, attempt);
+  }
+
+  async function handle<T>(response: Response, path: string, init: RequestInit, attempt: number): Promise<T> {
     if (response.status === 401) {
       await setAccountStatus(account.id, "reauth_required");
       throw new ProviderAuthError();

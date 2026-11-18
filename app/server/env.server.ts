@@ -27,6 +27,13 @@ export const env = {
     clientId: process.env.GOOGLE_CLIENT_ID || "",
     clientSecret: process.env.GOOGLE_CLIENT_SECRET || "",
   },
+  /**
+   * The API key of Composio. With a key, Gmail sign-in uses the verified Google
+   * app of Composio, and Gmail requests go through the Composio proxy.
+   */
+  composio: {
+    apiKey: process.env.COMPOSIO_API_KEY || "",
+  },
   microsoft: {
     clientId: process.env.MICROSOFT_CLIENT_ID || "",
     clientSecret: process.env.MICROSOFT_CLIENT_SECRET || "",
@@ -63,7 +70,7 @@ export const env = {
 };
 
 export const oauthConfigured = {
-  google: !!(env.google.clientId && env.google.clientSecret),
+  google: !!(env.composio.apiKey || (env.google.clientId && env.google.clientSecret)),
   microsoft: !!(env.microsoft.clientId && env.microsoft.clientSecret),
   hosted: !!(env.hosted.mailboxes.length && env.hosted.password && env.hosted.resendApiKey),
 };

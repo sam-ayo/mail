@@ -1,8 +1,9 @@
 import { data, redirect } from "react-router";
 import { randomToken, sha256Base64Url } from "~/server/crypto.server";
-import { oauthConfigured } from "~/server/env.server";
+import { env, oauthConfigured } from "~/server/env.server";
 import { redirectWithError } from "~/server/auth.server";
-import { googleAuthorizeUrl } from "~/server/oauth/google.server";
+import { composioStartGmail } from "~/server/oauth/composio.server";
+import { googleAuthorizeUrl, googleRedirectUri } from "~/server/oauth/google.server";
 import { microsoftAuthorizeUrl } from "~/server/oauth/microsoft.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/auth.start";
@@ -23,11 +24,26 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   }
 
   const url = new URL(request.url);
+  session.flash("oauthReturnTo", url.searchParams.get("returnTo") ?? "/mail/all/inbox");
+
+  // With a Composio key, Gmail connects through the Google app of Composio.
+  if (provider === "google" && env.composio.apiKey) {
+    try {
+      const start = await composioStartGmail(googleRedirectUri());
+      session.flash("composioAccountId", start.composioAccountId);
+      session.flash("composioUserId", start.composioUserId);
+      return redirect(start.redirectUrl, {
+        headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
+      });
+    } catch {
+      return redirectWithError(session, "/welcome", "Gmail sign-in is not available now. Try again later.");
+    }
+  }
+
   const state = randomToken();
   const verifier = randomToken(48);
   session.flash("oauthState", state);
   session.flash("oauthVerifier", verifier);
-  session.flash("oauthReturnTo", url.searchParams.get("returnTo") ?? "/mail/all/inbox");
 
   const hint = url.searchParams.get("hint") ?? undefined;
   const challenge = sha256Base64Url(verifier);

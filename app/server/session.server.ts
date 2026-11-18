@@ -9,6 +9,8 @@ type SessionFlashData = {
   oauthState: string;
   oauthVerifier: string;
   oauthReturnTo: string;
+  composioAccountId: string;
+  composioUserId: string;
   error: string;
 };
 
