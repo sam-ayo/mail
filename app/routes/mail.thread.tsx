@@ -22,7 +22,7 @@ import {
   Tray,
 } from "~/components/icons";
 import { Collapsible } from "@base-ui/react/collapsible";
-import { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { data, isRouteErrorResponse, useOutletContext, useRevalidator, useRouteError } from "react-router";
 import { toast } from "sonner";
 import { AttachmentViewer, type ViewedAttachment } from "~/components/attachment-viewer";
@@ -39,7 +39,7 @@ import { ContextMenu, copyText, openContextMenuAt } from "~/components/menu";
 import { AccountIcon, Avatar, Button, FileName, Hint, IconButton, cx } from "~/components/ui";
 import type { ComposeDraft } from "~/lib/compose";
 import { draftFor, draftFromMessage } from "~/lib/compose";
-import type { RenderedMessage, RenderedThread, ThreadSummary } from "~/lib/mail";
+import type { AccountSummary, RenderedMessage, RenderedThread, ThreadSummary } from "~/lib/mail";
 import { attachmentUrl, displayName, FOLDER_LABELS, PREFETCH_PARAM, formatAddress, formatFullDate, formatListDate, threadKey, textOn, threadRefs } from "~/lib/mail";
 import { userContext } from "~/server/context";
 import { timed } from "~/server/timing.server";
@@ -93,6 +93,23 @@ const PREFETCH_FRESH_MS = 5 * 60_000;
 /** The conversation on the screen. A reload of it always asks the server. */
 let shownKey: string | null = null;
 
+// The pages next to the open conversation show the cached data. They render
+// again when a prefetch puts new data in the cache.
+const cacheListeners = new Set<() => void>();
+function subscribeCache(listener: () => void) {
+  cacheListeners.add(listener);
+  return () => cacheListeners.delete(listener);
+}
+
+/** The cached conversation, or undefined if it did not load yet. */
+function useCachedThread(key: string | undefined) {
+  return useSyncExternalStore(
+    subscribeCache,
+    () => (key ? threadCache.get(key)?.data?.thread : undefined),
+    () => undefined,
+  );
+}
+
 function fetchThread(key: string, serverLoader: () => Promise<ThreadData>) {
   const previous = threadCache.get(key);
   const pending: Promise<ThreadData> = serverLoader().then(
@@ -100,6 +117,7 @@ function fetchThread(key: string, serverLoader: () => Promise<ThreadData>) {
       threadCache.delete(key);
       threadCache.set(key, { data, at: Date.now() });
       if (threadCache.size > CACHE_LIMIT) threadCache.delete(threadCache.keys().next().value!);
+      for (const listener of cacheListeners) listener();
       return data;
     },
     (error) => {
@@ -239,12 +257,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [key]);
 
-  // Show unread messages and the newest message. Collapse the others.
-  const initialExpanded = () =>
-    new Set([
-      ...data.messages.filter((m) => m.unread).map((m) => m.id),
-      data.messages[data.messages.length - 1]?.id,
-    ]);
+  const initialExpanded = () => defaultExpanded(data.messages);
   const [expanded, setExpanded] = useState<Set<string>>(initialExpanded);
   const [expandedFor, setExpandedFor] = useState(key);
   const [knownIds, setKnownIds] = useState(() => data.messages.map((m) => m.id).join());
@@ -368,6 +381,12 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
   const paging = singlePane && !draft;
   const previousThread = paging && index > 0 ? list.threads[index - 1] : undefined;
   const nextThread = paging && index >= 0 ? list.threads[index + 1] : undefined;
+  const previousKey = previousThread && threadKey(previousThread.accountId, previousThread.id);
+  const nextKey = nextThread && threadKey(nextThread.accountId, nextThread.id);
+  // The list prefetches these conversations. Their pages show the real
+  // messages during a swipe, and keep their email frames when they open.
+  const previousData = useCachedThread(previousKey);
+  const nextData = useCachedThread(nextKey);
   const pager = useThreadPager({
     enabled: paging,
     current: key,
@@ -389,8 +408,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     setShowEarlierFor(key);
     setShowEarlier(false);
   }
-  const firstOpen = data.messages.findIndex((m) => expanded.has(m.id));
-  const folded = !showEarlier && firstOpen >= 2 ? firstOpen : 0;
+  const folded = showEarlier ? 0 : foldedCount(data.messages, expanded);
 
   // On a phone, these actions move from the header to the More menu.
   const moreMenu = () => [
@@ -419,6 +437,30 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
       onSelect: () => list.openRelative(1),
     },
   ];
+
+  /** The page of a conversation next to the open one. It shows the real messages after the prefetch. */
+  function neighbor(pageKey: string, summary: ThreadSummary, cached: RenderedThread | undefined) {
+    if (!cached) return <NeighborPage key={pageKey} thread={summary} />;
+    return (
+      <ThreadPage
+        key={pageKey}
+        active={false}
+        subject={cached.subject}
+        owner={account(cached.accountId)}
+        accountId={cached.accountId}
+        threadId={cached.id}
+        messages={cached.messages}
+        expanded={defaultExpanded(cached.messages)}
+        folded={foldedCount(cached.messages, defaultExpanded(cached.messages))}
+        instant
+        onShowEarlier={noop}
+        onToggle={noop}
+        onReply={noop}
+        onEditDraft={noop}
+        onDiscardDraft={noop}
+      />
+    );
+  }
 
   return (
     <article className="relative flex min-w-0 flex-1 flex-col bg-white dark:bg-zinc-950">
@@ -518,112 +560,84 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         ref={pager}
         className="flex min-h-0 flex-1 overflow-x-hidden max-lg:overflow-x-auto max-lg:snap-x max-lg:snap-mandatory max-lg:overscroll-x-contain"
       >
-        {previousThread && <NeighborPage thread={previousThread} />}
+        {previousThread && neighbor(previousKey!, previousThread, previousData)}
         {/* On a phone, the messages are edge-to-edge cards on a gray page. */}
-        <div
-          ref={scroller}
-          className="w-full shrink-0 snap-start snap-always overflow-y-auto overscroll-contain max-md:bg-zinc-100 max-md:dark:bg-zinc-900"
+        <ThreadPage
+          key={key}
+          active
+          scrollerRef={scroller}
+          subject={thread.subject}
+          owner={owner}
+          accountId={data.accountId}
+          threadId={data.id}
+          messages={data.messages}
+          expanded={expanded}
+          folded={folded}
+          instant={instant}
+          editedDraftId={editedDraftId}
+          onShowEarlier={() => setShowEarlier(true)}
+          onToggle={(id) => {
+            setInstant(false);
+            setExpanded((current) => {
+              const next = new Set(current);
+              if (next.has(id)) next.delete(id);
+              else next.add(id);
+              return next;
+            });
+          }}
+          onReply={(mode, message) => startReply(mode, message)}
+          onArchive={removalActions ? undefined : () => list.actOnOpenThread("archive")}
+          onEditDraft={editDraft}
+          onDiscardDraft={discardServerDraft}
         >
-          <div className="mx-auto max-w-6xl px-6 py-6 max-md:px-0 max-md:pt-4 max-md:pb-28">
-            {/* The subject gets the full width. A long subject must not wrap into
-                a narrow column next to the account badge. */}
-            <div className="mb-6 space-y-2 max-md:mb-4 max-md:px-4">
-              <h1 dir="auto" className="text-xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere]">
-                {thread.subject}
-              </h1>
-              {owner && (
-                <span
-                  title={owner.email}
-                  className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 max-md:bg-white dark:bg-zinc-800 dark:text-zinc-300 max-md:dark:bg-zinc-950"
+          <div id="reply-composer" className="mt-6">
+            {draft ? (
+              <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
+                <div
+                  className={cx(
+                    "flex items-center gap-2 px-4 py-2 text-xs",
+                    !owner && "border-b border-zinc-100 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900",
+                  )}
+                  // The account color shows which address sends the reply.
+                  style={owner ? { background: owner.color, color: textOn(owner.color) } : undefined}
                 >
-                  <AccountIcon account={owner} className="size-3.5" />
-                  <span className="min-w-0 truncate">{owner.email}</span>
-                </span>
-              )}
-            </div>
-
-            <div className="space-y-3 max-md:space-y-1.5">
-              {folded > 0 && (
-                <EarlierMessages messages={data.messages.slice(0, folded)} onOpen={() => setShowEarlier(true)} />
-              )}
-              {data.messages.map((message, i) =>
-                message.draftId && message.draftId === editedDraftId ? null : (
-                  <MessageCard
-                    key={message.id}
-                    folded={i < folded}
-                    onEditDraft={message.draftId ? () => editDraft(message) : undefined}
-                    onDiscardDraft={message.draftId ? () => discardServerDraft(message) : undefined}
-                    accountId={data.accountId}
-                    accountEmail={owner?.email}
-                    threadId={data.id}
-                    onArchive={removalActions ? undefined : () => list.actOnOpenThread("archive")}
-                    message={message}
-                    expanded={expanded.has(message.id)}
-                    instant={instant}
-                    onToggle={() => {
-                      setInstant(false);
-                      setExpanded((current) => {
-                        const next = new Set(current);
-                        if (next.has(message.id)) next.delete(message.id);
-                        else next.add(message.id);
-                        return next;
-                      });
-                    }}
-                    onReply={(mode) => startReply(mode, message)}
-                  />
-                ),
-              )}
-            </div>
-
-            <div id="reply-composer" className="mt-6">
-              {draft ? (
-                <div className="overflow-hidden rounded-xl border border-zinc-200 shadow-sm dark:border-zinc-800">
-                  <div
-                    className={cx(
-                      "flex items-center gap-2 px-4 py-2 text-xs",
-                      !owner && "border-b border-zinc-100 bg-zinc-50 text-zinc-500 dark:border-zinc-800 dark:bg-zinc-900",
-                    )}
-                    // The account color shows which address sends the reply.
-                    style={owner ? { background: owner.color, color: textOn(owner.color) } : undefined}
-                  >
-                    {draft.reply?.kind === "forward" ? (
-                      <ArrowBendUpRight className="size-3.5 shrink-0" />
-                    ) : (
-                      <ArrowBendUpLeft className="size-3.5 shrink-0" />
-                    )}
-                    <span className="shrink-0 opacity-75">{draft.reply?.kind === "forward" ? "Forward" : "Reply"} from</span>
-                    <span className="min-w-0 truncate font-medium">{owner?.email}</span>
-                  </div>
-                  <Composer
-                    key={draft.id}
-                    draft={draft}
-                    onChange={saveDraft}
-                    onDiscard={() => {
-                      discardDraft(draft).then(() => revalidator.revalidate());
-                      saveDraft(null);
-                    }}
-                    onSent={() => saveDraft(null)}
-                    variant="inline"
-                    autoFocus={draft.reply?.kind === "forward" ? "to" : "body"}
-                  />
+                  {draft.reply?.kind === "forward" ? (
+                    <ArrowBendUpRight className="size-3.5 shrink-0" />
+                  ) : (
+                    <ArrowBendUpLeft className="size-3.5 shrink-0" />
+                  )}
+                  <span className="shrink-0 opacity-75">{draft.reply?.kind === "forward" ? "Forward" : "Reply"} from</span>
+                  <span className="min-w-0 truncate font-medium">{owner?.email}</span>
                 </div>
-              ) : (
-                <div className="flex flex-wrap justify-end gap-2 max-md:hidden">
-                  <ReplyButton onClick={() => startReply("reply")} shortcut="R">
-                    <ArrowBendUpLeft className="size-4" /> Reply
-                  </ReplyButton>
-                  <ReplyButton onClick={() => startReply("replyAll")} shortcut="A">
-                    <ArrowBendDoubleUpLeft className="size-4" /> Reply all
-                  </ReplyButton>
-                  <ReplyButton onClick={() => startReply("forward")} shortcut="F">
-                    <ArrowBendUpRight className="size-4" /> Forward
-                  </ReplyButton>
-                </div>
-              )}
-            </div>
+                <Composer
+                  key={draft.id}
+                  draft={draft}
+                  onChange={saveDraft}
+                  onDiscard={() => {
+                    discardDraft(draft).then(() => revalidator.revalidate());
+                    saveDraft(null);
+                  }}
+                  onSent={() => saveDraft(null)}
+                  variant="inline"
+                  autoFocus={draft.reply?.kind === "forward" ? "to" : "body"}
+                />
+              </div>
+            ) : (
+              <div className="flex flex-wrap justify-end gap-2 max-md:hidden">
+                <ReplyButton onClick={() => startReply("reply")} shortcut="R">
+                  <ArrowBendUpLeft className="size-4" /> Reply
+                </ReplyButton>
+                <ReplyButton onClick={() => startReply("replyAll")} shortcut="A">
+                  <ArrowBendDoubleUpLeft className="size-4" /> Reply all
+                </ReplyButton>
+                <ReplyButton onClick={() => startReply("forward")} shortcut="F">
+                  <ArrowBendUpRight className="size-4" /> Forward
+                </ReplyButton>
+              </div>
+            )}
           </div>
-        </div>
-        {nextThread && <NeighborPage thread={nextThread} />}
+        </ThreadPage>
+        {nextThread && neighbor(nextKey!, nextThread, nextData)}
       </div>
 
       {/* On a phone, the reply actions float at the bottom, near the thumb. */}
@@ -662,10 +676,126 @@ function FloatingButton({ label, onClick, children }: { label: string; onClick()
   );
 }
 
+const noop = () => {};
+
+/** Unread messages and the newest message show open. The others show closed. */
+function defaultExpanded(messages: RenderedMessage[]) {
+  return new Set([...messages.filter((m) => m.unread).map((m) => m.id), messages[messages.length - 1]?.id]);
+}
+
+/** On a phone, the closed messages above the first open message fold into one row. A fold of one message saves no space. */
+function foldedCount(messages: RenderedMessage[], expanded: Set<string>) {
+  const firstOpen = messages.findIndex((m) => expanded.has(m.id));
+  return firstOpen >= 2 ? firstOpen : 0;
+}
+
+/**
+ * One page of the pager: the subject and the messages of a conversation.
+ * The open conversation and the conversations next to it use this same
+ * component with the same key. Thus, when a page next to the open one opens,
+ * React keeps its elements, and its email frames do not load again.
+ */
+function ThreadPage({
+  active,
+  scrollerRef,
+  subject,
+  owner,
+  accountId,
+  threadId,
+  messages,
+  expanded,
+  folded,
+  instant,
+  editedDraftId,
+  onShowEarlier,
+  onToggle,
+  onReply,
+  onArchive,
+  onEditDraft,
+  onDiscardDraft,
+  children,
+}: {
+  /** The open conversation. The other pages only show during a swipe. */
+  active: boolean;
+  scrollerRef?: React.Ref<HTMLDivElement>;
+  subject: string;
+  owner: AccountSummary | undefined;
+  accountId: string;
+  threadId: string;
+  messages: RenderedMessage[];
+  expanded: Set<string>;
+  folded: number;
+  instant: boolean;
+  editedDraftId?: string;
+  onShowEarlier(): void;
+  onToggle(messageId: string): void;
+  onReply(mode: ReplyMode, message: RenderedMessage): void;
+  onArchive?(): void;
+  onEditDraft(message: RenderedMessage): void;
+  onDiscardDraft(message: RenderedMessage): void;
+  children?: React.ReactNode;
+}) {
+  return (
+    <div
+      ref={active ? scrollerRef : undefined}
+      aria-hidden={active ? undefined : true}
+      inert={!active}
+      className={cx(
+        "w-full shrink-0 snap-start snap-always overscroll-contain max-md:bg-zinc-100 max-md:dark:bg-zinc-900",
+        active ? "overflow-y-auto" : "overflow-hidden",
+      )}
+    >
+      <div className="mx-auto max-w-6xl px-6 py-6 max-md:px-0 max-md:pt-4 max-md:pb-28">
+        {/* The subject gets the full width. A long subject must not wrap into
+            a narrow column next to the account badge. */}
+        <div className="mb-6 space-y-2 max-md:mb-4 max-md:px-4">
+          <h1 dir="auto" className="text-xl font-semibold tracking-tight text-balance [overflow-wrap:anywhere]">
+            {subject}
+          </h1>
+          {owner && (
+            <span
+              title={owner.email}
+              className="inline-flex max-w-full min-w-0 items-center gap-1.5 rounded-full bg-zinc-100 px-2.5 py-0.5 text-xs text-zinc-600 max-md:bg-white dark:bg-zinc-800 dark:text-zinc-300 max-md:dark:bg-zinc-950"
+            >
+              <AccountIcon account={owner} className="size-3.5" />
+              <span className="min-w-0 truncate">{owner.email}</span>
+            </span>
+          )}
+        </div>
+
+        <div className="space-y-3 max-md:space-y-1.5">
+          {folded > 0 && <EarlierMessages messages={messages.slice(0, folded)} onOpen={onShowEarlier} />}
+          {messages.map((message, i) =>
+            message.draftId && message.draftId === editedDraftId ? null : (
+              <MessageCard
+                key={message.id}
+                folded={i < folded}
+                onEditDraft={message.draftId ? () => onEditDraft(message) : undefined}
+                onDiscardDraft={message.draftId ? () => onDiscardDraft(message) : undefined}
+                accountId={accountId}
+                accountEmail={owner?.email}
+                threadId={threadId}
+                onArchive={onArchive}
+                message={message}
+                expanded={expanded.has(message.id)}
+                instant={instant}
+                onToggle={() => onToggle(message.id)}
+                onReply={(mode) => onReply(mode, message)}
+              />
+            ),
+          )}
+        </div>
+
+        {children}
+      </div>
+    </div>
+  );
+}
+
 /**
  * The page of a conversation next to the open one, at the side of the pager.
  * The list row gives the subject, the sender, and the snippet. The page
- * shows during a swipe, and until the conversation loads.
+ * shows until the prefetch of the conversation completes.
  */
 function NeighborPage({ thread }: { thread: ThreadSummary }) {
   const sender = thread.participants[0];
