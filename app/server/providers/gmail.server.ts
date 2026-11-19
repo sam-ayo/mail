@@ -343,7 +343,7 @@ export function createGmailProvider(account: Account, pace?: GmailPace): MailPro
     });
 
   return {
-    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, cursor, limit, skip }: ListOptions): Promise<ThreadPage> {
       const { labelIds, q } = FOLDER_QUERY[folder];
       const params = new URLSearchParams({ maxResults: String(limit) });
       labelIds?.forEach((id) => params.append("labelIds", id));
@@ -360,7 +360,9 @@ export function createGmailProvider(account: Account, pace?: GmailPace): MailPro
       // Only Sent and Drafts show a different summary, so other folders share one entry.
       const people = folder === "sent" || folder === "drafts" ? "to" : "from";
       const keyFor = (id: string, historyId: string) => `${account.id}:${id}:${historyId}:${people}`;
-      const listed = list.threads ?? [];
+      const all = list.threads ?? [];
+      const skipped = skip ? await skip(all.map((t) => t.id)) : new Set<string>();
+      const listed = all.filter((t) => !skipped.has(t.id));
       // The memory cache is first. The database has the summaries from other server instances.
       const misses = listed.filter((t) => !summaryCache.has(keyFor(t.id, t.historyId)));
       const stored = await loadSummaries(account.id, people, misses);
@@ -385,7 +387,7 @@ export function createGmailProvider(account: Account, pace?: GmailPace): MailPro
       // On Vercel, waitUntil keeps the function alive until the write ends.
       waitUntil(saveSummaries(account.id, people, fetched));
 
-      return { threads, nextCursor: list.nextPageToken };
+      return { threads, nextCursor: list.nextPageToken, listed: all.length };
     },
 
     async getThread(threadId: string): Promise<Thread> {

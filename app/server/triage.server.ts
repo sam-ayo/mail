@@ -330,6 +330,13 @@ export async function sortListed(userId: string, threads: ThreadSummary[]) {
 /** The conversations in each page of the full inbox sort. */
 const INBOX_SORT_PAGE = 25;
 /**
+ * The conversations in each Gmail page of the full inbox sort. A Gmail list
+ * costs much more quota than its 10 documented units, mostly deep in a big
+ * inbox. A big page lists more IDs for each list, and the sort gets the
+ * summaries only of the conversations with no category.
+ */
+const INBOX_SORT_GMAIL_PAGE = 500;
+/**
  * The Gmail quota units that the sort can use each minute. Gmail lets each
  * person use 6,000 units each minute in the app's Google project, and it also
  * refuses short bursts. The sort starts at the first rate. Each refusal halves
@@ -453,9 +460,15 @@ async function sortInbox(account: Account) {
   const { start, min, max } = INBOX_SORT_GMAIL_UNITS;
   const pace = account.provider === "google" ? new GmailPace(start, min, max) : undefined;
   const provider = pace ? createGmailProvider(account, pace) : providerFor(account);
+  // Conversations with a category need no summary.
+  const skip = async (ids: string[]) => {
+    const categories = await categoriesFor(ids.map((id) => ({ accountId: account.id, id })));
+    return new Set(ids.filter((id) => categories.has(threadKey(account.id, id))));
+  };
+  const limit = pace ? INBOX_SORT_GMAIL_PAGE : INBOX_SORT_PAGE;
   // The list of the next page loads while Jev sorts the current page.
   const fetchPage = (from: string | undefined) =>
-    provider.listThreads({ folder: "inbox", cursor: from, limit: INBOX_SORT_PAGE }).then(
+    provider.listThreads({ folder: "inbox", cursor: from, limit, skip }).then(
       (page) => ({ page }),
       (error: unknown) => ({ error }),
     );
@@ -486,14 +499,16 @@ async function sortInbox(account: Account) {
       pace?.faster();
       const { page } = result;
       if (page.nextCursor) next = fetchPage(page.nextCursor);
-      pageChecked = 0;
+      const listed = page.listed ?? page.threads.length;
+      // The skipped conversations count as checked at once.
+      pageChecked = listed - page.threads.length;
       const { todo, failed } = await sortThreads(account, page.threads, () => (pageChecked += 1), provider);
       if (todo > 0 && failed === todo) {
         console.error("Cannot sort a page of the inbox", account.id);
         return;
       }
       cursor = page.nextCursor;
-      pagesChecked += page.threads.length;
+      pagesChecked += listed;
       pageChecked = 0;
       const saved = await queryOne(
         `UPDATE accounts SET inbox_sort_cursor = $3, inbox_sort_checked = $4,

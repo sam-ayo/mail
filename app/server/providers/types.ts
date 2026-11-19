@@ -7,11 +7,18 @@ export interface ListOptions {
   query?: string;
   cursor?: string;
   limit: number;
+  /**
+   * Gets the listed conversation IDs and returns the IDs that the caller does
+   * not need. A provider that can list IDs with no summaries leaves those out.
+   */
+  skip?: (ids: string[]) => Promise<Set<string>>;
 }
 
 export interface ThreadPage {
   threads: ThreadSummary[];
   nextCursor?: string;
+  /** The number of listed conversations, also the skipped ones. */
+  listed?: number;
 }
 
 export interface OutgoingAttachment {
