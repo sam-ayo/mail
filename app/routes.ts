@@ -26,6 +26,7 @@ export default [
 
   route("api/threads", "routes/api.threads.ts"),
   route("api/categories", "routes/api.categories.ts"),
+  route("api/inbox-sort", "routes/api.inbox-sort.ts"),
   route("api/important-senders", "routes/api.important-senders.ts"),
   route("api/contacts", "routes/api.contacts.ts"),
   route("api/send", "routes/api.send.ts"),

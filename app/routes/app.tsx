@@ -68,7 +68,10 @@ export function loader({ context }: Route.LoaderArgs) {
   const accounts = user.accounts.map(toSummary);
   if (accounts.length === 0) throw redirect("/accounts/add");
   // Jev sorts the inbox mail that has no category yet, after the response.
-  startInboxSort(user.id);
+  startInboxSort(
+    user.id,
+    user.accounts.map((a) => a.id),
+  );
   const demo = accounts.find((a) => a.provider === "demo");
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;

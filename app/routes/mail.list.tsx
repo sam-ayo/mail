@@ -55,7 +55,7 @@ import { SINGLE_PANE, useMediaQuery, usePaneSwipeBack, usePullToRefresh, useRowS
 import { ResizeHandle } from "~/components/resize-handle";
 import { reconnectUrl } from "~/components/sidebar";
 import { AccountIcon, Avatar, Hint, IconButton, cx } from "~/components/ui";
-import type { AccountSummary, Folder, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
+import type { AccountSummary, Folder, InboxSortStatus, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
 import {
   displayName,
   FOLDER_LABELS,
@@ -930,6 +930,10 @@ function ThreadList({
           )}
         </header>
 
+        {(folder === "inbox" || folder === "unread") && !loaderData.query && (
+          <InboxSortBanner onProgress={() => revalidator.revalidate()} />
+        )}
+
         {loaderData.errors.map((error) => {
           const failed = account(error.accountId);
           return (
@@ -1586,6 +1590,74 @@ function EmptyList({ folder, query, promotions }: { folder: Folder; query: strin
 }
 
 /** The two tabs of the sorted inbox. */
+/** The time between two checks of the full inbox sort. */
+const INBOX_SORT_POLL_MS = 3000;
+/** While the sort runs, the list loads again after this time, so the tabs fill. */
+const INBOX_SORT_RELOAD_MS = 60_000;
+/** The sort starts a moment after the app opens. Before this time, a sort with no run can still start. */
+const INBOX_SORT_START_MS = 15_000;
+
+/**
+ * Shows the progress of the full inbox sort, which starts when the app opens.
+ * When the sort ends, the list loads again with the new categories.
+ */
+function InboxSortBanner({ onProgress }: { onProgress(): void }) {
+  const [status, setStatus] = useState<InboxSortStatus | null>(null);
+  const onProgressRef = useRef(onProgress);
+  onProgressRef.current = onProgress;
+  useEffect(() => {
+    const opened = Date.now();
+    let reloaded = opened;
+    let ran = false;
+    let timer: ReturnType<typeof setTimeout> | undefined;
+    let stopped = false;
+    async function check() {
+      try {
+        const response = await fetch("/api/inbox-sort", { headers: { Accept: "application/json" } });
+        if (!response.ok) throw new Error(`HTTP ${response.status}`);
+        const next = (await response.json()) as InboxSortStatus;
+        if (stopped) return;
+        // A sort with no run after the start time stopped. It continues when the app opens again.
+        if (next.sorting && (next.running || Date.now() - opened < INBOX_SORT_START_MS)) {
+          ran ||= next.running;
+          setStatus(next);
+          if (Date.now() - reloaded >= INBOX_SORT_RELOAD_MS) {
+            reloaded = Date.now();
+            onProgressRef.current();
+          }
+          timer = setTimeout(check, INBOX_SORT_POLL_MS);
+          return;
+        }
+        setStatus(null);
+        if (ran && !next.sorting) {
+          onProgressRef.current();
+          toast.success("Your inbox is sorted into Important and Promotions");
+        }
+      } catch {
+        if (!stopped) timer = setTimeout(check, INBOX_SORT_POLL_MS * 3);
+      }
+    }
+    void check();
+    return () => {
+      stopped = true;
+      clearTimeout(timer);
+    };
+  }, []);
+  if (!status) return null;
+  return (
+    <div
+      role="status"
+      className="flex items-center gap-2 border-b border-zinc-200 bg-zinc-50 px-4 py-2 text-xs text-zinc-600 dark:border-zinc-800 dark:bg-zinc-900/50 dark:text-zinc-400"
+    >
+      <CircleNotch className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
+      <p className="min-w-0 flex-1">
+        Sorting your inbox into Important and Promotions
+        {status.checked > 0 && <span className="tabular-nums"> · {status.checked.toLocaleString()} checked</span>}
+      </p>
+    </div>
+  );
+}
+
 function InboxTabs({
   tab,
   onChange,

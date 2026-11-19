@@ -62,6 +62,16 @@ export function isSortedFolder(folder: string | undefined) {
   return (SORTED_FOLDERS as readonly (string | undefined)[]).includes(folder);
 }
 
+/** The progress of the full sort of the person's inboxes. */
+export interface InboxSortStatus {
+  /** An inbox is not sorted to the end yet. */
+  sorting: boolean;
+  /** A server sorts an inbox now. */
+  running: boolean;
+  /** The inbox conversations that the current sort checked. */
+  checked: number;
+}
+
 export function isFolder(value: string | undefined): value is Folder {
   return !!value && (FOLDERS as readonly string[]).includes(value);
 }
