@@ -1,7 +1,7 @@
 import { EnvelopeSimple } from "~/components/icons";
 import { Form } from "react-router";
 import { LegalLinks } from "~/components/legal";
-import { ThemeModeSwitch } from "~/components/theme-mode-switch";
+import { ThemeToggleButton } from "~/components/theme-mode-switch";
 import { GoogleIcon, Logo, MicrosoftIcon, cx, inputClass } from "~/components/ui";
 
 /** The card layout of the sign-in screen and the "add account" screen. */
@@ -15,7 +15,9 @@ export function SignInCard({
   children: React.ReactNode;
 }) {
   return (
-    <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
+    <main className="relative flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
+      {/* A person can pick light or dark mode before they log in. */}
+      <ThemeToggleButton className="absolute top-[calc(1rem+env(safe-area-inset-top))] right-4" />
       <div className="w-full max-w-md">
         {top}
         <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
@@ -27,9 +29,7 @@ export function SignInCard({
           <Logo className="text-lg" />
           {children}
         </div>
-        {/* A person can pick light or dark mode before they log in. */}
-        <ThemeModeSwitch className="mx-auto mt-6 w-fit" />
-        <LegalLinks className="mt-4" />
+        <LegalLinks className="mt-6" />
       </div>
     </main>
   );

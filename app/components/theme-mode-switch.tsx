@@ -1,5 +1,5 @@
 import { Desktop, Moon, Sun } from "~/components/icons";
-import { useThemeMode, type ThemeMode } from "~/components/theme";
+import { useTheme, useThemeMode, type ThemeMode } from "~/components/theme";
 import { cx } from "~/components/ui";
 
 const MODES = [
@@ -8,7 +8,7 @@ const MODES = [
   { value: "system", label: "System", Icon: Desktop },
 ] satisfies { value: ThemeMode; label: string; Icon: typeof Sun }[];
 
-/** The Light, Dark, and System control. Settings and the sign-in screen show it. */
+/** The Light, Dark, and System control in Settings. */
 export function ThemeModeSwitch({ className }: { className?: string }) {
   const { mode, setMode } = useThemeMode();
   return (
@@ -35,5 +35,24 @@ export function ThemeModeSwitch({ className }: { className?: string }) {
         </button>
       ))}
     </div>
+  );
+}
+
+/** One button that changes between light and dark mode. The sign-in screen shows it. */
+export function ThemeToggleButton({ className }: { className?: string }) {
+  const { dark, toggle } = useTheme();
+  return (
+    <button
+      type="button"
+      onClick={toggle}
+      aria-label={dark ? "Use light mode" : "Use dark mode"}
+      title={dark ? "Use light mode" : "Use dark mode"}
+      className={cx(
+        "press grid size-9 place-items-center rounded-full text-zinc-500 hover:bg-zinc-100 hover:text-zinc-900 dark:text-zinc-400 dark:hover:bg-zinc-800 dark:hover:text-zinc-100",
+        className,
+      )}
+    >
+      {dark ? <Sun className="size-[18px]" /> : <Moon className="size-[18px]" />}
+    </button>
   );
 }
