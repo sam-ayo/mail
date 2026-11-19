@@ -83,11 +83,7 @@ export async function connectAccount(
     const owner = workspaces.find((w) => w.canSignIn || input.provider === "demo");
     if (owner) current = owner.userId;
     else if (workspaces.length > 0) {
-      return redirectWithError(
-        session,
-        "/welcome",
-        `${input.email} is not a login account. Log in with your own account first. Then use "Add account" to add ${input.email}.`,
-      );
+      return redirectWithError(session, "/welcome", sharedMailboxError(input.email));
     }
   }
   // A browser with a workspace adds the mailbox to it, after a sign-in to the
@@ -109,7 +105,8 @@ export async function connectAccount(
  * Signs the browser in with a person from a sign-in that has no mail access.
  * The workspace of the person opens. A workspace from before sign-ins opens
  * through its sign-in mailbox. A new person gets a new workspace with no
- * mailbox, and adds mailboxes on /accounts/add.
+ * mailbox, and adds mailboxes on /accounts/add. An address that is a shared
+ * mailbox in a workspace, and that never logged in, cannot log in.
  */
 export async function signInWithIdentity(
   session: Session,
@@ -120,11 +117,15 @@ export async function signInWithIdentity(
   if (!userId) {
     const workspaces = await sameMailboxWorkspaces(identity);
     userId = workspaces.find((w) => w.canSignIn)?.userId;
+    // The address is a shared mailbox in a workspace, and it never logged in.
+    // A shared address must not get a workspace of its own.
+    if (!userId && workspaces.length > 0) {
+      return redirectWithError(session, "/welcome", sharedMailboxError(identity.email));
+    }
   }
   const newWorkspace = !userId;
   if (!userId) {
-    // A mailbox of the same address in a workspace of another person does not open
-    // that workspace. The person gets an own workspace and adds mailboxes to it.
+    // A new person gets an own workspace and adds mailboxes to it.
     userId = await createUser();
     await insertSignIn({ userId, ...identity });
   }
@@ -167,6 +168,11 @@ async function sameLegacySubject(provider: ProviderKind, subject: string, accoun
     // The stored token does not work. The account cannot prove its subject, so it does not match.
     return false;
   }
+}
+
+/** The error for a login with an address that is a shared mailbox in a workspace. */
+export function sharedMailboxError(email: string) {
+  return `${email} is a shared mailbox. Log in with your own email address. Then use "Add account" to add ${email}.`;
 }
 
 export async function redirectWithError(session: Session, to: string, error: string) {
