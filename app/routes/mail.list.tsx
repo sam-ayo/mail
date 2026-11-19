@@ -1590,25 +1590,24 @@ function EmptyList({ folder, query, promotions }: { folder: Folder; query: strin
 }
 
 /** The two tabs of the sorted inbox. */
-/** The time between two checks of the full inbox sort. */
-const INBOX_SORT_POLL_MS = 3000;
+/** The time between two checks of the full inbox sort while it runs. */
+const INBOX_SORT_POLL_MS = 1500;
+/** The time between two checks while the sort waits to continue. */
+const INBOX_SORT_WAIT_POLL_MS = 5000;
 /** While the sort runs, the list loads again after this time, so the tabs fill. */
 const INBOX_SORT_RELOAD_MS = 60_000;
-/** The sort starts a moment after the app opens. Before this time, a sort with no run can still start. */
-const INBOX_SORT_START_MS = 15_000;
 
 /**
- * Shows the progress of the full inbox sort, which starts when the app opens.
- * When the sort ends, the list loads again with the new categories.
+ * Shows the live progress of the full inbox sort, which starts when the app
+ * opens. When the sort ends, the list loads again with the new categories.
  */
 function InboxSortBanner({ onProgress }: { onProgress(): void }) {
   const [status, setStatus] = useState<InboxSortStatus | null>(null);
   const onProgressRef = useRef(onProgress);
   onProgressRef.current = onProgress;
   useEffect(() => {
-    const opened = Date.now();
-    let reloaded = opened;
-    let ran = false;
+    let reloaded = Date.now();
+    let shown = false;
     let timer: ReturnType<typeof setTimeout> | undefined;
     let stopped = false;
     async function check() {
@@ -1617,24 +1616,23 @@ function InboxSortBanner({ onProgress }: { onProgress(): void }) {
         if (!response.ok) throw new Error(`HTTP ${response.status}`);
         const next = (await response.json()) as InboxSortStatus;
         if (stopped) return;
-        // A sort with no run after the start time stopped. It continues when the app opens again.
-        if (next.sorting && (next.running || Date.now() - opened < INBOX_SORT_START_MS)) {
-          ran ||= next.running;
+        if (next.sorting) {
+          shown = true;
           setStatus(next);
           if (Date.now() - reloaded >= INBOX_SORT_RELOAD_MS) {
             reloaded = Date.now();
             onProgressRef.current();
           }
-          timer = setTimeout(check, INBOX_SORT_POLL_MS);
+          timer = setTimeout(check, next.running ? INBOX_SORT_POLL_MS : INBOX_SORT_WAIT_POLL_MS);
           return;
         }
         setStatus(null);
-        if (ran && !next.sorting) {
+        if (shown) {
           onProgressRef.current();
           toast.success("Your inbox is sorted into Important and Promotions");
         }
       } catch {
-        if (!stopped) timer = setTimeout(check, INBOX_SORT_POLL_MS * 3);
+        if (!stopped) timer = setTimeout(check, INBOX_SORT_WAIT_POLL_MS);
       }
     }
     void check();
@@ -1651,7 +1649,7 @@ function InboxSortBanner({ onProgress }: { onProgress(): void }) {
     >
       <CircleNotch className="size-3.5 shrink-0 animate-spin motion-reduce:animate-none" />
       <p className="min-w-0 flex-1">
-        Sorting your inbox into Important and Promotions
+        {status.running ? "Sorting your inbox into Important and Promotions" : "Waiting to continue the sort of your inbox"}
         {status.checked > 0 && <span className="tabular-nums"> · {status.checked.toLocaleString()} checked</span>}
       </p>
     </div>

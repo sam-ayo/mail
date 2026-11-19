@@ -7,6 +7,7 @@ import { randomToken } from "./crypto.server";
 import { query, queryOne } from "./db.server";
 import { env } from "./env.server";
 import { providerFor } from "./mail.server";
+import { ProviderError } from "./providers/types";
 import { htmlToText } from "./sanitize.server";
 import { errorMessage, mapLimit } from "./util.server";
 
@@ -249,8 +250,9 @@ export async function removeImportantSender(userId: string, pattern: string) {
  * sender that Jev always sorted the same way gets that category again. Jev
  * sorts the other mail. A failed Jev request leaves its conversation with no category.
  * Returns the number of conversations that needed a sort, and the number that failed.
+ * onSorted gets each conversation that needed a sort, when its sort ends.
  */
-export async function sortThreads(account: Account, threads: ThreadSummary[]) {
+export async function sortThreads(account: Account, threads: ThreadSummary[], onSorted?: () => void) {
   const none = { todo: 0, failed: 0 };
   if (!aiSortingConfigured || account.provider === "demo" || threads.length === 0) return none;
   const keyed = threads.map((thread) => ({ ...thread, accountId: account.id }));
@@ -289,7 +291,11 @@ export async function sortThreads(account: Account, threads: ThreadSummary[]) {
       } catch (error) {
         console.error("Cannot sort a thread", account.id, errorMessage(error));
         return undefined;
+      } finally {
+        onSorted?.();
       }
+    } else {
+      onSorted?.();
     }
     return { accountId: account.id, threadId: thread.id, category, sender };
   });
@@ -314,24 +320,48 @@ export async function sortListed(userId: string, threads: ThreadSummary[]) {
 }
 
 /** The conversations in each page of the full inbox sort. */
-const INBOX_SORT_PAGE = 50;
-/** The lease of a full inbox sort. The run renews it after each page. */
-const INBOX_SORT_LEASE_SECONDS = 5 * 60;
-/** The app opens many times. This server checks the inbox of a person at most once in this time. */
-const INBOX_SORT_CHECK_MS = 10 * 60 * 1000;
+const INBOX_SORT_PAGE = 25;
+/**
+ * The shortest time for a page that needed Jev. Gmail lets each person use
+ * 15,000 quota units each minute, and a page uses about 500 units. At one page
+ * in 4 seconds, the sort uses about half, and the app keeps the other half.
+ */
+const INBOX_SORT_PAGE_MS = 4000;
+/** The shortest time for a page that was sorted already. */
+const INBOX_SORT_SORTED_PAGE_MS = 1000;
+/** The time to wait when the mail server says that the app sent too many requests. */
+const INBOX_SORT_LIMIT_WAIT_MS = 60_000;
+/** The run stops after this many waits in a row. A later status check starts it again. */
+const INBOX_SORT_LIMIT_TRIES = 10;
+/**
+ * The lease of a full inbox sort. The run renews it each second. A server that
+ * stops, for example in a deploy, lets another server continue after this time.
+ */
+const INBOX_SORT_LEASE_SECONDS = 90;
+/** The time between two writes of the progress and the lease. */
+const INBOX_SORT_BEAT_MS = 1000;
+/** This server starts the full sort of a person at most once in this time. */
+const INBOX_SORT_CHECK_MS = 60_000;
 const inboxSortChecks = new Map<string, number>();
 
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+
+/** The mail server refused the request because the app sent too many requests. */
+function isRateLimit(error: unknown) {
+  if (!(error instanceof ProviderError)) return false;
+  return error.status === 429 || (error.status === 403 && /quota|rate ?limit/i.test(error.message));
+}
+
 /**
- * Starts the full sort of the person's inboxes when the app opens. The sort
- * runs after the response. It does nothing for an inbox that is sorted already.
+ * Starts the full sort of the person's inboxes. The app does this when it
+ * opens and when it checks the progress, so a sort that stopped continues.
+ * The sort runs after the response. It does nothing for a sorted inbox.
  */
-export function startInboxSort(userId: string, accountIds: string[]) {
+export function startInboxSort(userId: string) {
   if (!aiSortingConfigured) return;
   const now = Date.now();
-  // A new mailbox changes the key, so its inbox sorts at once.
-  const key = `${userId}:${[...accountIds].sort().join(",")}`;
-  if (now - (inboxSortChecks.get(key) ?? 0) < INBOX_SORT_CHECK_MS) return;
-  inboxSortChecks.set(key, now);
+  if (now - (inboxSortChecks.get(userId) ?? 0) < INBOX_SORT_CHECK_MS) return;
+  inboxSortChecks.set(userId, now);
   for (const [key, at] of inboxSortChecks) if (now - at >= INBOX_SORT_CHECK_MS) inboxSortChecks.delete(key);
   void sortInboxes(userId).catch((error) => console.error("Cannot sort the inbox", userId, errorMessage(error)));
 }
@@ -365,21 +395,46 @@ export async function inboxSortStatus(userId: string): Promise<InboxSortStatus> 
 }
 
 /**
- * Sorts the full inbox of the account, from the saved page to the end. A run
- * stops when AI sorting turns off, or when Jev fails for all the conversations
- * of a page. The next open then continues from that page.
+ * Sorts the full inbox of the account, from the saved page to the end. When
+ * the mail server limits the requests, the run waits and tries the page again.
+ * A run stops when AI sorting turns off, or when Jev fails for all the
+ * conversations of a page. A later start continues from that page.
  */
 async function sortInbox(account: Account) {
   const runId = randomToken(12);
-  const claimed = await queryOne<{ inbox_sort_cursor: string | null }>(
+  const claimed = await queryOne<{ inbox_sort_cursor: string | null; inbox_sort_checked: number }>(
     `UPDATE accounts SET inbox_sort_run = $2, inbox_sort_until = now() + make_interval(secs => $3),
        inbox_sort_checked = CASE WHEN inbox_sort_cursor IS NULL THEN 0 ELSE inbox_sort_checked END
      WHERE id = $1 AND inbox_sorted_at IS NULL AND (inbox_sort_until IS NULL OR inbox_sort_until < now())
-     RETURNING inbox_sort_cursor`,
+     RETURNING inbox_sort_cursor, inbox_sort_checked`,
     [account.id, runId, INBOX_SORT_LEASE_SECONDS],
   );
   if (!claimed) return;
   let cursor = claimed.inbox_sort_cursor ?? undefined;
+  // The conversations before the saved page, and the conversations of the current page so far.
+  let pagesChecked = claimed.inbox_sort_checked;
+  let pageChecked = 0;
+  let lost = false;
+  // Each beat writes the progress, so the app shows it at once, and renews the lease.
+  const beat = async () => {
+    const checked = pagesChecked + pageChecked;
+    const saved = await queryOne(
+      `UPDATE accounts SET inbox_sort_checked = $3, inbox_sort_until = now() + make_interval(secs => $4)
+       WHERE id = $1 AND inbox_sort_run = $2 RETURNING 1`,
+      [account.id, runId, checked, INBOX_SORT_LEASE_SECONDS],
+    );
+    // The account is gone, or another server took the lease.
+    if (!saved) lost = true;
+  };
+  let beating = false;
+  const beats = setInterval(() => {
+    if (beating) return;
+    beating = true;
+    beat()
+      .catch((error) => console.error("Cannot save the inbox sort", account.id, errorMessage(error)))
+      .finally(() => (beating = false));
+  }, INBOX_SORT_BEAT_MS);
+
   const provider = providerFor(account);
   // The list of the next page loads while Jev sorts the current page.
   const fetchPage = (from: string | undefined) =>
@@ -389,37 +444,53 @@ async function sortInbox(account: Account) {
     );
   try {
     let next = fetchPage(cursor);
-    for (;;) {
+    let limited = 0;
+    while (!lost) {
+      const started = Date.now();
       const result = await next;
       if ("error" in result) {
+        if (isRateLimit(result.error) && limited < INBOX_SORT_LIMIT_TRIES) {
+          limited += 1;
+          await sleep(INBOX_SORT_LIMIT_WAIT_MS);
+          next = fetchPage(cursor);
+          continue;
+        }
         // A saved cursor can expire. Then start again at the top: sorted mail costs no Jev request.
-        if (!cursor) throw result.error;
+        const status = result.error instanceof ProviderError ? result.error.status : undefined;
+        if (!cursor || (status !== 400 && status !== 404 && status !== 410)) throw result.error;
         cursor = undefined;
         next = fetchPage(cursor);
         continue;
       }
+      limited = 0;
       const { page } = result;
       if (page.nextCursor) next = fetchPage(page.nextCursor);
-      const { todo, failed } = await sortThreads(account, page.threads);
+      pageChecked = 0;
+      const { todo, failed } = await sortThreads(account, page.threads, () => (pageChecked += 1));
       if (todo > 0 && failed === todo) {
         console.error("Cannot sort a page of the inbox", account.id);
         return;
       }
       cursor = page.nextCursor;
+      pagesChecked += page.threads.length;
+      pageChecked = 0;
       const saved = await queryOne(
-        `UPDATE accounts SET inbox_sort_cursor = $3, inbox_sort_until = now() + make_interval(secs => $4),
-           inbox_sorted_at = CASE WHEN $3::text IS NULL THEN now() END,
-           inbox_sort_checked = inbox_sort_checked + $5
+        `UPDATE accounts SET inbox_sort_cursor = $3, inbox_sort_checked = $4,
+           inbox_sorted_at = CASE WHEN $3::text IS NULL THEN now() END
          WHERE id = $1 AND inbox_sort_run = $2 RETURNING 1`,
-        [account.id, runId, cursor ?? null, INBOX_SORT_LEASE_SECONDS, page.threads.length],
+        [account.id, runId, cursor ?? null, pagesChecked],
       );
-      // The account is gone, or another server took the lease.
       if (!saved || !cursor || !(await aiSortingOn(account.userId))) return;
+      await sleep((todo > 0 ? INBOX_SORT_PAGE_MS : INBOX_SORT_SORTED_PAGE_MS) - (Date.now() - started));
     }
   } finally {
+    clearInterval(beats);
+    // A run that stops in a page keeps the count of the saved pages, so the next run does not count that page twice.
     await query(
-      "UPDATE accounts SET inbox_sort_run = NULL, inbox_sort_until = NULL WHERE id = $1 AND inbox_sort_run = $2",
-      [account.id, runId],
+      `UPDATE accounts SET inbox_sort_run = NULL, inbox_sort_until = NULL,
+         inbox_sort_checked = CASE WHEN inbox_sorted_at IS NULL THEN $3 ELSE inbox_sort_checked END
+       WHERE id = $1 AND inbox_sort_run = $2`,
+      [account.id, runId, pagesChecked],
     );
   }
 }
