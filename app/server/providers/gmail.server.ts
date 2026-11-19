@@ -112,14 +112,52 @@ function quotaUnits(path: string, method = "GET") {
   return 10;
 }
 
-const unitsUsed = new Map<string, number>();
+/**
+ * Sends Gmail requests at a steady rate of quota units. Gmail also refuses short
+ * bursts, so the requests of a long task, such as the full inbox sort, go through a pace.
+ */
+export class GmailPace {
+  private tokens = 0;
+  private at = Date.now();
+  private queue = Promise.resolve();
 
-/** The Gmail quota units that this server used for the account since it started. */
-export function gmailUnitsUsed(accountId: string) {
-  return unitsUsed.get(accountId) ?? 0;
+  constructor(
+    public unitsPerMinute: number,
+    private readonly minUnits: number,
+    private readonly maxUnits: number,
+  ) {}
+
+  /** Waits until the request can use its units. */
+  take(units: number) {
+    const turn = this.queue.then(async () => {
+      const rate = this.unitsPerMinute / 60_000;
+      const now = Date.now();
+      // At most one second of unused units stays available.
+      this.tokens = Math.min(this.tokens + (now - this.at) * rate, Math.max(units, rate * 1000));
+      this.at = now;
+      if (this.tokens < units) {
+        await new Promise((resolve) => setTimeout(resolve, (units - this.tokens) / rate));
+        this.tokens = units;
+        this.at = Date.now();
+      }
+      this.tokens -= units;
+    });
+    this.queue = turn;
+    return turn;
+  }
+
+  /** Gmail refused a request. The rate goes down to half. */
+  slower() {
+    this.unitsPerMinute = Math.max(this.minUnits, this.unitsPerMinute / 2);
+  }
+
+  /** Gmail accepted the requests. The rate goes up a little. */
+  faster() {
+    this.unitsPerMinute = Math.min(this.maxUnits, this.unitsPerMinute * 1.1);
+  }
 }
 
-export function createGmailProvider(account: Account): MailProvider {
+export function createGmailProvider(account: Account, pace?: GmailPace): MailProvider {
   const composio = isComposioCredentials(account.credentials) ? account.credentials : undefined;
   const tokens = composio ? undefined : createTokenSource(account);
 
@@ -141,7 +179,7 @@ export function createGmailProvider(account: Account): MailProvider {
   }
 
   async function request<T>(path: string, init: RequestInit = {}, attempt = 0): Promise<T> {
-    unitsUsed.set(account.id, gmailUnitsUsed(account.id) + quotaUnits(path, init.method));
+    await pace?.take(quotaUnits(path, init.method));
     if (composio) {
       const response = await composioFetch(path, init);
       return handle<T>(response, path, init, attempt);
