@@ -88,8 +88,8 @@ export function loader({ params, request, context }: Route.LoaderArgs) {
     { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
     user.accounts,
   ).then(async (result) => {
-    // The inbox shows important mail and promotions in two tabs.
-    if (params.folder !== "inbox" || query) return { ...result, query };
+    // The inbox and the unread list show important mail and promotions in two tabs.
+    if ((params.folder !== "inbox" && params.folder !== "unread") || query) return { ...result, query };
     const threads = await withCategories(result.threads);
     // Mail that the mail check did not sort, such as older or read mail, shows in the next load.
     waitUntil(sortListed(user.id, threads).catch((error) => console.error("Cannot sort the inbox", error)));
@@ -356,9 +356,9 @@ function ThreadList({
     setCursor(moreFetcher.data.nextCursor);
   }, [moreFetcher.data]);
 
-  // AI sorting puts promotions in their own tab of the inbox. Mail with no
-  // category shows with the important mail, so that no mail stays hidden.
-  const sorted = folder === "inbox" && !loaderData.query;
+  // AI sorting puts promotions in their own tab of the inbox and of the unread
+  // list. Mail with no category shows with the important mail, so that no mail stays hidden.
+  const sorted = (folder === "inbox" || folder === "unread") && !loaderData.query;
   const [tab, setTab] = useState<ThreadCategory>("important");
   const [moved, setMoved] = useState<Record<string, ThreadCategory>>({});
 
@@ -1551,7 +1551,9 @@ function BulkActions({
 function EmptyList({ folder, query, promotions }: { folder: Folder; query: string; promotions: boolean }) {
   if (promotions) {
     return (
-      <li className="px-6 py-16 text-center text-sm text-zinc-500">No promotions</li>
+      <li className="px-6 py-16 text-center text-sm text-zinc-500">
+        {folder === "unread" ? "No unread promotions" : "No promotions"}
+      </li>
     );
   }
   if (query) {
@@ -1595,7 +1597,7 @@ function InboxTabs({
     { value: "promotion", label: "Promotions" },
   ];
   return (
-    <div role="tablist" aria-label="Inbox" className="flex gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
+    <div role="tablist" aria-label="Category" className="flex gap-1 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
       {tabs.map(({ value, label }) => (
         <button
           key={value}
