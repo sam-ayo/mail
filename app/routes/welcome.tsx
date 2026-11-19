@@ -34,8 +34,6 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
   return (
     <SignInCard>
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">Log in to mail</h1>
-      {/* Google compares this name with the app name on the OAuth consent screen. */}
-      <p className="mt-2 text-sm text-zinc-500">mail by samayo shows your Gmail and Outlook in one inbox.</p>
       <p className="mt-2 text-sm text-zinc-500">
         Log in with your own account. After you log in, you can add more accounts, such as a team address.
       </p>
