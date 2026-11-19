@@ -1,5 +1,6 @@
 import { createHash, randomUUID } from "node:crypto";
 import type { Address, MailboxFolder, Message, ProviderKind, Thread, ThreadAction, ThreadCategory, ThreadSummary, Unsubscribe } from "~/lib/mail";
+import { isSortedFolder } from "~/lib/mail";
 import type { Account, DemoCredentials } from "../accounts.server";
 import { snippetFromText } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
@@ -751,7 +752,7 @@ export function createDemoProvider(account: Account): MailProvider {
       messageCount: thread.messages.length,
       hasAttachments: thread.messages.some((m) => m.attachments.length > 0),
       messageIds: thread.messages.flatMap((m) => (m.messageIdHeader ? [m.messageIdHeader] : [])),
-      ...(folder === "inbox" && thread.category ? { category: thread.category } : {}),
+      ...(isSortedFolder(folder) && thread.category ? { category: thread.category } : {}),
     };
   }
 

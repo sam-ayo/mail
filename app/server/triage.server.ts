@@ -11,7 +11,8 @@ import { errorMessage, mapLimit } from "./util.server";
 
 // AI sorting of the inbox. The server asks Jev, the model of TypeSafe, whether
 // each new inbox conversation is important or a promotion. It sorts new mail
-// when the mail check finds it, and the inbox list sorts older mail.
+// when the mail check finds it. The lists of the sorted folders (inbox, unread,
+// starred, archive) sort older mail when they load.
 
 /** A fixed version, because PROMOTION_MIN fits this version. */
 const JEV_MODEL = "jev-1.14.0";
@@ -231,7 +232,7 @@ export async function removeImportantSender(userId: string, pattern: string) {
 }
 
 /**
- * Gives a category to each inbox conversation of the account that has none.
+ * Gives a category to each listed conversation of the account that has none.
  * Mail from a sender in the list of important senders goes to Important. Mail
  * from a sender that the person moved gets the same category. Jev sorts the
  * other mail. A failed Jev request leaves its conversation with no category.
@@ -272,7 +273,7 @@ export async function sortThreads(account: Account, threads: ThreadSummary[]) {
   return setCategories(account.userId, items.filter((item) => item !== undefined), "ai");
 }
 
-/** Sorts the inbox conversations in a list that have no category. The list shows them after the next load. */
+/** Sorts the conversations in a list that have no category. The list shows them after the next load. */
 export async function sortListed(userId: string, threads: ThreadSummary[]) {
   const unsorted = threads.filter((t) => !t.category);
   if (unsorted.length === 0 || !(await aiSortingOn(userId))) return;

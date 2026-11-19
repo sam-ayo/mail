@@ -52,6 +52,16 @@ export const FOLDER_LABELS: Record<Folder, string> = {
   trash: "Trash",
 };
 
+/**
+ * The folders that AI sorting splits into Important and Promotions. Sent mail
+ * and drafts come from the person, and spam and trash are mail to ignore.
+ */
+export const SORTED_FOLDERS: readonly Folder[] = ["inbox", "unread", "starred", "archive"];
+
+export function isSortedFolder(folder: string | undefined) {
+  return (SORTED_FOLDERS as readonly (string | undefined)[]).includes(folder);
+}
+
 export function isFolder(value: string | undefined): value is Folder {
   return !!value && (FOLDERS as readonly string[]).includes(value);
 }

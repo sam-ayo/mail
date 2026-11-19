@@ -62,6 +62,7 @@ import {
   formatCount,
   formatListDate,
   isFolder,
+  isSortedFolder,
   mergeDuplicates,
   PREFETCH_PARAM,
   threadKey,
@@ -88,11 +89,11 @@ export function loader({ params, request, context }: Route.LoaderArgs) {
     { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
     user.accounts,
   ).then(async (result) => {
-    // The inbox and the unread list show important mail and promotions in two tabs.
-    if ((params.folder !== "inbox" && params.folder !== "unread") || query) return { ...result, query };
+    // The sorted folders show important mail and promotions in two tabs.
+    if (!isSortedFolder(params.folder) || query) return { ...result, query };
     const threads = await withCategories(result.threads);
     // Mail that the mail check did not sort, such as older or read mail, shows in the next load.
-    waitUntil(sortListed(user.id, threads).catch((error) => console.error("Cannot sort the inbox", error)));
+    waitUntil(sortListed(user.id, threads).catch((error) => console.error("Cannot sort the list", error)));
     return { ...result, threads, query };
   });
   return { list };
@@ -356,9 +357,9 @@ function ThreadList({
     setCursor(moreFetcher.data.nextCursor);
   }, [moreFetcher.data]);
 
-  // AI sorting puts promotions in their own tab of the inbox and of the unread
-  // list. Mail with no category shows with the important mail, so that no mail stays hidden.
-  const sorted = (folder === "inbox" || folder === "unread") && !loaderData.query;
+  // AI sorting puts promotions in their own tab of each sorted folder. Mail
+  // with no category shows with the important mail, so that no mail stays hidden.
+  const sorted = isSortedFolder(folder) && !loaderData.query;
   const [tab, setTab] = useState<ThreadCategory>("important");
   const [moved, setMoved] = useState<Record<string, ThreadCategory>>({});
 
@@ -1552,7 +1553,7 @@ function EmptyList({ folder, query, promotions }: { folder: Folder; query: strin
   if (promotions) {
     return (
       <li className="px-6 py-16 text-center text-sm text-zinc-500">
-        {folder === "unread" ? "No unread promotions" : "No promotions"}
+        {folder === "unread" ? "No unread promotions" : folder === "starred" ? "No starred promotions" : "No promotions"}
       </li>
     );
   }

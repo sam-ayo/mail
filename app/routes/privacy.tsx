@@ -87,11 +87,11 @@ export default function Privacy() {
 
       <h2>AI sorting</h2>
       <p>
-        AI sorting puts promotions in their own tab of your inbox, and sends notifications only for Important mail. It is on by default.
+        AI sorting puts promotions in their own tab of your inbox, unread, starred, and archive lists, and sends notifications only for Important mail. It is on by default.
       </p>
       <ul>
         <li>
-          <strong>Data that TypeSafe gets:</strong> for each new conversation in your inbox, mail by samayo sends the sender,
+          <strong>Data that TypeSafe gets:</strong> for each conversation in these lists that has no category, mail by samayo sends the sender,
           the subject, the address that got the email, and the first 1,200 characters of the text to TypeSafe. TypeSafe's
           model Jev answers only with a category. TypeSafe does not train its models on this data, and it keeps the data as
           its <a href="https://typesafe.ai/legal/data-processing">Data Processing Agreement</a> tells.
