@@ -132,12 +132,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
         <section className="mt-8">
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
-            <div>
-              <h2 className="font-semibold">Email accounts</h2>
-              <p className="text-sm text-zinc-500">
-                The display name shows as the sender name on mail you send.
-              </p>
-            </div>
+            <h2 className="font-semibold">Email accounts</h2>
             <Link
               to="/welcome"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-white hover:bg-accent-700"
@@ -160,10 +155,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
         )}
 
         <section className="mt-10">
-          <h2 className="font-semibold">Session</h2>
-          <p className="mb-3 text-sm text-zinc-500">
-            Sign out of mail on this browser. Your connected accounts stay connected.
-          </p>
+          <h2 className="mb-3 font-semibold">Session</h2>
           <Form method="post" action="/logout">
             <Button>
               <SignOut className="size-4" /> Sign out
@@ -516,10 +508,7 @@ function Appearance() {
   return (
     <section className="mt-10">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div>
-          <h2 className="font-semibold">Appearance</h2>
-          <p className="text-sm text-zinc-500">The theme and the mode apply to this browser only.</p>
-        </div>
+        <h2 className="font-semibold">Appearance</h2>
         <div role="radiogroup" aria-label="Mode" className="flex shrink-0 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
           {(
             [
@@ -683,10 +672,8 @@ function Notifications() {
     }
   }
 
-  const description: Record<PushState, string> = {
-    loading: "Get a notification on this device when new mail comes to your inbox.",
-    off: "Get a notification on this device when new mail comes to your inbox.",
-    on: "This device gets a notification when new mail comes to your inbox.",
+  // Only the states that need an action from the person get a description.
+  const description: Partial<Record<PushState, string>> = {
     denied: "This browser blocks notifications from mail. Allow them in the browser or system settings.",
     install: "On iPhone and iPad, add mail to your Home Screen first. Tap Share, then Add to Home Screen.",
     unsupported: "This browser cannot show notifications.",
@@ -697,7 +684,7 @@ function Notifications() {
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <div>
           <h2 className="font-semibold">Notifications</h2>
-          <p className="text-sm text-zinc-500">{description[state]}</p>
+          {description[state] && <p className="text-sm text-zinc-500">{description[state]}</p>}
         </div>
         {state === "on" ? (
           <Button className="shrink-0" disabled={busy} onClick={turnOff}>
@@ -808,12 +795,7 @@ function AiSorting({ on, importantSenders }: { on: boolean; importantSenders: st
   return (
     <section className="mt-10">
       <div className="flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
-        <div>
-          <h2 className="font-semibold">AI sorting</h2>
-          <p className="text-sm text-zinc-500">
-            {shown ? "New mail goes to Important or Promotions." : "Put promotions in their own tab."}
-          </p>
-        </div>
+        <h2 className="font-semibold">AI sorting</h2>
         <Button
           className="shrink-0"
           variant={shown ? undefined : "primary"}
@@ -900,10 +882,7 @@ function ImportantSenders({ patterns }: { patterns: string[] }) {
 
   return (
     <div className="mt-5">
-      <h3 className="text-sm font-medium">Always important</h3>
-      <p className="mb-3 text-sm text-zinc-500">
-        Mail from these senders always goes to Important.
-      </p>
+      <h3 className="mb-3 text-sm font-medium">Always important</h3>
       <fetcher.Form method="post" className="flex gap-2">
         <input type="hidden" name="intent" value="addImportantSender" />
         {/* A click on a suggestion adds it at once. */}
