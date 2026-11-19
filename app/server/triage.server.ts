@@ -3,6 +3,7 @@ import type { ThreadCategory, ThreadSummary } from "~/lib/mail";
 import { importantSenderPattern, senderMatches, THREAD_CATEGORIES, threadKey } from "~/lib/mail";
 import type { Account } from "./accounts.server";
 import { listAccounts } from "./accounts.server";
+import { randomToken } from "./crypto.server";
 import { query, queryOne } from "./db.server";
 import { env } from "./env.server";
 import { providerFor } from "./mail.server";
@@ -185,6 +186,8 @@ export async function aiSortingOn(userId: string) {
 
 export async function setAiSorting(userId: string, on: boolean) {
   await query("UPDATE users SET ai_sorting = $2 WHERE id = $1", [userId, on]);
+  // The mail check did not sort new mail while AI sorting was off. The next open sorts the full inbox again.
+  if (on) await query("UPDATE accounts SET inbox_sorted_at = NULL, inbox_sort_cursor = NULL WHERE user_id = $1", [userId]);
 }
 
 /** The most patterns in the list of important senders of a person. */
@@ -236,13 +239,15 @@ export async function removeImportantSender(userId: string, pattern: string) {
  * Mail from a sender in the list of important senders goes to Important. Mail
  * from a sender that the person moved gets the same category. Jev sorts the
  * other mail. A failed Jev request leaves its conversation with no category.
+ * Returns the number of conversations that needed a sort, and the number that failed.
  */
 export async function sortThreads(account: Account, threads: ThreadSummary[]) {
-  if (!aiSortingConfigured || account.provider === "demo" || threads.length === 0) return 0;
+  const none = { todo: 0, failed: 0 };
+  if (!aiSortingConfigured || account.provider === "demo" || threads.length === 0) return none;
   const keyed = threads.map((thread) => ({ ...thread, accountId: account.id }));
   const categories = await categoriesFor(keyed);
   const todo = keyed.filter((t) => !t.category && !categories.has(threadKey(account.id, t.id)));
-  if (todo.length === 0) return 0;
+  if (todo.length === 0) return none;
   const moved = new Map(
     (
       await query<{ sender: string; category: ThreadCategory }>(
@@ -270,7 +275,9 @@ export async function sortThreads(account: Account, threads: ThreadSummary[]) {
     }
     return { accountId: account.id, threadId: thread.id, category, sender };
   });
-  return setCategories(account.userId, items.filter((item) => item !== undefined), "ai");
+  const sorted = items.filter((item) => item !== undefined);
+  await setCategories(account.userId, sorted, "ai");
+  return { todo: todo.length, failed: todo.length - sorted.length };
 }
 
 /** Sorts the conversations in a list that have no category. The list shows them after the next load. */
@@ -286,4 +293,85 @@ export async function sortListed(userId: string, threads: ThreadSummary[]) {
       ),
     ),
   );
+}
+
+/** The conversations in each page of the full inbox sort. */
+const INBOX_SORT_PAGE = 50;
+/** The lease of a full inbox sort. The run renews it after each page. */
+const INBOX_SORT_LEASE_SECONDS = 5 * 60;
+/** The app opens many times. This server checks the inbox of a person at most once in this time. */
+const INBOX_SORT_CHECK_MS = 10 * 60 * 1000;
+const inboxSortChecks = new Map<string, number>();
+
+/**
+ * Starts the full sort of the person's inboxes when the app opens. The sort
+ * runs after the response. It does nothing for an inbox that is sorted already.
+ */
+export function startInboxSort(userId: string) {
+  if (!aiSortingConfigured) return;
+  const now = Date.now();
+  if (now - (inboxSortChecks.get(userId) ?? 0) < INBOX_SORT_CHECK_MS) return;
+  inboxSortChecks.set(userId, now);
+  for (const [key, at] of inboxSortChecks) if (now - at >= INBOX_SORT_CHECK_MS) inboxSortChecks.delete(key);
+  void sortInboxes(userId).catch((error) => console.error("Cannot sort the inbox", userId, errorMessage(error)));
+}
+
+/** Gives a category to each conversation in the person's inboxes that has none. */
+export async function sortInboxes(userId: string) {
+  if (!(await aiSortingOn(userId))) return;
+  // One inbox at a time, so the person's mail servers get fewer requests at once.
+  for (const account of await listAccounts(userId)) {
+    if (account.provider === "demo") continue;
+    await sortInbox(account).catch((error) => console.error("Cannot sort the inbox", account.id, errorMessage(error)));
+  }
+}
+
+/**
+ * Sorts the full inbox of the account, from the saved page to the end. A run
+ * stops when AI sorting turns off, or when Jev fails for all the conversations
+ * of a page. The next open then continues from that page.
+ */
+async function sortInbox(account: Account) {
+  const runId = randomToken(12);
+  const claimed = await queryOne<{ inbox_sort_cursor: string | null }>(
+    `UPDATE accounts SET inbox_sort_run = $2, inbox_sort_until = now() + make_interval(secs => $3)
+     WHERE id = $1 AND inbox_sorted_at IS NULL AND (inbox_sort_until IS NULL OR inbox_sort_until < now())
+     RETURNING inbox_sort_cursor`,
+    [account.id, runId, INBOX_SORT_LEASE_SECONDS],
+  );
+  if (!claimed) return;
+  let cursor = claimed.inbox_sort_cursor ?? undefined;
+  try {
+    const provider = providerFor(account);
+    for (;;) {
+      let page;
+      try {
+        page = await provider.listThreads({ folder: "inbox", cursor, limit: INBOX_SORT_PAGE });
+      } catch (error) {
+        // A saved cursor can expire. Then start again at the top: sorted mail costs no Jev request.
+        if (!cursor) throw error;
+        cursor = undefined;
+        continue;
+      }
+      const { todo, failed } = await sortThreads(account, page.threads);
+      if (todo > 0 && failed === todo) {
+        console.error("Cannot sort a page of the inbox", account.id);
+        return;
+      }
+      cursor = page.nextCursor;
+      const saved = await queryOne(
+        `UPDATE accounts SET inbox_sort_cursor = $3, inbox_sort_until = now() + make_interval(secs => $4),
+           inbox_sorted_at = CASE WHEN $3::text IS NULL THEN now() END
+         WHERE id = $1 AND inbox_sort_run = $2 RETURNING 1`,
+        [account.id, runId, cursor ?? null, INBOX_SORT_LEASE_SECONDS],
+      );
+      // The account is gone, or another server took the lease.
+      if (!saved || !cursor || !(await aiSortingOn(account.userId))) return;
+    }
+  } finally {
+    await query(
+      "UPDATE accounts SET inbox_sort_run = NULL, inbox_sort_until = NULL WHERE id = $1 AND inbox_sort_run = $2",
+      [account.id, runId],
+    );
+  }
 }
