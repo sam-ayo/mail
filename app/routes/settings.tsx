@@ -1,12 +1,13 @@
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { useEffect, useMemo, useRef, useState } from "react";
-import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning, X } from "~/components/icons";
+import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Plus, SignOut, Trash, Warning, X } from "~/components/icons";
 import { data, Form, Link, redirect, useFetcher, useFetchers, useSubmit } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
 import { useMediaQuery, usePageSwipeBack } from "~/components/touch";
-import { loadPaletteFont, PALETTES, usePalette, useThemeMode, type ThemeMode } from "~/components/theme";
+import { loadPaletteFont, PALETTES, usePalette } from "~/components/theme";
+import { ThemeModeSwitch } from "~/components/theme-mode-switch";
 import { AccountIcon, Avatar, Button, IconButton, PROVIDER_NAMES, cx, inputClass } from "~/components/ui";
 import { ACCOUNT_COLORS, PREFETCH_PARAM, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
 import {
@@ -528,7 +529,6 @@ function AccountDetail({
 
 function Appearance() {
   const { palette, setPalette } = usePalette();
-  const { mode, setMode } = useThemeMode();
   // The previews show each theme in its own font, so load all of them here.
   useEffect(() => PALETTES.forEach((p) => loadPaletteFont(p.id)), []);
 
@@ -536,31 +536,7 @@ function Appearance() {
     <section className="mt-10">
       <div className="mb-3 flex flex-wrap items-center justify-between gap-x-4 gap-y-3">
         <h2 className="font-semibold">Appearance</h2>
-        <div role="radiogroup" aria-label="Mode" className="flex shrink-0 gap-0.5 rounded-lg bg-zinc-100 p-0.5 dark:bg-zinc-900">
-          {(
-            [
-              { value: "light", label: "Light", Icon: Sun },
-              { value: "dark", label: "Dark", Icon: Moon },
-              { value: "system", label: "System", Icon: Desktop },
-            ] satisfies { value: ThemeMode; label: string; Icon: typeof Sun }[]
-          ).map(({ value, label, Icon }) => (
-            <button
-              key={value}
-              type="button"
-              role="radio"
-              aria-checked={mode === value}
-              onClick={() => setMode(value)}
-              className={cx(
-                "press inline-flex items-center gap-1.5 rounded-md px-2.5 py-1 text-sm",
-                mode === value
-                  ? "bg-white text-zinc-900 shadow-xs dark:bg-zinc-800 dark:text-zinc-100"
-                  : "text-zinc-500 hover:text-zinc-900 dark:hover:text-zinc-100",
-              )}
-            >
-              <Icon className="size-4" /> {label}
-            </button>
-          ))}
-        </div>
+        <ThemeModeSwitch />
       </div>
 
       <fieldset className="grid grid-cols-4 gap-3 sm:grid-cols-7" aria-label="Theme">

@@ -1,6 +1,7 @@
 import { EnvelopeSimple } from "~/components/icons";
 import { Form } from "react-router";
 import { LegalLinks } from "~/components/legal";
+import { ThemeModeSwitch } from "~/components/theme-mode-switch";
 import { GoogleIcon, Logo, MicrosoftIcon, cx, inputClass } from "~/components/ui";
 
 /** The card layout of the sign-in screen and the "add account" screen. */
@@ -26,7 +27,9 @@ export function SignInCard({
           <Logo className="text-lg" />
           {children}
         </div>
-        <LegalLinks className="mt-6" />
+        {/* A person can pick light or dark mode before they log in. */}
+        <ThemeModeSwitch className="mx-auto mt-6 w-fit" />
+        <LegalLinks className="mt-4" />
       </div>
     </main>
   );
