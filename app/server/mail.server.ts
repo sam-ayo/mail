@@ -133,7 +133,8 @@ export async function listThreads(
         const page = await withListLimit(
           account,
           providerFor(account).listThreads({
-            folder: options.folder,
+            // Unread is the inbox with only the unread conversations.
+            ...(options.folder === "unread" ? { folder: "inbox", unread: true } : { folder: options.folder }),
             query: options.query || undefined,
             cursor: cursors?.[account.id],
             limit,

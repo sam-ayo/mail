@@ -2,7 +2,7 @@ import { waitUntil } from "@vercel/functions";
 import type {
   Address,
   Attachment,
-  Folder,
+  MailboxFolder,
   Message,
   Thread,
   ThreadAction,
@@ -48,7 +48,7 @@ interface GmailThread {
   messages: GmailMessage[];
 }
 
-const FOLDER_QUERY: Record<Folder, { labelIds?: string[]; q?: string }> = {
+const FOLDER_QUERY: Record<MailboxFolder, { labelIds?: string[]; q?: string }> = {
   inbox: { labelIds: ["INBOX"] },
   starred: { labelIds: ["STARRED"] },
   sent: { labelIds: ["SENT"] },
@@ -167,7 +167,7 @@ export function createGmailProvider(account: Account): MailProvider {
     return (await response.json()) as T;
   }
 
-  function summarize(thread: GmailThread, folder: Folder): ThreadSummary {
+  function summarize(thread: GmailThread, folder: MailboxFolder): ThreadSummary {
     const messages = thread.messages;
     const first = messages[0];
     const last = messages[messages.length - 1];
@@ -286,11 +286,11 @@ export function createGmailProvider(account: Account): MailProvider {
     });
 
   return {
-    async listThreads({ folder, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
       const { labelIds, q } = FOLDER_QUERY[folder];
       const params = new URLSearchParams({ maxResults: String(limit) });
       labelIds?.forEach((id) => params.append("labelIds", id));
-      const search = [q, query].filter(Boolean).join(" ");
+      const search = [q, unread && "is:unread", query].filter(Boolean).join(" ");
       if (search) params.set("q", search);
       if (cursor) params.set("pageToken", cursor);
       if (folder === "spam" || folder === "trash") params.set("includeSpamTrash", "true");

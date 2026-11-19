@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import type { Address, Folder, Message, ProviderKind, Thread, ThreadAction, ThreadCategory, ThreadSummary, Unsubscribe } from "~/lib/mail";
+import type { Address, MailboxFolder, Message, ProviderKind, Thread, ThreadAction, ThreadCategory, ThreadSummary, Unsubscribe } from "~/lib/mail";
 import type { Account, DemoCredentials } from "../accounts.server";
 import { snippetFromText } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
@@ -711,7 +711,7 @@ function store(account: Account) {
   return threads;
 }
 
-function matches(thread: DemoThread, folder: Folder, myEmail: string) {
+function matches(thread: DemoThread, folder: MailboxFolder, myEmail: string) {
   switch (folder) {
     case "starred":
       return thread.messages.some((m) => m.starred) && thread.location !== "trash";
@@ -732,7 +732,7 @@ export function createDemoProvider(account: Account): MailProvider {
     return thread;
   }
 
-  function summarize(thread: DemoThread, folder: Folder): ThreadSummary {
+  function summarize(thread: DemoThread, folder: MailboxFolder): ThreadSummary {
     const last = thread.messages[thread.messages.length - 1];
     const people =
       folder === "sent" || folder === "drafts"
@@ -756,10 +756,11 @@ export function createDemoProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
       const needle = query?.toLowerCase();
       const all = [...threads.values()]
         .filter((thread) => matches(thread, folder, account.email))
+        .filter((thread) => !unread || thread.messages.some((m) => m.unread))
         .filter(
           (thread) =>
             !needle ||

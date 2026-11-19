@@ -1,7 +1,9 @@
-import type { Address, Folder, Thread, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
+import type { Address, MailboxFolder, Thread, ThreadAction, ThreadCategory, ThreadSummary } from "~/lib/mail";
 
 export interface ListOptions {
-  folder: Folder;
+  folder: MailboxFolder;
+  /** List only the conversations that have unread mail. */
+  unread?: boolean;
   query?: string;
   cursor?: string;
   limit: number;

@@ -1,7 +1,7 @@
 import type {
   Address,
   Attachment,
-  Folder,
+  MailboxFolder,
   Message,
   Thread,
   ThreadAction,
@@ -24,7 +24,7 @@ const RETRY_BUDGET_MS = 10_000;
 
 type WellKnownFolder = "inbox" | "sentitems" | "drafts" | "archive" | "junkemail" | "deleteditems";
 
-const WELL_KNOWN: Record<Exclude<Folder, "starred">, WellKnownFolder> = {
+const WELL_KNOWN: Record<Exclude<MailboxFolder, "starred">, WellKnownFolder> = {
   inbox: "inbox",
   sent: "sentitems",
   drafts: "drafts",
@@ -169,7 +169,7 @@ export function createOutlookProvider(account: Account): MailProvider {
     return result.value.sort((a, b) => a.receivedDateTime.localeCompare(b.receivedDateTime));
   }
 
-  function summarize(messages: GraphMessage[], folder: Folder): ThreadSummary {
+  function summarize(messages: GraphMessage[], folder: MailboxFolder): ThreadSummary {
     // `messages` is newest first.
     const latest = messages[0];
     const oldest = messages[messages.length - 1];
@@ -253,16 +253,18 @@ export function createOutlookProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
       // The cursor is a Graph nextLink that came back from the browser. Accept
       // only Graph URLs, so the access token never goes to another host.
       if (cursor && !cursor.startsWith(`${API}/`)) throw new ProviderError("Invalid cursor", 400);
       let url = cursor;
       if (!url) {
         const params = new URLSearchParams({ $top: String(limit), $select: LIST_FIELDS });
-        // Graph does not allow $orderby together with $search.
+        // Graph does not allow $orderby or $filter together with $search.
         if (query) params.set("$search", `"${query.replace(/"/g, "")}"`);
         else params.set("$orderby", "receivedDateTime desc");
+        // Graph sorts a filtered list only if the filter starts with the sort property.
+        if (unread && !query) params.set("$filter", "receivedDateTime ge 1900-01-01T00:00:00Z and isRead eq false");
         if (folder === "starred") {
           params.set("$filter", "flag/flagStatus eq 'flagged'");
           params.delete("$orderby");
@@ -272,6 +274,8 @@ export function createOutlookProvider(account: Account): MailProvider {
         }
       }
       const page = await request<{ value: GraphMessage[]; "@odata.nextLink"?: string }>(url);
+      // A search cannot have a filter, so remove the read messages here.
+      if (unread && query) page.value = page.value.filter((m) => !m.isRead);
 
       // Graph lists messages. Group the messages on this page into conversations.
       const groups = new Map<string, GraphMessage[]>();

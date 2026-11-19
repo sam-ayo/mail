@@ -24,6 +24,7 @@ export function shownProvider(account: { provider: ProviderKind; look?: Provider
 
 export const FOLDERS = [
   "inbox",
+  "unread",
   "starred",
   "sent",
   "drafts",
@@ -34,8 +35,15 @@ export const FOLDERS = [
 
 export type Folder = (typeof FOLDERS)[number];
 
+/**
+ * A folder on the mail server. "unread" is not one: it is the inbox with
+ * only the unread conversations.
+ */
+export type MailboxFolder = Exclude<Folder, "unread">;
+
 export const FOLDER_LABELS: Record<Folder, string> = {
   inbox: "Inbox",
+  unread: "Unread",
   starred: "Starred",
   sent: "Sent",
   drafts: "Drafts",
@@ -160,6 +168,7 @@ export const THREAD_ACTIONS: readonly ThreadAction[] = [
 
 /** Actions that take the thread out of the current folder view. */
 export function removesFromFolder(action: ThreadAction, folder: Folder) {
+  // A conversation stays in Unread after you read it, so it does not go away while you read it.
   switch (action) {
     case "archive":
       return folder !== "archive";
@@ -168,7 +177,7 @@ export function removesFromFolder(action: ThreadAction, folder: Folder) {
     case "spam":
       return folder !== "spam";
     case "inbox":
-      return folder !== "inbox";
+      return folder !== "inbox" && folder !== "unread";
     case "unstar":
       return folder === "starred";
     default:

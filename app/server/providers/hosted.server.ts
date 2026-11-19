@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { simpleParser } from "mailparser";
-import type { Address, Folder, Thread, ThreadAction, ThreadSummary } from "~/lib/mail";
+import type { Address, MailboxFolder, Thread, ThreadAction, ThreadSummary } from "~/lib/mail";
 import type { Account } from "../accounts.server";
 import { query, queryOne } from "../db.server";
 import { getSentMessageId, sendWithResend } from "../resend.server";
@@ -14,7 +14,7 @@ import { ProviderError } from "./types";
 
 type StoredFolder = "inbox" | "sent" | "archive" | "spam" | "trash";
 
-const FOLDER_FILTER: Record<Folder, string> = {
+const FOLDER_FILTER: Record<MailboxFolder, string> = {
   inbox: "folder = 'inbox'",
   starred: "starred AND folder NOT IN ('spam', 'trash')",
   sent: "folder = 'sent'",
@@ -29,11 +29,11 @@ const FOLDER_FILTER: Record<Folder, string> = {
  * The messages that a list row summarizes. A conversation in Inbox also shows
  * the replies in Sent. Spam and Trash show only their own messages.
  */
-const SUMMARY_FILTER: Record<Folder, string> = {
+const SUMMARY_FILTER: Record<MailboxFolder, string> = {
   ...Object.fromEntries(Object.keys(FOLDER_FILTER).map((folder) => [folder, "folder NOT IN ('spam', 'trash')"])),
   spam: FOLDER_FILTER.spam,
   trash: FOLDER_FILTER.trash,
-} as Record<Folder, string>;
+} as Record<MailboxFolder, string>;
 
 interface SummaryRow {
   id: string;
@@ -151,7 +151,7 @@ const likePattern = (text: string) => `%${text.replace(/[\\%_]/g, (c) => `\\${c}
 export function createHostedProvider(account: Account): MailProvider {
   const mailbox = account.email.toLowerCase();
 
-  function summarize(folder: Folder, rows: SummaryRow[]): ThreadSummary {
+  function summarize(folder: MailboxFolder, rows: SummaryRow[]): ThreadSummary {
     // The rows are in date order, oldest first.
     const latest = rows[rows.length - 1];
     const people = new Map<string, Address>();
@@ -194,8 +194,8 @@ export function createHostedProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, query: search, cursor, limit }: ListOptions): Promise<ThreadPage> {
-      const filter = FOLDER_FILTER[folder];
+    async listThreads({ folder, unread, query: search, cursor, limit }: ListOptions): Promise<ThreadPage> {
+      const filter = unread ? `${FOLDER_FILTER[folder]} AND unread` : FOLDER_FILTER[folder];
       const offset = Number(cursor) || 0;
       const params: unknown[] = [mailbox, limit + 1, offset];
       let searchFilter = "";

@@ -3,6 +3,7 @@ import {
   ArrowSquareOut,
   CaretRight,
   Copy,
+  EnvelopeSimple,
   File,
   Gear,
   Keyboard,
@@ -32,6 +33,7 @@ import { AccountIcon, Hint, IconButton, Logo, PROVIDER_NAMES, cx } from "./ui";
 
 export const FOLDER_ICONS: Record<Folder, typeof Tray> = {
   inbox: Tray,
+  unread: EnvelopeSimple,
   starred: Star,
   sent: PaperPlaneTilt,
   drafts: File,

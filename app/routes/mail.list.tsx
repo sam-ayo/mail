@@ -1570,6 +1570,11 @@ function EmptyList({ folder, query, promotions }: { folder: Folder; query: strin
       </li>
     );
   }
+  if (folder === "unread") {
+    return (
+      <li className="px-6 py-16 text-center text-sm text-zinc-500">No unread mail. You are all caught up.</li>
+    );
+  }
   return (
     <li className="px-6 py-16 text-center text-sm text-zinc-500">
       {FOLDER_LABELS[folder]} is empty.

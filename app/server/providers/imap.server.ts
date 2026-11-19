@@ -4,14 +4,14 @@ import type { FetchMessageObject, ListResponse, MessageAddressObject } from "ima
 import { simpleParser } from "mailparser";
 import type { AddressObject, ParsedMail } from "mailparser";
 import nodemailer from "nodemailer";
-import type { Address, Folder, Message, Thread, ThreadAction, ThreadSummary } from "~/lib/mail";
+import type { Address, MailboxFolder, Message, Thread, ThreadAction, ThreadSummary } from "~/lib/mail";
 import type { Account, ImapCredentials } from "../accounts.server";
 import { setAccountStatus } from "../accounts.server";
 import { buildMime, parseListUnsubscribe, snippetFromText } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
 import { ProviderAuthError, ProviderError } from "./types";
 
-type SpecialFolder = Exclude<Folder, "inbox">;
+type SpecialFolder = Exclude<MailboxFolder, "inbox">;
 
 const SPECIAL_USE: Record<SpecialFolder, string[]> = {
   starred: ["\\Flagged"],
@@ -223,7 +223,7 @@ export function createImapProvider(account: Account): MailProvider {
     return entry.mailboxes;
   }
 
-  async function folderPath(folder: Folder, create = false): Promise<string | undefined> {
+  async function folderPath(folder: MailboxFolder, create = false): Promise<string | undefined> {
     if (folder === "inbox") return "INBOX";
     const list = await mailboxes();
     const found =
@@ -238,7 +238,7 @@ export function createImapProvider(account: Account): MailProvider {
     return created.path;
   }
 
-  function summarize(path: string, message: FetchMessageObject, folder: Folder): ThreadSummary {
+  function summarize(path: string, message: FetchMessageObject, folder: MailboxFolder): ThreadSummary {
     const envelope = message.envelope;
     const people =
       folder === "sent" || folder === "drafts"
@@ -268,7 +268,7 @@ export function createImapProvider(account: Account): MailProvider {
     });
   }
 
-  async function move(threadId: string, folder: Folder) {
+  async function move(threadId: string, folder: MailboxFolder) {
     const { path, uid } = decodeThreadId(threadId);
     const destination = await folderPath(folder, true);
     if (!destination || destination === path) return {};
@@ -296,7 +296,7 @@ export function createImapProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
       const flaggedFolder = folder === "starred" ? await folderPath("starred") : undefined;
       const path = folder === "starred" ? (flaggedFolder ?? "INBOX") : await folderPath(folder);
       if (!path) return { threads: [] };
@@ -304,6 +304,7 @@ export function createImapProvider(account: Account): MailProvider {
       return withMailbox(path, async (imap) => {
         const criteria: Record<string, unknown> = {};
         if (folder === "starred" && !flaggedFolder) criteria.flagged = true;
+        if (unread) criteria.seen = false;
         if (query) criteria.or = [{ subject: query }, { from: query }, { body: query }];
         const uids =
           Object.keys(criteria).length > 0
