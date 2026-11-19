@@ -44,9 +44,9 @@ export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
         <Logo className="text-lg" />
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight">Sign in to connect an AI agent</h1>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight">Log in to connect an AI agent</h1>
         <p className="mt-2 text-sm text-zinc-500">
-          This browser is not signed in to mail by samayo. Sign in with an account of your workspace. Then you can give the
+          This browser is not logged in to mail by samayo. Log in with an account of your workspace. Then you can give the
           agent access.
         </p>
         <div className="mt-6 flex flex-col gap-2.5">
@@ -68,13 +68,13 @@ export default function OAuthLogin({ loaderData }: Route.ComponentProps) {
           )}
         </div>
         <p className="mt-4 text-center text-xs text-zinc-400">
-          For an IMAP or hosted address, open mail by samayo in this browser and sign in. Then connect the agent again.
+          For an IMAP or hosted address, open mail by samayo in this browser and log in. Then connect the agent again.
         </p>
         {review && (
           <p className="mt-2 text-center text-xs text-zinc-400">
             Directory reviewer?{" "}
             <a href={`/review?returnTo=${encodeURIComponent(returnTo)}`} className="underline hover:text-zinc-700 dark:hover:text-zinc-200">
-              Sign in with the review password
+              Log in with the review password
             </a>
           </p>
         )}

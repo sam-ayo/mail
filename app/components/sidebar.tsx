@@ -46,7 +46,7 @@ export function reconnectUrl(account: AccountSummary) {
   if (account.provider === "google" || account.provider === "microsoft") {
     return `/auth/${account.provider}?hint=${encodeURIComponent(account.email)}`;
   }
-  return "/welcome";
+  return "/accounts/add";
 }
 
 /** The list loads before the route changes. The sidebar shows the folder
@@ -310,7 +310,7 @@ export function Sidebar({
         )}
       >
         <Link
-          to="/welcome"
+          to="/accounts/add"
           className="press flex h-7 items-center gap-2.5 rounded-[7px] px-2 text-[13px] text-zinc-700 pointer-coarse:h-11 pointer-coarse:text-base hover:bg-(--sidebar-hover) dark:text-zinc-200"
         >
           <Plus className="size-4 text-zinc-500 dark:text-zinc-400" /> Add account

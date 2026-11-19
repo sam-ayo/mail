@@ -7,7 +7,9 @@ import type { OAuthCredentials } from "./accounts.server";
 import {
   createUser,
   findAccountWorkspaces,
+  findSignIn,
   getAccountById,
+  insertSignIn,
   isDemoUser,
   resolveUser,
   resolveUserAccounts,
@@ -18,6 +20,7 @@ import {
 } from "./accounts.server";
 import { env } from "./env.server";
 import { isConsumerMicrosoftSubject, microsoftStoredSubject } from "./oauth/microsoft.server";
+import { writeLastSignIn } from "./last-sign-in.server";
 import { closeImapConnection } from "./providers/imap.server";
 import { getSession, sessionStorage } from "./session.server";
 
@@ -70,6 +73,8 @@ export async function connectAccount(
   let current = await sessionUser(session);
   // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.
   if (current && input.provider !== "demo" && (await isDemoUser(current))) current = undefined;
+  // A sign-in opens a workspace in a browser that has none.
+  const signIn = !current;
   if (!current) {
     // A browser with no workspace. Only a sign-in account opens its workspace.
     // Other accounts can be shared mailboxes: a person who uses a team address
@@ -81,7 +86,7 @@ export async function connectAccount(
       return redirectWithError(
         session,
         "/welcome",
-        `${input.email} is in a workspace of another person. Sign in with your own account first. Then add ${input.email}.`,
+        `${input.email} is not a login account. Log in with your own account first. Then use "Add account" to add ${input.email}.`,
       );
     }
   }
@@ -93,9 +98,40 @@ export async function connectAccount(
   // Drop a pooled connection that still uses an old password.
   if (input.provider === "imap") closeImapConnection(accountId);
   await startSession(session, userId);
-  return redirect(returnTo, {
-    headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
-  });
+  const headers = new Headers({ "Set-Cookie": await sessionStorage.commitSession(session) });
+  if (signIn && input.provider !== "demo") {
+    headers.append("Set-Cookie", await writeLastSignIn({ provider: input.provider, email: input.email.toLowerCase() }));
+  }
+  return redirect(returnTo, { headers });
+}
+
+/**
+ * Signs the browser in with a person from a sign-in that has no mail access.
+ * The workspace of the person opens. A workspace from before sign-ins opens
+ * through its sign-in mailbox. A new person gets a new workspace with no
+ * mailbox, and adds mailboxes on /accounts/add.
+ */
+export async function signInWithIdentity(
+  session: Session,
+  identity: { provider: "google" | "microsoft"; email: string; subject: string },
+  returnTo = "/mail/all/inbox",
+) {
+  let userId = await resolveUser(await findSignIn(identity.provider, identity.subject));
+  if (!userId) {
+    const workspaces = await sameMailboxWorkspaces(identity);
+    userId = workspaces.find((w) => w.canSignIn)?.userId;
+  }
+  const newWorkspace = !userId;
+  if (!userId) {
+    // A mailbox of the same address in a workspace of another person does not open
+    // that workspace. The person gets an own workspace and adds mailboxes to it.
+    userId = await createUser();
+    await insertSignIn({ userId, ...identity });
+  }
+  await startSession(session, userId);
+  const headers = new Headers({ "Set-Cookie": await sessionStorage.commitSession(session) });
+  headers.append("Set-Cookie", await writeLastSignIn({ provider: identity.provider, email: identity.email.toLowerCase() }));
+  return redirect(newWorkspace ? "/accounts/add" : returnTo, { headers });
 }
 
 /**

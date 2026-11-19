@@ -100,7 +100,7 @@ export async function action({ request, context }: Route.ActionArgs) {
       return { removed: accountId };
     case "signIn": {
       const changed = await setAccountSignIn(user.id, accountId, form.get("on") === "true");
-      return changed ? { signIn: accountId } : { signInError: "One account must open the workspace." };
+      return changed ? { signIn: accountId } : { signInError: "One account must log in to the workspace." };
     }
     case "signOutEverywhere": {
       // A new session version makes all the session cookies of the workspace invalid, also this one.
@@ -156,7 +156,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           <div className="mb-3 flex flex-wrap items-center justify-between gap-3">
             <h2 className="font-semibold">Email accounts</h2>
             <Link
-              to="/welcome"
+              to="/accounts/add"
               className="inline-flex shrink-0 items-center gap-1.5 rounded-lg bg-accent-600 px-3 py-1.5 text-sm font-medium whitespace-nowrap text-white hover:bg-accent-700"
             >
               <Plus className="size-4" /> Add account
@@ -181,7 +181,7 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
           <div className="flex flex-wrap gap-2">
             <Form method="post" action="/logout">
               <Button>
-                <SignOut className="size-4" /> Sign out
+                <SignOut className="size-4" /> Log out
               </Button>
             </Form>
             <SignOutEverywhere />
@@ -838,7 +838,7 @@ function SignInToggle({ account }: { account: AccountSummary }) {
         className="mt-0.5 size-4 accent-accent-600"
       />
       <span>
-        <span className="font-medium">Sign in to this workspace with this account</span>
+        <span className="font-medium">Log in to this workspace with this account</span>
         <span className="block text-zinc-500">Turn this off for a shared mailbox.</span>
       </span>
     </label>
@@ -853,15 +853,15 @@ function SignOutEverywhere() {
     <Button
       onClick={async () => {
         const yes = await confirm({
-          title: "Sign out of all browsers?",
-          description: "All browsers, also this one, must sign in again. The AI agents also disconnect.",
-          confirmLabel: "Sign out everywhere",
+          title: "Log out of all browsers?",
+          description: "All browsers, also this one, must log in again. The AI agents also disconnect.",
+          confirmLabel: "Log out everywhere",
           danger: true,
         });
         if (yes) submit({ intent: "signOutEverywhere", agents: "true" }, { method: "post" });
       }}
     >
-      <SignOut className="size-4" /> Sign out of all browsers
+      <SignOut className="size-4" /> Log out of all browsers
     </Button>
   );
 }

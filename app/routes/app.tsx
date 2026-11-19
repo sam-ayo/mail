@@ -65,7 +65,7 @@ export const middleware: Route.MiddlewareFunction[] = [
 export function loader({ context }: Route.LoaderArgs) {
   const user = context.get(userContext)!;
   const accounts = user.accounts.map(toSummary);
-  if (accounts.length === 0) throw redirect("/welcome");
+  if (accounts.length === 0) throw redirect("/accounts/add");
   const demo = accounts.find((a) => a.provider === "demo");
   // The worst-case data toggle is for development only.
   const devDataset = import.meta.env.DEV && demo ? getDemoDataset(demo.id) : null;
@@ -180,7 +180,7 @@ function Shell() {
       }
     }
     list.push(
-      { id: "add-account", label: "Add an email account", group: "Accounts", icon: Plus, run: () => navigate("/welcome") },
+      { id: "add-account", label: "Add an email account", group: "Accounts", icon: Plus, run: () => navigate("/accounts/add") },
       { id: "settings", label: "Settings", group: "Accounts", hint: "G ,", icon: Gear, run: () => navigate("/settings") },
       {
         id: "sidebar",
@@ -197,7 +197,7 @@ function Shell() {
       { id: "shortcuts", label: "Keyboard shortcuts", group: "Help", hint: "?", icon: Keyboard, run: () => setShortcutsOpen(true) },
       {
         id: "logout",
-        label: "Sign out",
+        label: "Log out",
         group: "Accounts",
         icon: SignOut,
         run: () => submit(null, { method: "post", action: "/logout" }),

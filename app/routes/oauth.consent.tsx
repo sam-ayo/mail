@@ -30,7 +30,7 @@ export async function loader({ request }: Route.LoaderArgs) {
   const url = new URL(request.url);
   const session = await getAgentAuth().api.getSession({ headers: request.headers });
   const clientId = url.searchParams.get("client_id");
-  if (!session || !clientId) throw new Response("The sign-in request is not valid. Connect the agent again.", { status: 400 });
+  if (!session || !clientId) throw new Response("The login request is not valid. Connect the agent again.", { status: 400 });
   // The login step signs in to the browser's workspace, and then runs the authorize step again.
   if (!(await sameWorkspace(request, session.user.id))) throw redirect(`/oauth/login${url.search}`);
 
@@ -75,7 +75,7 @@ export async function action({ request }: Route.ActionArgs) {
   if (request.headers.get("Origin") !== env.appUrl) throw new Response("Forbidden", { status: 403 });
   const session = await getAgentAuth().api.getSession({ headers: request.headers });
   if (!session || !(await sameWorkspace(request, session.user.id))) {
-    throw new Response("This browser signed in to another workspace. Connect the agent again.", { status: 409 });
+    throw new Response("This browser logged in to another workspace. Connect the agent again.", { status: 409 });
   }
   const form = await request.formData();
   // Use the HTTP handler, not the API functions. The consent endpoint runs the

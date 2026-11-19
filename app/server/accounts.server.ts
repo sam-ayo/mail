@@ -200,6 +200,23 @@ export async function findAccountWorkspaces(provider: ProviderKind, email: strin
   }));
 }
 
+/** The workspace of a person who signed in before with this provider subject. See migration 0017. */
+export async function findSignIn(provider: ProviderKind, subject: string) {
+  const row = await queryOne<{ user_id: string }>(
+    "SELECT user_id FROM sign_ins WHERE provider = $1 AND subject = $2",
+    [provider, subject],
+  );
+  return row?.user_id;
+}
+
+export async function insertSignIn(input: { userId: string; provider: ProviderKind; subject: string; email: string }) {
+  await query(
+    `INSERT INTO sign_ins (provider, subject, user_id, email) VALUES ($1, $2, $3, $4)
+     ON CONFLICT (provider, subject) DO UPDATE SET email = EXCLUDED.email`,
+    [input.provider, input.subject, input.userId, input.email.toLowerCase()],
+  );
+}
+
 /** Gives the account its subject. See findAccountWorkspaces. */
 export async function setAccountSubject(accountId: string, subject: string) {
   await query("UPDATE accounts SET subject = $1 WHERE id = $2", [subject, accountId]);

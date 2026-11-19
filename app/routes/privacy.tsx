@@ -54,12 +54,12 @@ export default function Privacy() {
         For an address that mail by samayo hosts, mail by samayo is the mail server. It keeps the full messages and their attachments
         in its database until you delete them. Resend receives and sends this mail for mail by samayo.
       </p>
-      <p>mail by samayo uses a session cookie to keep you signed in. The cookie expires after 90 days.</p>
+      <p>mail by samayo uses a session cookie to keep you logged in. The cookie expires after 90 days.</p>
 
       <h2>AI agents</h2>
       <p>
         You can connect an AI agent, such as Claude or ChatGPT, to your workspace through the MCP server at
-        mail.samayo.me/mcp. The agent connects only after you sign in and allow it on a consent page. The consent page
+        mail.samayo.me/mcp. The agent connects only after you log in and allow it on a consent page. The consent page
         shows the permissions and the accounts.
       </p>
       <ul>

@@ -2,12 +2,14 @@ import { env } from "../env.server";
 import type { OAuthCredentials } from "../accounts.server";
 import { ProviderAuthError } from "../providers/types";
 
+/**
+ * A sign-in asks only who the person is. User.Read gives the same address as
+ * a mailbox connection. Mail access comes when the person adds a mailbox.
+ */
+const SIGN_IN_SCOPES = ["openid", "email", "profile", "https://graph.microsoft.com/User.Read"];
 const SCOPES = [
-  "openid",
-  "email",
-  "profile",
+  ...SIGN_IN_SCOPES,
   "offline_access",
-  "https://graph.microsoft.com/User.Read",
   "https://graph.microsoft.com/Mail.ReadWrite",
   "https://graph.microsoft.com/Mail.Send",
 ];
@@ -16,14 +18,14 @@ const authority = () => `https://login.microsoftonline.com/${env.microsoft.tenan
 
 export const microsoftRedirectUri = () => `${env.appUrl}/auth/microsoft/callback`;
 
-export function microsoftAuthorizeUrl(state: string, codeChallenge: string, loginHint?: string) {
+export function microsoftAuthorizeUrl(state: string, codeChallenge: string, loginHint?: string, signIn = false) {
   const url = new URL(`${authority()}/authorize`);
   url.search = new URLSearchParams({
     client_id: env.microsoft.clientId,
     redirect_uri: microsoftRedirectUri(),
     response_type: "code",
     response_mode: "query",
-    scope: SCOPES.join(" "),
+    scope: (signIn ? SIGN_IN_SCOPES : SCOPES).join(" "),
     prompt: "select_account",
     state,
     code_challenge: codeChallenge,
@@ -42,14 +44,14 @@ interface TokenResponse {
   error_description?: string;
 }
 
-async function tokenRequest(params: Record<string, string>) {
+async function tokenRequest(params: Record<string, string>, scopes = SCOPES) {
   const response = await fetch(`${authority()}/token`, {
     method: "POST",
     headers: { "Content-Type": "application/x-www-form-urlencoded" },
     body: new URLSearchParams({
       client_id: env.microsoft.clientId,
       client_secret: env.microsoft.clientSecret,
-      scope: SCOPES.join(" "),
+      scope: scopes.join(" "),
       ...params,
     }),
   });
@@ -63,16 +65,32 @@ async function tokenRequest(params: Record<string, string>) {
   return body;
 }
 
+function exchange(code: string, codeVerifier: string, scopes = SCOPES) {
+  return tokenRequest(
+    { grant_type: "authorization_code", code, code_verifier: codeVerifier, redirect_uri: microsoftRedirectUri() },
+    scopes,
+  );
+}
+
+/** The person of a sign-in. The app gets no mail access and keeps no token. */
+export async function microsoftIdentity(code: string, codeVerifier: string) {
+  return profileOf(await exchange(code, codeVerifier, SIGN_IN_SCOPES));
+}
+
 export async function microsoftExchangeCode(code: string, codeVerifier: string) {
-  const tokens = await tokenRequest({
-    grant_type: "authorization_code",
-    code,
-    code_verifier: codeVerifier,
-    redirect_uri: microsoftRedirectUri(),
-  });
+  const tokens = await exchange(code, codeVerifier);
   if (!tokens.refresh_token) {
     throw new Error("Microsoft did not return a refresh token. Try to connect the account again.");
   }
+  const credentials: OAuthCredentials = {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token,
+    expiresAt: Date.now() + tokens.expires_in * 1000,
+  };
+  return { ...(await profileOf(tokens)), credentials };
+}
+
+async function profileOf(tokens: TokenResponse) {
   const subject = microsoftSubject(tokens.id_token);
   const profileResponse = await fetch(
     "https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName",
@@ -83,17 +101,7 @@ export async function microsoftExchangeCode(code: string, codeVerifier: string) 
     mail?: string;
     userPrincipalName: string;
   };
-  const credentials: OAuthCredentials = {
-    accessToken: tokens.access_token,
-    refreshToken: tokens.refresh_token,
-    expiresAt: Date.now() + tokens.expires_in * 1000,
-  };
-  return {
-    email: profile.mail || profile.userPrincipalName,
-    name: profile.displayName ?? "",
-    credentials,
-    subject,
-  };
+  return { email: profile.mail || profile.userPrincipalName, name: profile.displayName ?? "", subject };
 }
 
 /** The tenant of personal Microsoft accounts (outlook.com, hotmail.com, live.com). */

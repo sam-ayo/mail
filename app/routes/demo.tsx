@@ -16,7 +16,7 @@ import type { Route } from "./+types/demo";
 
 const TITLE = "Try mail by samayo";
 const DESCRIPTION =
-  "A live demo of mail by samayo, an email client with one fast inbox for all your accounts. No sign-in.";
+  "A live demo of mail by samayo, an email client with one fast inbox for all your accounts. No login.";
 
 export const meta: Route.MetaFunction = () => [
   { title: `${TITLE} · Live demo` },

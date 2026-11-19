@@ -50,14 +50,14 @@ export default function Agents() {
         </li>
         <li>Click Connect. A browser window opens.</li>
         <li>
-          Sign in to mail by samayo, if the browser is not signed in. Then read the consent page, and click Allow.
+          Log in to mail by samayo, if the browser is not logged in. Then read the consent page, and click Allow.
         </li>
       </ul>
 
       <h2>Connect ChatGPT</h2>
       <ul>
         <li>Open the apps of ChatGPT, and find mail by samayo.</li>
-        <li>Click Connect, sign in to mail by samayo, and click Allow on the consent page.</li>
+        <li>Click Connect, log in to mail by samayo, and click Allow on the consent page.</li>
       </ul>
 
       <h2>Connect another MCP client</h2>

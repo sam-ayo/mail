@@ -13,6 +13,8 @@ type SessionFlashData = {
   oauthReturnTo: string;
   composioAccountId: string;
   composioUserId: string;
+  /** "signin": the OAuth flow asks only who the person is, with no mail access. */
+  oauthIntent: "signin";
   error: string;
 };
 

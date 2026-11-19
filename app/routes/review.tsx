@@ -16,7 +16,7 @@ import type { Route } from "./+types/review";
  */
 
 export const meta: Route.MetaFunction = () => [
-  { title: "Reviewer sign-in · mail by samayo" },
+  { title: "Reviewer login · mail by samayo" },
   { name: "robots", content: "noindex" },
 ];
 
@@ -58,7 +58,7 @@ export default function Review({ loaderData }: Route.ComponentProps) {
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
         <Logo className="text-lg" />
-        <h1 className="mt-6 text-2xl font-semibold tracking-tight">Reviewer sign-in</h1>
+        <h1 className="mt-6 text-2xl font-semibold tracking-tight">Reviewer login</h1>
         <p className="mt-2 text-sm text-zinc-500">
           For reviewers of the Claude and ChatGPT directories. The review password opens a new workspace with three
           accounts of sample mail. Mail that you send from these accounts goes only to their Sent folder.
