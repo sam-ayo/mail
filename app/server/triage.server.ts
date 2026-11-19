@@ -344,7 +344,7 @@ const INBOX_SORT_BEAT_MS = 1000;
 const INBOX_SORT_CHECK_MS = 60_000;
 const inboxSortChecks = new Map<string, number>();
 
-const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, ms));
+const sleep = (ms: number) => new Promise((resolve) => setTimeout(resolve, Math.max(0, ms)));
 
 /** The mail server refused the request because the app sent too many requests. */
 function isRateLimit(error: unknown) {
@@ -451,6 +451,7 @@ async function sortInbox(account: Account) {
       if ("error" in result) {
         if (isRateLimit(result.error) && limited < INBOX_SORT_LIMIT_TRIES) {
           limited += 1;
+          console.warn("The mail server limits the inbox sort. It waits one minute.", account.id, limited);
           await sleep(INBOX_SORT_LIMIT_WAIT_MS);
           next = fetchPage(cursor);
           continue;
