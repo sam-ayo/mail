@@ -7,6 +7,7 @@ import { randomToken } from "./crypto.server";
 import { query, queryOne } from "./db.server";
 import { env } from "./env.server";
 import { providerFor } from "./mail.server";
+import { gmailUnitsUsed } from "./providers/gmail.server";
 import { ProviderError } from "./providers/types";
 import { htmlToText } from "./sanitize.server";
 import { errorMessage, mapLimit } from "./util.server";
@@ -322,13 +323,18 @@ export async function sortListed(userId: string, threads: ThreadSummary[]) {
 /** The conversations in each page of the full inbox sort. */
 const INBOX_SORT_PAGE = 25;
 /**
- * The shortest time for a page that needed Jev. Gmail lets each person use
- * 15,000 quota units each minute, and a page uses about 500 units. At one page
- * in 4 seconds, the sort uses about half, and the app keeps the other half.
+ * The Gmail quota units that the sort can use each minute. Gmail lets each
+ * person use 6,000 units each minute in the app's Google project. The app keeps
+ * the other units for the mail check and for the person's requests.
  */
-const INBOX_SORT_PAGE_MS = 4000;
-/** The shortest time for a page that was sorted already. */
-const INBOX_SORT_SORTED_PAGE_MS = 1000;
+const INBOX_SORT_GMAIL_UNITS_PER_MINUTE = 4000;
+/**
+ * The shortest time for a page that needed Jev from other mail servers.
+ * Microsoft lets an app send 10,000 requests each 10 minutes for a mailbox.
+ */
+const INBOX_SORT_PAGE_MS: Partial<Record<Account["provider"], number>> = { microsoft: 2000 };
+/** The shortest time for a page. */
+const INBOX_SORT_MIN_PAGE_MS = 1000;
 /** The time to wait when the mail server says that the app sent too many requests. */
 const INBOX_SORT_LIMIT_WAIT_MS = 60_000;
 /** The run stops after this many waits in a row. A later status check starts it again. */
@@ -442,11 +448,14 @@ async function sortInbox(account: Account) {
       (page) => ({ page }),
       (error: unknown) => ({ error }),
     );
+  // The Gmail units that this server used for the account at the start of the page.
+  const gmail = account.provider === "google";
   try {
     let next = fetchPage(cursor);
     let limited = 0;
     while (!lost) {
       const started = Date.now();
+      const units = gmail ? gmailUnitsUsed(account.id) : 0;
       const result = await next;
       if ("error" in result) {
         if (isRateLimit(result.error) && limited < INBOX_SORT_LIMIT_TRIES) {
@@ -482,7 +491,13 @@ async function sortInbox(account: Account) {
         [account.id, runId, cursor ?? null, pagesChecked],
       );
       if (!saved || !cursor || !(await aiSortingOn(account.userId))) return;
-      await sleep((todo > 0 ? INBOX_SORT_PAGE_MS : INBOX_SORT_SORTED_PAGE_MS) - (Date.now() - started));
+      // A Gmail page waits until its units fit the budget. The count also has the other requests of this server.
+      const pageMs = gmail
+        ? ((gmailUnitsUsed(account.id) - units) * 60_000) / INBOX_SORT_GMAIL_UNITS_PER_MINUTE
+        : todo > 0
+          ? (INBOX_SORT_PAGE_MS[account.provider] ?? 0)
+          : 0;
+      await sleep(Math.max(pageMs, INBOX_SORT_MIN_PAGE_MS) - (Date.now() - started));
     }
   } finally {
     clearInterval(beats);

@@ -101,6 +101,24 @@ function uniqueAddresses(addresses: Address[]) {
   });
 }
 
+/**
+ * The Gmail quota units of a request. Gmail lets each person use 6,000 units
+ * each minute in the app's Google project. A request that is not in the list costs 10.
+ */
+function quotaUnits(path: string, method = "GET") {
+  if (path.startsWith("/messages/send")) return 100;
+  if (path.startsWith("/labels")) return 1;
+  if (method === "GET" && (path.startsWith("/messages") || path.startsWith("/drafts?"))) return 5;
+  return 10;
+}
+
+const unitsUsed = new Map<string, number>();
+
+/** The Gmail quota units that this server used for the account since it started. */
+export function gmailUnitsUsed(accountId: string) {
+  return unitsUsed.get(accountId) ?? 0;
+}
+
 export function createGmailProvider(account: Account): MailProvider {
   const composio = isComposioCredentials(account.credentials) ? account.credentials : undefined;
   const tokens = composio ? undefined : createTokenSource(account);
@@ -123,6 +141,7 @@ export function createGmailProvider(account: Account): MailProvider {
   }
 
   async function request<T>(path: string, init: RequestInit = {}, attempt = 0): Promise<T> {
+    unitsUsed.set(account.id, gmailUnitsUsed(account.id) + quotaUnits(path, init.method));
     if (composio) {
       const response = await composioFetch(path, init);
       return handle<T>(response, path, init, attempt);
