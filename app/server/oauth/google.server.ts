@@ -69,13 +69,17 @@ export async function googleExchangeCode(code: string, codeVerifier: string) {
   const profileResponse = await fetch("https://openidconnect.googleapis.com/v1/userinfo", {
     headers: { Authorization: `Bearer ${tokens.access_token}` },
   });
-  const profile = (await profileResponse.json()) as { email: string; name?: string };
+  const profile = (await profileResponse.json()) as { sub?: string; email?: string; email_verified?: boolean; name?: string };
+  // Google identifies the person with "sub". An address that Google did not verify does not identify a mailbox.
+  if (!profile.sub || !profile.email || profile.email_verified !== true) {
+    throw new Error("Google did not verify the address of this account.");
+  }
   const credentials: OAuthCredentials = {
     accessToken: tokens.access_token,
     refreshToken: tokens.refresh_token,
     expiresAt: Date.now() + tokens.expires_in * 1000,
   };
-  return { email: profile.email, name: profile.name ?? "", credentials };
+  return { email: profile.email, name: profile.name ?? "", credentials, subject: profile.sub };
 }
 
 export async function googleRefresh(credentials: OAuthCredentials): Promise<OAuthCredentials> {

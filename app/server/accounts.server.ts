@@ -45,6 +45,7 @@ interface AccountRow {
   color: string;
   credentials: string;
   status: AccountStatus;
+  can_sign_in: boolean;
 }
 
 function toAccount(row: AccountRow): Account {
@@ -56,14 +57,15 @@ function toAccount(row: AccountRow): Account {
     name: row.name,
     color: row.color,
     status: row.status,
+    canSignIn: row.can_sign_in,
     credentials: JSON.parse(decrypt(row.credentials)),
   };
 }
 
 export function toSummary(account: Account): AccountSummary {
-  const { id, provider, email, name, color, status } = account;
+  const { id, provider, email, name, color, status, canSignIn } = account;
   const look = provider === "demo" ? (account.credentials as DemoCredentials).look : undefined;
-  return { id, provider, email, name, color, status, ...(look && { look }) };
+  return { id, provider, email, name, color, status, canSignIn, ...(look && { look }) };
 }
 
 export async function createUser({ demo = false } = {}) {
@@ -96,16 +98,35 @@ export async function deleteExpiredDemoUsers() {
 }
 
 /**
- * Gives the workspace for a session's user ID. A merged workspace gives the
- * workspace that it joined. An unknown ID gives undefined.
+ * Gives the workspace for a user ID. A merged workspace gives the workspace
+ * that it joined. An unknown ID gives undefined. With a session version, a
+ * workspace that has a different version also gives undefined: a person
+ * signed out all its browsers.
  */
-export async function resolveUser(id: string | undefined) {
+export async function resolveUser(id: string | undefined, version?: number) {
   if (!id) return undefined;
-  const row = await queryOne<{ id: string }>(
-    "SELECT COALESCE(merged_into, id) AS id FROM users WHERE id = $1",
+  const row = await queryOne<{ id: string; session_version: number }>(
+    `SELECT r.id, r.session_version FROM users s JOIN users r ON r.id = COALESCE(s.merged_into, s.id)
+     WHERE s.id = $1`,
     [id],
   );
-  return row?.id;
+  if (!row || (version !== undefined && row.session_version !== version)) return undefined;
+  return row.id;
+}
+
+/** The session version of the workspace. A session cookie must have it. */
+export async function sessionVersion(userId: string) {
+  const row = await queryOne<{ session_version: number }>("SELECT session_version FROM users WHERE id = $1", [userId]);
+  return row?.session_version ?? 0;
+}
+
+/** Signs out all the browsers of the workspace. Returns the new version. */
+export async function bumpSessionVersion(userId: string) {
+  const row = await queryOne<{ session_version: number }>(
+    "UPDATE users SET session_version = session_version + 1 WHERE id = $1 RETURNING session_version",
+    [userId],
+  );
+  return row?.session_version ?? 0;
 }
 
 /**
@@ -113,16 +134,16 @@ export async function resolveUser(id: string | undefined) {
  * accounts and the demo flag of isDemoUser. Each page load needs all three,
  * and each query is a round trip.
  */
-export async function resolveUserAccounts(id: string | undefined) {
+export async function resolveUserAccounts(id: string | undefined, version: number) {
   if (!id) return undefined;
   const rows = await query<{ resolved_id: string; user_demo: boolean } & Partial<AccountRow>>(
     `SELECT r.id AS resolved_id, r.demo AS user_demo, a.*
      FROM users s
      JOIN users r ON r.id = COALESCE(s.merged_into, s.id)
      LEFT JOIN accounts a ON a.user_id = r.id
-     WHERE s.id = $1
+     WHERE s.id = $1 AND r.session_version = $2
      ORDER BY a.position, a.created_at`,
-    [id],
+    [id, version],
   );
   if (rows.length === 0) return undefined;
   // A user with no accounts gives one row with no account columns.
@@ -159,13 +180,51 @@ export async function findAccountOwner(provider: ProviderKind, email: string) {
  * account of each. Only a sign-in account opens its workspace in a new
  * browser. A shared mailbox, for example a team address, can be in the
  * workspace of each person who uses it.
+ *
+ * With a subject, an account matches only if it has the same subject. An
+ * account with no subject (from before subjects) is in the list with its ID,
+ * so that the caller can check its subject.
  */
-export async function findAccountWorkspaces(provider: ProviderKind, email: string) {
-  const rows = await query<{ user_id: string; can_sign_in: boolean }>(
-    "SELECT user_id, can_sign_in FROM accounts WHERE provider = $1 AND email = $2 ORDER BY created_at",
-    [provider, email.toLowerCase()],
+export async function findAccountWorkspaces(provider: ProviderKind, email: string, subject?: string) {
+  const rows = await query<{ id: string; user_id: string; can_sign_in: boolean; subject: string | null }>(
+    `SELECT id, user_id, can_sign_in, subject FROM accounts
+     WHERE provider = $1 AND email = $2 AND ($3::text IS NULL OR subject IS NULL OR subject = $3)
+     ORDER BY created_at`,
+    [provider, email.toLowerCase(), subject ?? null],
   );
-  return rows.map((row) => ({ userId: row.user_id, canSignIn: row.can_sign_in }));
+  return rows.map((row) => ({
+    accountId: row.id,
+    userId: row.user_id,
+    canSignIn: row.can_sign_in,
+    subject: row.subject,
+  }));
+}
+
+/** Gives the account its subject. See findAccountWorkspaces. */
+export async function setAccountSubject(accountId: string, subject: string) {
+  await query("UPDATE accounts SET subject = $1 WHERE id = $2", [subject, accountId]);
+}
+
+/** Gives an account by ID with no workspace check. Only for checks on the server. */
+export async function getAccountById(accountId: string): Promise<Account | undefined> {
+  const row = await queryOne<AccountRow>("SELECT * FROM accounts WHERE id = $1", [accountId]);
+  return row ? toAccount(row) : undefined;
+}
+
+/**
+ * Sets if the account opens the workspace in a browser with no session. One
+ * account must stay a sign-in account, so the last one cannot turn off.
+ * Returns false when nothing changed.
+ */
+export async function setAccountSignIn(userId: string, accountId: string, on: boolean) {
+  const rows = await query<{ id: string }>(
+    `UPDATE accounts SET can_sign_in = $3
+     WHERE user_id = $1 AND id = $2 AND provider <> 'demo'
+       AND ($3 OR EXISTS (SELECT 1 FROM accounts o WHERE o.user_id = $1 AND o.id <> $2 AND o.can_sign_in))
+     RETURNING id`,
+    [userId, accountId, on],
+  );
+  return rows.length > 0;
 }
 
 /**
@@ -179,6 +238,8 @@ export async function upsertAccount(input: {
   email: string;
   name: string;
   credentials: Credentials;
+  /** The immutable ID of the person at the provider. See findAccountWorkspaces. */
+  subject?: string;
   /** For a new account only: the account can open the workspace in a new browser. */
   canSignIn?: boolean;
 }): Promise<string> {
@@ -191,9 +252,9 @@ export async function upsertAccount(input: {
 
   if (existing) {
     await query(
-      `UPDATE accounts SET name = $1, credentials = $2, status = 'active'
+      `UPDATE accounts SET name = $1, credentials = $2, status = 'active', subject = COALESCE($4, subject)
        WHERE id = $3`,
-      [input.name, credentials, existing.id],
+      [input.name, credentials, existing.id, input.subject ?? null],
     );
     return existing.id;
   }
@@ -207,6 +268,7 @@ export async function insertAccount(input: {
   email: string;
   name: string;
   credentials: Credentials;
+  subject?: string;
   canSignIn?: boolean;
 }): Promise<string> {
   const email = input.email.toLowerCase();
@@ -217,8 +279,8 @@ export async function insertAccount(input: {
   ))!;
   const id = randomUUID();
   await query(
-    `INSERT INTO accounts (id, user_id, provider, email, name, color, credentials, position, can_sign_in)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)`,
+    `INSERT INTO accounts (id, user_id, provider, email, name, color, credentials, position, can_sign_in, subject)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)`,
     [
       id,
       input.userId,
@@ -229,6 +291,7 @@ export async function insertAccount(input: {
       credentials,
       count,
       input.canSignIn ?? false,
+      input.subject ?? null,
     ],
   );
   return id;
@@ -284,6 +347,7 @@ export async function removeCustomColor(userId: string, color: string) {
   await query("UPDATE users SET custom_colors = array_remove(custom_colors, $2) WHERE id = $1", [userId, color]);
 }
 
+/** Deletes the account. Returns false if the workspace has no account with the ID. */
 export async function deleteAccount(userId: string, accountId: string) {
   const rows = await query<{ credentials: string }>(
     "DELETE FROM accounts WHERE user_id = $1 AND id = $2 RETURNING credentials",
@@ -294,4 +358,5 @@ export async function deleteAccount(userId: string, accountId: string) {
     const credentials: unknown = JSON.parse(decrypt(row.credentials));
     if (isComposioCredentials(credentials)) await composioDisconnect(credentials);
   }
+  return rows.length > 0;
 }

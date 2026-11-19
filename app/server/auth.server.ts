@@ -3,27 +3,43 @@ import type { Session } from "react-router";
 import { redirect } from "react-router";
 import type { ProviderKind } from "~/lib/mail";
 import type { Credentials } from "./accounts.server";
+import type { OAuthCredentials } from "./accounts.server";
 import {
   createUser,
   findAccountWorkspaces,
+  getAccountById,
   isDemoUser,
   resolveUser,
   resolveUserAccounts,
+  sessionVersion,
+  setAccountSubject,
+  updateCredentials,
   upsertAccount,
 } from "./accounts.server";
 import { env } from "./env.server";
+import { isConsumerMicrosoftSubject, microsoftStoredSubject } from "./oauth/microsoft.server";
 import { closeImapConnection } from "./providers/imap.server";
 import { getSession, sessionStorage } from "./session.server";
 
+/** The workspace of the session, or undefined. A cookie from before a "sign out everywhere" gives undefined. */
+export function sessionUser(session: Session) {
+  return resolveUser(session.get("userId"), session.get("version") ?? 0);
+}
+
+/** Puts the workspace and its session version in the session. */
+export async function startSession(session: Session, userId: string) {
+  session.set("userId", userId);
+  session.set("version", await sessionVersion(userId));
+}
+
 export async function getUserId(request: Request) {
-  const session = await getSession(request);
-  return (await resolveUser(session.get("userId"))) ?? null;
+  return (await sessionUser(await getSession(request))) ?? null;
 }
 
 /** The signed-in user and the user's accounts, or null. */
 export async function getUser(request: Request) {
   const session = await getSession(request);
-  return (await resolveUserAccounts(session.get("userId"))) ?? null;
+  return (await resolveUserAccounts(session.get("userId"), session.get("version") ?? 0)) ?? null;
 }
 
 /** For resource routes that the layout middleware does not cover. */
@@ -48,17 +64,17 @@ export function requireCronSecret(request: Request) {
  */
 export async function connectAccount(
   session: Session,
-  input: { provider: ProviderKind; email: string; name: string; credentials: Credentials },
+  input: { provider: ProviderKind; email: string; name: string; credentials: Credentials; subject?: string },
   returnTo = "/mail/all/inbox",
 ) {
-  let current = await resolveUser(session.get("userId"));
+  let current = await sessionUser(session);
   // A real mailbox does not join a demo workspace, because the cron job deletes that workspace.
   if (current && input.provider !== "demo" && (await isDemoUser(current))) current = undefined;
   if (!current) {
     // A browser with no workspace. Only a sign-in account opens its workspace.
     // Other accounts can be shared mailboxes: a person who uses a team address
     // must not see the other mailboxes of a workspace that has it.
-    const workspaces = await findAccountWorkspaces(input.provider, input.email);
+    const workspaces = await sameMailboxWorkspaces(input);
     const owner = workspaces.find((w) => w.canSignIn || input.provider === "demo");
     if (owner) current = owner.userId;
     else if (workspaces.length > 0) {
@@ -76,10 +92,45 @@ export async function connectAccount(
   const accountId = await upsertAccount({ userId, ...input, canSignIn: newWorkspace });
   // Drop a pooled connection that still uses an old password.
   if (input.provider === "imap") closeImapConnection(accountId);
-  session.set("userId", userId);
+  await startSession(session, userId);
   return redirect(returnTo, {
     headers: { "Set-Cookie": await sessionStorage.commitSession(session) },
   });
+}
+
+/**
+ * The workspaces whose account is the same mailbox as the sign-in. With a
+ * subject, an account must have the same subject. An account from before
+ * subjects gets its subject here, after a check:
+ * - Google: the sign-in address is verified, so the address is enough.
+ * - Microsoft: a personal account has a verified address. For a work or school
+ *   account, the stored refresh token of the account gives its subject.
+ */
+async function sameMailboxWorkspaces(input: { provider: ProviderKind; email: string; subject?: string }) {
+  const workspaces = await findAccountWorkspaces(input.provider, input.email, input.subject);
+  const subject = input.subject;
+  if (!subject) return workspaces;
+  const checked = [];
+  for (const workspace of workspaces) {
+    if (workspace.subject === null && !(await sameLegacySubject(input.provider, subject, workspace.accountId))) continue;
+    if (workspace.subject === null) await setAccountSubject(workspace.accountId, subject);
+    checked.push(workspace);
+  }
+  return checked;
+}
+
+async function sameLegacySubject(provider: ProviderKind, subject: string, accountId: string) {
+  if (provider === "google" || isConsumerMicrosoftSubject(subject)) return true;
+  if (provider !== "microsoft") return false;
+  try {
+    const account = await getAccountById(accountId);
+    const stored = await microsoftStoredSubject(account!.credentials as OAuthCredentials);
+    await updateCredentials(accountId, stored.credentials);
+    return stored.subject === subject;
+  } catch {
+    // The stored token does not work. The account cannot prove its subject, so it does not match.
+    return false;
+  }
 }
 
 export async function redirectWithError(session: Session, to: string, error: string) {

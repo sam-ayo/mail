@@ -3,7 +3,7 @@ import { isEmail, parseAddressList } from "~/lib/mail";
 import { requireUserId } from "~/server/auth.server";
 import { deleteDraft, loadThread, saveDraft } from "~/server/mail.server";
 import { ProviderError } from "~/server/providers/types";
-import { errorMessage } from "~/server/util.server";
+import { cleanReplyContext, errorMessage } from "~/server/util.server";
 import type { Route } from "./+types/api.drafts";
 
 interface Body {
@@ -62,7 +62,7 @@ export async function action({ request }: Route.ActionArgs) {
         subject: String(body.subject ?? ""),
         html: String(body.html ?? ""),
         text: String(body.text ?? ""),
-        reply: body.reply,
+        reply: cleanReplyContext(body.reply),
         attachments: [],
       },
       draftId,

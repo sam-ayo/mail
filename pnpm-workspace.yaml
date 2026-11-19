@@ -4,3 +4,13 @@ patchedDependencies:
 allowBuilds:
   # Its install script only checks the binary. The binary comes from a platform package.
   esbuild: false
+
+# Fixed versions of dependencies of dependencies that have known vulnerabilities.
+# Remove an entry when the package that brings it in has the fixed version.
+overrides:
+  hono: ">=4.13.16"
+  body-parser: ">=2.4.0"
+  zod: ">=4.6.6"
+  ajv@8: ">=8.18.0"
+  qs: ">=6.16.1"
+  nodemailer: ">=10.1.4"

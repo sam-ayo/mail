@@ -3,7 +3,7 @@ import { CaretRight } from "~/components/icons";
 import { LegalLinks } from "~/components/legal";
 import { Logo } from "~/components/ui";
 import { isDemoUser } from "~/server/accounts.server";
-import { getUserId } from "~/server/auth.server";
+import { getUserId, startSession } from "~/server/auth.server";
 import { createDemoWorkspace, isDemoHost } from "~/server/demo-accounts.server";
 import { env } from "~/server/env.server";
 import { sessionStorage } from "~/server/session.server";
@@ -39,7 +39,7 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action() {
   // A new session, not the session of this browser: a demo never joins a real workspace.
   const session = await sessionStorage.getSession();
-  session.set("userId", await createDemoWorkspace());
+  await startSession(session, await createDemoWorkspace());
   return redirect("/mail/all/inbox", { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
 }
 

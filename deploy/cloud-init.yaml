@@ -30,7 +30,12 @@ runcmd:
   - iptables -I INPUT 5 -p tcp -m state --state NEW --dport 443 -j ACCEPT
   - iptables -I INPUT 5 -p udp --dport 443 -j ACCEPT
   - netfilter-persistent save
-  - curl -fsSL https://get.docker.com | sh
+  # Docker from its apt repository. apt checks the signature of each package.
+  - install -m 0755 -d /etc/apt/keyrings
+  - curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+  - echo "deb [arch=arm64 signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu noble stable" > /etc/apt/sources.list.d/docker.list
+  - apt-get update
+  - apt-get install -y docker-ce docker-ce-cli containerd.io docker-buildx-plugin docker-compose-plugin
   - usermod -aG docker ubuntu
   - install -d -o ubuntu -g ubuntu -m 750 /opt/mail
   - systemctl enable --now docker fail2ban

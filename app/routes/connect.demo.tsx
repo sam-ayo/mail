@@ -1,6 +1,6 @@
 import { redirect } from "react-router";
-import { listAccounts, resolveUser } from "~/server/accounts.server";
-import { connectAccount } from "~/server/auth.server";
+import { listAccounts } from "~/server/accounts.server";
+import { connectAccount, sessionUser } from "~/server/auth.server";
 import { demoAccount } from "~/server/demo-accounts.server";
 import { DEMO_PERSONAS } from "~/server/providers/demo.server";
 import { getSession } from "~/server/session.server";
@@ -12,7 +12,7 @@ export async function action({ request }: Route.ActionArgs) {
   // Development only. Production users connect real accounts.
   if (!import.meta.env.DEV) return new Response("Not found", { status: 404 });
   const session = await getSession(request);
-  const userId = await resolveUser(session.get("userId"));
+  const userId = await sessionUser(session);
   const chosen = Number((await request.formData()).get("persona"));
   // Without a choice, each demo account gets the next persona, so a second demo account has different mail.
   const persona = Number.isInteger(chosen) && chosen >= 0 && chosen < DEMO_PERSONAS.length

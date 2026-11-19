@@ -15,8 +15,17 @@ import { useTheme } from "./components/theme";
 import { themeScript } from "./lib/theme-script";
 import { ConfirmProvider } from "./components/confirm-dialog";
 import { TooltipProvider } from "./components/ui";
+import { checkSameOrigin } from "./server/csrf.server";
 import type { Route } from "./+types/root";
 import "./app.css";
+
+// Each request goes through this check. See checkSameOrigin.
+export const middleware: Route.MiddlewareFunction[] = [
+  async ({ request }, next) => {
+    checkSameOrigin(request);
+    return next();
+  },
+];
 
 export const links: Route.LinksFunction = () => [
   { rel: "preconnect", href: "https://fonts.googleapis.com" },

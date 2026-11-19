@@ -24,9 +24,12 @@ async function call<T>(path: string, init: RequestInit = {}): Promise<T> {
   return body as T;
 }
 
-/** A name with a comma or a quote must be in quotes, or Resend reads two addresses. */
+/**
+ * A name with a comma or a quote must be in quotes, or Resend reads two
+ * addresses. A line break in a name could start a new header.
+ */
 const formatAddress = (address: Address) =>
-  address.name ? `"${address.name.replace(/["\\]/g, "")}" <${address.email}>` : address.email;
+  address.name ? `"${address.name.replace(/["\\\r\n]/g, "")}" <${address.email.replace(/[\r\n]/g, "")}>` : address.email.replace(/[\r\n]/g, "");
 
 /** Sends the message and returns the Message-ID header that the recipients get. */
 export async function sendWithResend(from: Address, message: OutgoingMessage) {

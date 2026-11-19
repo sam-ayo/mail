@@ -128,3 +128,50 @@ function toNodemailer(address: Address) {
 export function errorMessage(error: unknown) {
   return error instanceof Error ? error.message : String(error);
 }
+
+/**
+ * Gives the value if it is a path on this site, else the fallback. The URL
+ * parser decides, as the browser does: the browser removes tabs and new lines,
+ * so "/\t/evil.com" goes to evil.com.
+ */
+export function safeReturnTo(value: string | null | undefined, fallback: string) {
+  if (!value || !value.startsWith("/")) return fallback;
+  const base = new URL("https://app.invalid");
+  try {
+    const url = new URL(value, base);
+    return url.origin === base.origin ? url.pathname + url.search + url.hash : fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+/**
+ * The IP address of the client. Caddy adds the address of the client at the
+ * end of X-Forwarded-For, so the last entry is the one that Caddy saw. The
+ * client can write the other entries.
+ */
+export function clientIp(request: Request) {
+  const forwarded = request.headers.get("x-forwarded-for")?.split(",").at(-1)?.trim();
+  return forwarded || "unknown";
+}
+
+/**
+ * Checks the reply data that the browser sends. The Message-ID and the
+ * References go into mail headers, so they must be single message IDs with no
+ * spaces or line breaks.
+ */
+export function cleanReplyContext(value: unknown): import("~/lib/compose").ReplyContext | undefined {
+  if (!value || typeof value !== "object") return undefined;
+  const reply = value as Record<string, unknown>;
+  if (reply.kind !== "reply" && reply.kind !== "forward") return undefined;
+  if (typeof reply.threadId !== "string" || typeof reply.messageId !== "string") return undefined;
+  const messageIdPattern = /^<[^<>\s]{1,995}>$/;
+  const isMessageId = (id: unknown): id is string => typeof id === "string" && messageIdPattern.test(id);
+  return {
+    kind: reply.kind,
+    threadId: reply.threadId,
+    messageId: reply.messageId,
+    ...(isMessageId(reply.messageIdHeader) && { messageIdHeader: reply.messageIdHeader }),
+    ...(Array.isArray(reply.references) && { references: reply.references.filter(isMessageId).slice(-50) }),
+  };
+}

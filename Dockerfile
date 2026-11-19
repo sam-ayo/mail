@@ -26,5 +26,7 @@ COPY --from=production-dependencies-env /app/node_modules /app/node_modules
 COPY --from=build-env /app/build /app/build
 WORKDIR /app
 ENV NODE_ENV=production
+# The server does not run as root. The image has the user "node", and the app writes no files.
+USER node
 # Start the server directly. "pnpm run start" makes corepack download pnpm at each start.
 CMD ["node_modules/.bin/react-router-serve", "build/server/index.js"]

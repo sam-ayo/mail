@@ -22,6 +22,7 @@ import { ProviderAuthError, ProviderError } from "./providers/types";
 import { emailDocument, hasQuotedHtml, sanitizeEmailHtml } from "./sanitize.server";
 import { aiSortingOn, categoriesFor } from "./triage.server";
 import { errorMessage, parseAddresses } from "./util.server";
+import { safeRequest } from "./safe-net.server";
 
 export function providerFor(account: Account): MailProvider {
   switch (account.provider) {
@@ -318,26 +319,25 @@ export async function unsubscribe(
 /** Sends the RFC 8058 one-click request. */
 async function postOneClick(url: string) {
   const target = new URL(url);
-  // Do not send requests to local or internal hosts, or to IP addresses.
-  const host = target.hostname.toLowerCase();
-  if (
-    target.protocol !== "https:" ||
-    host === "localhost" ||
-    /\.(localhost|local|internal)$/.test(host) ||
-    /^[\d.]+$/.test(host) ||
-    host.startsWith("[")
-  ) {
+  if (target.protocol !== "https:") throw new ProviderError("The unsubscribe address is not valid", 400);
+  // The header comes from the sender. The request connects only to public
+  // addresses, also when a name resolves to an internal address, and does not
+  // follow redirects.
+  let status: number;
+  try {
+    const response = await safeRequest(target, {
+      method: "POST",
+      headers: { "Content-Type": "application/x-www-form-urlencoded" },
+      body: "List-Unsubscribe=One-Click",
+      signal: AbortSignal.timeout(10_000),
+    });
+    response.resume();
+    status = response.statusCode ?? 0;
+  } catch {
     throw new ProviderError("The unsubscribe address is not valid", 400);
   }
-  const response = await fetch(target, {
-    method: "POST",
-    headers: { "Content-Type": "application/x-www-form-urlencoded" },
-    body: "List-Unsubscribe=One-Click",
-    redirect: "manual",
-    signal: AbortSignal.timeout(10_000),
-  });
-  if (response.status >= 400) {
-    throw new ProviderError(`The sender rejected the request (HTTP ${response.status})`, 502);
+  if (status >= 400) {
+    throw new ProviderError(`The sender rejected the request (HTTP ${status})`, 502);
   }
 }
 

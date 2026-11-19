@@ -11,12 +11,35 @@ export async function loader({ request }: Route.LoaderArgs) {
   return Response.json({ publicKey: pushConfigured ? env.push.publicKey : null });
 }
 
+/**
+ * The push services of the browsers. The server sends a POST to the endpoint,
+ * so an endpoint on another host could make the server call any address.
+ */
+const PUSH_HOSTS = [
+  /^fcm\.googleapis\.com$/,
+  /^android\.googleapis\.com$/,
+  /^updates\.push\.services\.mozilla\.com$/,
+  /^web\.push\.apple\.com$/,
+  /^[a-z0-9-]+\.push\.apple\.com$/,
+  /^[a-z0-9-]+\.notify\.windows\.com$/,
+];
+
+function isPushEndpoint(value: unknown): value is string {
+  if (typeof value !== "string" || value.length > 1024) return false;
+  try {
+    const url = new URL(value);
+    return url.protocol === "https:" && !url.port && PUSH_HOSTS.some((host) => host.test(url.hostname));
+  } catch {
+    return false;
+  }
+}
+
 /** POST saves the subscription of this device. DELETE removes it. */
 export async function action({ request }: Route.ActionArgs) {
   const userId = await requireUserId(request);
   const body = (await request.json().catch(() => null)) as Partial<PushSubscriptionInput> | null;
   const endpoint = body?.endpoint;
-  if (typeof endpoint !== "string" || !endpoint.startsWith("https://")) {
+  if (!isPushEndpoint(endpoint)) {
     throw data("Invalid subscription", { status: 400 });
   }
   if (request.method === "DELETE") {

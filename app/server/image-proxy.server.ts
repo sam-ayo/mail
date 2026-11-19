@@ -1,9 +1,8 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
-import { lookup as dnsLookup, type LookupAddress, type LookupOptions } from "node:dns";
 import http, { type IncomingMessage } from "node:http";
 import https from "node:https";
-import { BlockList, isIP } from "node:net";
 import { env } from "./env.server";
+import { isUnsafeUrl, safeLookup } from "./safe-net.server";
 
 // The server fetches the remote images in emails, so senders do not get the
 // reader's IP address. Vercel limits a function response to 4.5 MB, so the
@@ -19,59 +18,6 @@ const IMAGE_TYPE = /^image\/[a-z0-9.+-]+$/;
 // Some image servers send no type, or a generic binary type. Then the proxy
 // finds the type from the first bytes of the file, as browsers do.
 const GENERIC_TYPE = /^$|^(application|binary)\/octet-stream$/;
-
-// Addresses in private networks, the server itself, and cloud metadata
-// services. An email must not make the server fetch from these.
-const blocked = new BlockList();
-for (const [address, prefix] of [
-  ["0.0.0.0", 8],
-  ["10.0.0.0", 8],
-  ["100.64.0.0", 10],
-  ["127.0.0.0", 8],
-  ["169.254.0.0", 16],
-  ["172.16.0.0", 12],
-  ["192.0.0.0", 24],
-  ["192.168.0.0", 16],
-  ["198.18.0.0", 15],
-  ["224.0.0.0", 4],
-  ["240.0.0.0", 4],
-] as const) {
-  blocked.addSubnet(address, prefix, "ipv4");
-}
-for (const [address, prefix] of [
-  ["::", 128],
-  ["::1", 128],
-  // BlockList applies the IPv4 rules to IPv4-mapped addresses (::ffff:10.0.0.1).
-  // A rule for ::ffff:0:0/96 here would block all IPv4 addresses.
-  ["64:ff9b::", 96],
-  ["fc00::", 7],
-  ["fe80::", 10],
-  ["ff00::", 8],
-] as const) {
-  blocked.addSubnet(address, prefix, "ipv6");
-}
-
-function isBlocked(address: string) {
-  return blocked.check(address, isIP(address) === 6 ? "ipv6" : "ipv4");
-}
-
-type LookupCallback = (
-  error: NodeJS.ErrnoException | null,
-  address: string | LookupAddress[],
-  family?: number,
-) => void;
-
-// The check runs on each connection, after DNS. A host that gives a public
-// address to a first lookup and a private address later is still blocked.
-function safeLookup(hostname: string, options: LookupOptions, callback: LookupCallback) {
-  dnsLookup(hostname, { ...options, all: true }, (error, addresses) => {
-    if (error) return callback(error, "");
-    const allowed = addresses.filter((entry) => !isBlocked(entry.address));
-    if (allowed.length === 0) return callback(new Error(`Blocked address for ${hostname}`), "");
-    if (options.all) callback(null, allowed);
-    else callback(null, allowed[0].address, allowed[0].family);
-  });
-}
 
 // The sanitizer signs each proxy URL. Then the proxy needs no session, and
 // the CDN can keep its responses for all users. Only the URLs in emails get
@@ -124,11 +70,7 @@ export async function fetchRemoteImage(raw: string) {
   }
 
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-    if (url.protocol !== "https:" && url.protocol !== "http:") return null;
-    if (url.username || url.password) return null;
-    // A literal IP address skips the DNS lookup, so check it here.
-    const host = url.hostname.replace(/^\[|\]$/g, "");
-    if (isIP(host) && isBlocked(host)) return null;
+    if (isUnsafeUrl(url)) return null;
 
     const response = await get(url, signal);
     const status = response.statusCode ?? 0;

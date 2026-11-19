@@ -34,7 +34,8 @@ export async function listAgentConnections(workspaceId: string): Promise<AgentCo
   return rows.map((row) => ({
     clientId: row.clientId,
     name: row.name || "AI agent",
-    site: hostOf(row.uri) ?? hostOf(row.clientId),
+    // Only a client with a URL as its ID proves its site. Any client can give itself a URI.
+    site: row.clientId.startsWith("https://") ? hostOf(row.clientId) : undefined,
     scopes: row.scopes.filter(isMailScope),
     connectedAt: new Date(row.createdAt).toISOString(),
   }));
@@ -50,6 +51,15 @@ export async function disconnectAgent(workspaceId: string, clientId: string) {
     `UPDATE "oauthRefreshToken" SET revoked = now()
      WHERE "clientId" = $2 AND revoked IS NULL AND "userId" IN (${WORKSPACE_USERS})`,
     [workspaceId, clientId],
+  );
+}
+
+/** Disconnects all the agents of the workspace. */
+export async function disconnectAllAgents(workspaceId: string) {
+  await query(`DELETE FROM "oauthConsent" WHERE "userId" IN (${WORKSPACE_USERS})`, [workspaceId]);
+  await query(
+    `UPDATE "oauthRefreshToken" SET revoked = now() WHERE revoked IS NULL AND "userId" IN (${WORKSPACE_USERS})`,
+    [workspaceId],
   );
 }
 

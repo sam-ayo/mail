@@ -3,6 +3,8 @@ import { env } from "./env.server";
 
 type SessionData = {
   userId: string;
+  /** The session version of the workspace when the browser signed in. See users.session_version. */
+  version: number;
 };
 
 type SessionFlashData = {

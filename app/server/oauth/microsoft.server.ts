@@ -36,6 +36,7 @@ export function microsoftAuthorizeUrl(state: string, codeChallenge: string, logi
 interface TokenResponse {
   access_token: string;
   refresh_token?: string;
+  id_token?: string;
   expires_in: number;
   error?: string;
   error_description?: string;
@@ -72,6 +73,7 @@ export async function microsoftExchangeCode(code: string, codeVerifier: string) 
   if (!tokens.refresh_token) {
     throw new Error("Microsoft did not return a refresh token. Try to connect the account again.");
   }
+  const subject = microsoftSubject(tokens.id_token);
   const profileResponse = await fetch(
     "https://graph.microsoft.com/v1.0/me?$select=displayName,mail,userPrincipalName",
     { headers: { Authorization: `Bearer ${tokens.access_token}` } },
@@ -90,7 +92,43 @@ export async function microsoftExchangeCode(code: string, codeVerifier: string) 
     email: profile.mail || profile.userPrincipalName,
     name: profile.displayName ?? "",
     credentials,
+    subject,
   };
+}
+
+/** The tenant of personal Microsoft accounts (outlook.com, hotmail.com, live.com). */
+const CONSUMER_TENANT = "9188040d-6c67-4c5b-b112-36a304b66dad";
+
+/**
+ * The immutable ID of the person: "tid:oid" from the ID token. The token
+ * comes straight from the token endpoint over TLS, so the app does not check
+ * its signature. Do not identify a Microsoft account by its email address: a
+ * tenant administrator can set the mail attribute of a user to any address.
+ */
+export function microsoftSubject(idToken: string | undefined) {
+  const [, payload] = (idToken ?? "").split(".");
+  const claims = payload ? (JSON.parse(Buffer.from(payload, "base64url").toString()) as { tid?: string; oid?: string }) : {};
+  if (!claims.tid || !claims.oid) throw new Error("Microsoft did not identify the account. Try again.");
+  return `${claims.tid}:${claims.oid}`;
+}
+
+/**
+ * The subject of an account from before subjects, from a refresh with its own
+ * stored refresh token. Only the real owner of the mailbox gave that token.
+ */
+export async function microsoftStoredSubject(credentials: OAuthCredentials) {
+  const tokens = await tokenRequest({ grant_type: "refresh_token", refresh_token: credentials.refreshToken });
+  const next: OAuthCredentials = {
+    accessToken: tokens.access_token,
+    refreshToken: tokens.refresh_token ?? credentials.refreshToken,
+    expiresAt: Date.now() + tokens.expires_in * 1000,
+  };
+  return { subject: microsoftSubject(tokens.id_token), credentials: next };
+}
+
+/** True for a personal Microsoft account. Microsoft verifies the address of these accounts. */
+export function isConsumerMicrosoftSubject(subject: string) {
+  return subject.startsWith(`${CONSUMER_TENANT}:`);
 }
 
 export async function microsoftRefresh(credentials: OAuthCredentials): Promise<OAuthCredentials> {

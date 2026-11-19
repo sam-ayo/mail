@@ -9,6 +9,12 @@ x-app: &app
   restart: unless-stopped
   # Node as PID 1 does not stop on SIGTERM. The init process passes the signal.
   init: true
+  # The app writes no files and needs no Linux capabilities. Code that runs
+  # through a bug in the app cannot change the image or get new privileges.
+  read_only: true
+  tmpfs: [/tmp]
+  cap_drop: [ALL]
+  security_opt: ["no-new-privileges:true"]
   env_file: app.env
   environment:
     APP_URL: https://mail.samayo.me

@@ -13,6 +13,8 @@ export interface AccountSummary {
   status: AccountStatus;
   /** The provider that the app shows. A demo account can look like a Gmail or a custom domain account. */
   look?: ProviderKind;
+  /** The account opens the workspace in a browser with no session. A shared mailbox must not. */
+  canSignIn?: boolean;
 }
 
 /** The provider to show for an account. */

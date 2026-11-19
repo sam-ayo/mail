@@ -1,7 +1,7 @@
 import { Autocomplete } from "@base-ui/react/autocomplete";
 import { useEffect, useMemo, useRef, useState } from "react";
 import { ArrowLeft, Bell, BellSlash, CaretLeft, CaretRight, Check, Copy, Desktop, Moon, Plus, SignOut, Sun, Trash, Warning, X } from "~/components/icons";
-import { data, Form, Link, useFetcher, useFetchers, useSubmit } from "react-router";
+import { data, Form, Link, redirect, useFetcher, useFetchers, useSubmit } from "react-router";
 import { toast } from "sonner";
 import { removeAccountPrompt, useConfirm } from "~/components/confirm-dialog";
 import { reconnectUrl } from "~/components/sidebar";
@@ -11,15 +11,24 @@ import { AccountIcon, Avatar, Button, IconButton, PROVIDER_NAMES, cx, inputClass
 import { ACCOUNT_COLORS, PREFETCH_PARAM, shownProvider, suggestImportantSenders, type AccountSummary, type KnownSender } from "~/lib/mail";
 import {
   addCustomColor,
+  bumpSessionVersion,
   deleteAccount,
   listAccounts,
   listCustomColors,
   removeCustomColor,
+  setAccountSignIn,
   toSummary,
   updateAccountProfile,
 } from "~/server/accounts.server";
+import { getSession, sessionStorage } from "~/server/session.server";
 import type { MailScope } from "~/lib/agents";
-import { disconnectAgent, listAgentConnections, MCP_RESOURCE, type AgentConnection } from "~/server/agent-connections.server";
+import {
+  disconnectAgent,
+  disconnectAllAgents,
+  listAgentConnections,
+  MCP_RESOURCE,
+  type AgentConnection,
+} from "~/server/agent-connections.server";
 import { userContext } from "~/server/context";
 import { closeImapConnection } from "~/server/providers/imap.server";
 import { resetDemoAccount } from "~/server/providers/demo.server";
@@ -83,10 +92,23 @@ export async function action({ request, context }: Route.ActionArgs) {
       return { removedColor: color };
     }
     case "remove":
-      await deleteAccount(user.id, accountId);
-      closeImapConnection(accountId);
-      resetDemoAccount(accountId);
+      // Only an account of this workspace. Another ID must not touch the connections of another workspace.
+      if (await deleteAccount(user.id, accountId)) {
+        closeImapConnection(accountId);
+        resetDemoAccount(accountId);
+      }
       return { removed: accountId };
+    case "signIn": {
+      const changed = await setAccountSignIn(user.id, accountId, form.get("on") === "true");
+      return changed ? { signIn: accountId } : { signInError: "One account must open the workspace." };
+    }
+    case "signOutEverywhere": {
+      // A new session version makes all the session cookies of the workspace invalid, also this one.
+      await bumpSessionVersion(user.id);
+      if (form.get("agents") === "true") await disconnectAllAgents(user.id);
+      const session = await getSession(request);
+      return redirect("/welcome", { headers: { "Set-Cookie": await sessionStorage.destroySession(session) } });
+    }
     case "disconnectAgent":
       await disconnectAgent(user.id, String(form.get("clientId") ?? ""));
       return { disconnected: true };
@@ -156,11 +178,14 @@ export default function Settings({ loaderData }: Route.ComponentProps) {
 
         <section className="mt-10">
           <h2 className="mb-3 font-semibold">Session</h2>
-          <Form method="post" action="/logout">
-            <Button>
-              <SignOut className="size-4" /> Sign out
-            </Button>
-          </Form>
+          <div className="flex flex-wrap gap-2">
+            <Form method="post" action="/logout">
+              <Button>
+                <SignOut className="size-4" /> Sign out
+              </Button>
+            </Form>
+            <SignOutEverywhere />
+          </div>
         </section>
       </div>
     </div>
@@ -472,6 +497,8 @@ function AccountDetail({
         </div>
       </fieldset>
 
+      {account.provider !== "demo" && <SignInToggle account={account} />}
+
       <div className="flex items-center justify-between gap-3 border-t border-zinc-200 pt-4 dark:border-zinc-800">
         <remover.Form method="post">
           <input type="hidden" name="accountId" value={account.id} />
@@ -782,6 +809,60 @@ function AgentRow({ agent }: { agent: AgentConnection }) {
         Disconnect
       </Button>
     </li>
+  );
+}
+
+/**
+ * A sign-in account opens the whole workspace in a new browser. A shared
+ * mailbox, for example a team address, must not: each person who knows its
+ * password would see all the mailboxes.
+ */
+function SignInToggle({ account }: { account: AccountSummary }) {
+  const fetcher = useFetcher<typeof action>();
+  const on = fetcher.formData ? fetcher.formData.get("on") === "true" : !!account.canSignIn;
+  useEffect(() => {
+    if (fetcher.data && "signInError" in fetcher.data) toast.error(fetcher.data.signInError);
+  }, [fetcher.data]);
+  return (
+    <label className="flex cursor-pointer items-start gap-3 text-sm">
+      <input
+        type="checkbox"
+        checked={on}
+        disabled={fetcher.state !== "idle"}
+        onChange={(event) =>
+          fetcher.submit(
+            { intent: "signIn", accountId: account.id, on: String(event.target.checked) },
+            { method: "post" },
+          )
+        }
+        className="mt-0.5 size-4 accent-accent-600"
+      />
+      <span>
+        <span className="font-medium">Sign in to this workspace with this account</span>
+        <span className="block text-zinc-500">Turn this off for a shared mailbox.</span>
+      </span>
+    </label>
+  );
+}
+
+/** Signs out all the browsers of the workspace, for example after the loss of a phone. */
+function SignOutEverywhere() {
+  const confirm = useConfirm();
+  const submit = useSubmit();
+  return (
+    <Button
+      onClick={async () => {
+        const yes = await confirm({
+          title: "Sign out of all browsers?",
+          description: "All browsers, also this one, must sign in again. The AI agents also disconnect.",
+          confirmLabel: "Sign out everywhere",
+          danger: true,
+        });
+        if (yes) submit({ intent: "signOutEverywhere", agents: "true" }, { method: "post" });
+      }}
+    >
+      <SignOut className="size-4" /> Sign out of all browsers
+    </Button>
   );
 }
 

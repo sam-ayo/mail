@@ -1,3 +1,4 @@
+import { deleteExpiredRateLimits } from "./rate-limit.server";
 import { deleteExpiredDemoUsers } from "./accounts.server";
 import { randomToken } from "./crypto.server";
 import { query } from "./db.server";
@@ -11,7 +12,10 @@ const jobs = {
   "expire-cache": {
     seconds: 24 * 60 * 60,
     leaseSeconds: 5 * 60,
-    run: async () => ({ deleted: await deleteExpiredSummaries(), demoWorkspaces: await deleteExpiredDemoUsers() }),
+    run: async () => {
+      await deleteExpiredRateLimits();
+      return { deleted: await deleteExpiredSummaries(), demoWorkspaces: await deleteExpiredDemoUsers() };
+    },
   },
 };
 

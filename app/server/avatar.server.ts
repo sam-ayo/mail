@@ -1,8 +1,8 @@
 import { createHash } from "node:crypto";
-import { lookup, resolveTxt } from "node:dns/promises";
-import { isIP } from "node:net";
+import { resolveTxt } from "node:dns/promises";
 import { getDomain, getPublicSuffix } from "tldts";
 import { DEMO_COMPANY } from "~/lib/demo-company";
+import { safeFetchResponse } from "./safe-net.server";
 
 export interface AvatarImage {
   data: Uint8Array<ArrayBuffer>;
@@ -48,20 +48,6 @@ const GOVERNMENT_SITES: Record<string, string> = {
   "gov": "usa.gov",
 };
 
-function isPrivateAddress(address: string) {
-  if (isIP(address) === 6) {
-    const lower = address.toLowerCase();
-    if (lower.startsWith("::ffff:")) return isPrivateAddress(lower.slice(7));
-    return lower === "::1" || lower === "::" || /^f[cd]|^fe[89ab]/.test(lower);
-  }
-  const [a, b] = address.split(".").map(Number);
-  return (
-    a === 0 || a === 10 || a === 127 || (a === 169 && b === 254) ||
-    (a === 172 && b! >= 16 && b! <= 31) || (a === 192 && b === 168) ||
-    (a === 100 && b! >= 64 && b! <= 127) || a! >= 224
-  );
-}
-
 /**
  * Reads the body, and stops when it is larger than `limit`. With `truncate`,
  * gives the first `limit` bytes. Without it, gives null.
@@ -103,13 +89,10 @@ async function safeFetch(url: string, accept: string, limit: number, truncate = 
     let current = new URL(url);
     for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
       if (current.protocol !== "https:") return null;
-      const addresses = await lookup(current.hostname, { all: true });
-      if (addresses.some(({ address }) => isPrivateAddress(address))) return null;
-
-      const response = await fetch(current, {
-        redirect: "manual",
+      // The address check runs on the connection itself, so DNS rebinding cannot skip it.
+      const response = await safeFetchResponse(current, {
         signal: AbortSignal.timeout(TIMEOUT_MS),
-        headers: { Accept: accept, "User-Agent": USER_AGENT },
+        headers: { Accept: accept, "User-Agent": USER_AGENT, "Accept-Encoding": "identity" },
       });
       const location = response.headers.get("location");
       if (response.status >= 300 && response.status < 400 && location) {

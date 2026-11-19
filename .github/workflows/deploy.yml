@@ -38,15 +38,15 @@ jobs:
       contents: read
       packages: write
     steps:
-      - uses: actions/checkout@v7
-      - uses: docker/setup-buildx-action@v3
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
       - if: github.event_name != 'pull_request'
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
-      - uses: docker/build-push-action@v6
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           platforms: linux/arm64
@@ -65,12 +65,16 @@ jobs:
     env:
       HOST: ubuntu@${{ vars.DEPLOY_HOST }}
     steps:
-      - uses: actions/checkout@v7
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
       - name: Set up SSH
+        # The secrets go in through env, not into the script text.
+        env:
+          SSH_KEY: ${{ secrets.DEPLOY_SSH_KEY }}
+          KNOWN_HOSTS: ${{ secrets.DEPLOY_KNOWN_HOSTS }}
         run: |
           install -m 700 -d ~/.ssh
-          echo "${{ secrets.DEPLOY_SSH_KEY }}" > ~/.ssh/id_ed25519
-          echo "${{ secrets.DEPLOY_KNOWN_HOSTS }}" > ~/.ssh/known_hosts
+          printf '%s\n' "$SSH_KEY" > ~/.ssh/id_ed25519
+          printf '%s\n' "$KNOWN_HOSTS" > ~/.ssh/known_hosts
           chmod 600 ~/.ssh/id_ed25519
       - name: Copy the Compose file and the Caddyfile
         run: scp deploy/compose.yaml deploy/Caddyfile "$HOST:/opt/mail/"
@@ -78,11 +82,17 @@ jobs:
         # The job token pulls the image. It ends with the job, so no registry token stays on the VM.
         # The script replaces app-a, waits until it is healthy, and then does the same for app-b.
         # Caddy sends requests to the other container meanwhile, so the site does not stop.
+        # A failed pull still removes the registry login, because of the trap.
+        env:
+          REGISTRY_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REGISTRY_USER: ${{ github.actor }}
+          IMAGE_TAG: ${{ github.sha }}
         run: |
-          echo "${{ secrets.GITHUB_TOKEN }}" | ssh "$HOST" docker login ghcr.io -u "${{ github.actor }}" --password-stdin
+          printf '%s' "$REGISTRY_TOKEN" | ssh "$HOST" docker login ghcr.io -u "$REGISTRY_USER" --password-stdin
           ssh "$HOST" "set -e
+            trap 'docker logout ghcr.io > /dev/null' EXIT
             cd /opt/mail
-            echo IMAGE_TAG=${{ github.sha }} > .env
+            echo IMAGE_TAG=$IMAGE_TAG > .env
             docker compose pull --quiet app-a app-b
             docker logout ghcr.io
             for service in app-a app-b; do

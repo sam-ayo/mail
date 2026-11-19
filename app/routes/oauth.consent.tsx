@@ -50,11 +50,20 @@ export async function loader({ request }: Route.LoaderArgs) {
       return undefined;
     }
   };
+  // A client with a URL as its ID (a Client ID Metadata Document) publishes
+  // its name at that URL, so its host identifies it. Anyone can register a
+  // client with RFC 7591 and give it any name, URL and logo, so the page marks
+  // it as unverified and shows no logo.
+  const verifiedSite = clientId.startsWith("https://") ? host(clientId) : undefined;
+  const name = client.client_name?.trim().slice(0, 60) || "An AI agent";
   return {
     client: {
-      name: client.client_name || host(client.client_uri) || "An AI agent",
-      site: host(client.client_uri) ?? host(client.client_id),
-      logo: client.logo_uri?.startsWith("https://") ? client.logo_uri : undefined,
+      name: verifiedSite ? name : `“${name}”`,
+      site: verifiedSite,
+      verified: !!verifiedSite,
+      logo: verifiedSite && client.logo_uri?.startsWith("https://") ? client.logo_uri : undefined,
+      // The access goes to this address. A fake client must show its own host here.
+      redirectHost: host(url.searchParams.get("redirect_uri") ?? undefined) ?? "an unknown address",
     },
     scopes: scopes.map((scope) => MAIL_SCOPES[scope]),
     offline: url.searchParams.get("scope")?.split(" ").includes("offline_access") ?? false,
@@ -102,6 +111,15 @@ export default function OAuthConsent({ loaderData }: Route.ComponentProps) {
         </div>
         <h1 className="mt-6 text-2xl font-semibold tracking-tight">Allow {client.name} to use your email?</h1>
         {client.site && <p className="mt-1 text-sm text-zinc-500">{client.site}</p>}
+        {!client.verified && (
+          <p className="mt-1 text-sm text-zinc-500">
+            Unverified app. The app gave this name itself, so it can be any app.
+          </p>
+        )}
+        <p className="mt-3 text-sm">
+          The access goes to <span className="font-medium">{client.redirectHost}</span>. Allow only if you started the
+          connection there.
+        </p>
 
         <p className="mt-5 text-sm font-medium">The agent can:</p>
         <ul className="mt-2 list-disc space-y-1 pl-5 text-sm text-zinc-600 dark:text-zinc-300">

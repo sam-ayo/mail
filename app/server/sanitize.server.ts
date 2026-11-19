@@ -77,10 +77,23 @@ function unescapeCss(value: string) {
 function proxyCssUrls(css: string) {
   return css.replace(CSS_URL, (match, double?: string, single?: string, bare?: string) => {
     const url = unescapeCss(double ?? single ?? bare ?? "");
-    const proxied = proxiedImageUrl(url);
+    const safe = emailImageUrl(url);
     // A proxy URL has no double quote, backslash, or line break, so it needs no escape here.
-    return proxied === url ? match : `url("${proxied}")`;
+    return safe === url ? match : `url("${safe}")`;
   });
+}
+
+/**
+ * The URL of an image in an email: a remote URL goes through the proxy, and a
+ * data: image stays. Other URLs go. A relative URL would load from this app
+ * with the session cookie of the reader, so the sender could make a request
+ * to the app when the reader opens the email.
+ */
+function emailImageUrl(src: string) {
+  const url = src.trim();
+  if (/^(https?:)?\/\//i.test(url)) return proxiedImageUrl(url);
+  if (/^data:image\//i.test(url)) return url;
+  return "";
 }
 
 // sanitize-html gives the text of a <style> tag as it is, with no filter.
@@ -92,17 +105,30 @@ interface Options {
   resolveCid: (contentId: string) => string | undefined;
 }
 
+/** The size in pixels from the attribute or from the style, or undefined. */
+function imageSize(attribs: Record<string, string>, name: "width" | "height") {
+  const fromStyle = attribs.style?.match(new RegExp(`(?:^|;)\\s*${name}\\s*:\\s*(\\d+(?:\\.\\d+)?)(px)?\\s*(?:!important)?\\s*(?:;|$)`, "i"));
+  const value = fromStyle ? Number(fromStyle[1]) : attribs[name] !== undefined ? Number(attribs[name]) : NaN;
+  return Number.isNaN(value) ? undefined : value;
+}
+
+/**
+ * An image that the reader cannot see tells the sender when the email opens.
+ * The size can be in the attributes or in the style.
+ */
 function isTrackingPixel(attribs: Record<string, string>) {
-  const width = Number(attribs.width);
-  const height = Number(attribs.height);
-  return width <= 1 && height <= 1 && !Number.isNaN(width) && !Number.isNaN(height);
+  const width = imageSize(attribs, "width");
+  const height = imageSize(attribs, "height");
+  if (width === 0 || height === 0) return true;
+  if (/(?:^|;)\s*display\s*:\s*none/i.test(attribs.style ?? "")) return true;
+  return width !== undefined && height !== undefined && width <= 1 && height <= 1;
 }
 
 /** Proxies the remote URLs in the style and background of each element. */
 function proxyAttributeUrls(tagName: string, attribs: Record<string, string>) {
   const next = { ...attribs };
   if (next.style) next.style = proxyCssUrls(next.style);
-  if (next.background) next.background = proxiedImageUrl(next.background);
+  if (next.background) next.background = emailImageUrl(next.background);
   return { tagName, attribs: next };
 }
 
@@ -176,7 +202,7 @@ export function sanitizeEmailHtml(html: string, { resolveCid }: Options) {
           const url = resolveCid(attribs.src.slice(4));
           return { tagName, attribs: { ...attribs, src: url ?? "" } };
         }
-        return { tagName, attribs: attribs.src ? { ...attribs, src: proxiedImageUrl(attribs.src) } : attribs };
+        return { tagName, attribs: attribs.src ? { ...attribs, src: emailImageUrl(attribs.src) } : attribs };
       },
       "*": proxyAttributeUrls,
     },

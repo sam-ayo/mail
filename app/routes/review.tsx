@@ -1,9 +1,11 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import { data, Form, redirect } from "react-router";
 import { Logo, inputClass } from "~/components/ui";
-import { redirectWithError } from "~/server/auth.server";
+import { redirectWithError, startSession } from "~/server/auth.server";
 import { createDemoWorkspace } from "~/server/demo-accounts.server";
 import { env } from "~/server/env.server";
+import { rateLimit } from "~/server/rate-limit.server";
+import { clientIp, safeReturnTo } from "~/server/util.server";
 import { getSession, sessionStorage } from "~/server/session.server";
 import type { Route } from "./+types/review";
 
@@ -18,17 +20,13 @@ export const meta: Route.MetaFunction = () => [
   { name: "robots", content: "noindex" },
 ];
 
-/** Only a path on this site, so that the sign-in cannot send the browser to another site. */
-function safeReturnTo(value: string | null) {
-  return value && value.startsWith("/") && !value.startsWith("//") && !value.startsWith("/\\") ? value : "/mail";
-}
 
 export async function loader({ request }: Route.LoaderArgs) {
   if (!env.reviewPassword) throw new Response("Not found", { status: 404 });
   const session = await getSession(request);
   const error = session.get("error");
   return data(
-    { error, returnTo: safeReturnTo(new URL(request.url).searchParams.get("returnTo")) },
+    { error, returnTo: safeReturnTo(new URL(request.url).searchParams.get("returnTo"), "/mail") },
     { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } },
   );
 }
@@ -36,7 +34,11 @@ export async function loader({ request }: Route.LoaderArgs) {
 export async function action({ request }: Route.ActionArgs) {
   if (!env.reviewPassword) throw new Response("Not found", { status: 404 });
   const form = await request.formData();
-  const returnTo = safeReturnTo(String(form.get("returnTo") ?? ""));
+  const returnTo = safeReturnTo(String(form.get("returnTo") ?? ""), "/mail");
+  if (!(await rateLimit(`review-ip:${clientIp(request)}`, 10, 15 * 60))) {
+    const session = await getSession(request);
+    return redirectWithError(session, `/review?returnTo=${encodeURIComponent(returnTo)}`, "Too many attempts. Try again in 15 minutes.");
+  }
   const digest = (value: string) => createHash("sha256").update(value).digest();
   if (!timingSafeEqual(digest(String(form.get("password") ?? "")), digest(env.reviewPassword))) {
     const session = await getSession(request);
@@ -46,7 +48,7 @@ export async function action({ request }: Route.ActionArgs) {
   // A new session, not the session of this browser: connectAccount would join
   // a signed-in workspace to the review workspace.
   const session = await sessionStorage.getSession();
-  session.set("userId", await createDemoWorkspace());
+  await startSession(session, await createDemoWorkspace());
   return redirect(returnTo, { headers: { "Set-Cookie": await sessionStorage.commitSession(session) } });
 }
 

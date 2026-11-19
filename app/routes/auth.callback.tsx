@@ -4,7 +4,7 @@ import { composioFinishGmail } from "~/server/oauth/composio.server";
 import { googleExchangeCode } from "~/server/oauth/google.server";
 import { microsoftExchangeCode } from "~/server/oauth/microsoft.server";
 import { getSession } from "~/server/session.server";
-import { errorMessage } from "~/server/util.server";
+import { errorMessage, safeReturnTo } from "~/server/util.server";
 import type { Route } from "./+types/auth.callback";
 
 export async function loader({ request, params }: Route.LoaderArgs) {
@@ -16,10 +16,8 @@ export async function loader({ request, params }: Route.LoaderArgs) {
   const session = await getSession(request);
   const expectedState = session.get("oauthState");
   const verifier = session.get("oauthVerifier");
-  const returnTo = session.get("oauthReturnTo") ?? "/mail/all/inbox";
   const url = new URL(request.url);
-  // Allow only paths in this app. "//host" and "/\\host" go to other sites.
-  const safeReturnTo = /^\/(?![/\\])/.test(returnTo) ? returnTo : "/mail/all/inbox";
+  const returnTo = safeReturnTo(session.get("oauthReturnTo"), "/mail/all/inbox");
 
   // Composio sends the user back with status and connected_account_id. The
   // ID must be the one that this browser started, because anyone can type
@@ -36,7 +34,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
     }
     try {
       const profile = await composioFinishGmail({ composioAccountId, composioUserId });
-      return connectAccount(session, { provider, ...profile }, safeReturnTo);
+      return connectAccount(session, { provider, ...profile }, returnTo);
     } catch (error) {
       return redirectWithError(session, "/welcome", errorMessage(error));
     }
@@ -63,7 +61,7 @@ export async function loader({ request, params }: Route.LoaderArgs) {
       provider === "google"
         ? await googleExchangeCode(code, verifier)
         : await microsoftExchangeCode(code, verifier);
-    return connectAccount(session, { provider, ...profile }, safeReturnTo);
+    return connectAccount(session, { provider, ...profile }, returnTo);
   } catch (error) {
     return redirectWithError(session, "/welcome", errorMessage(error));
   }
