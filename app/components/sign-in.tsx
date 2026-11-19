@@ -4,12 +4,25 @@ import { LegalLinks } from "~/components/legal";
 import { GoogleIcon, Logo, MicrosoftIcon, cx, inputClass } from "~/components/ui";
 
 /** The card layout of the sign-in screen and the "add account" screen. */
-export function SignInCard({ top, children }: { top?: React.ReactNode; children: React.ReactNode }) {
+export function SignInCard({
+  top,
+  banner,
+  children,
+}: {
+  top?: React.ReactNode;
+  banner?: React.ReactNode;
+  children: React.ReactNode;
+}) {
   return (
     <main className="flex min-h-full items-center justify-center bg-gradient-to-b from-accent-50/60 to-white p-6 pt-[calc(1.5rem+env(safe-area-inset-top))] dark:from-zinc-900 dark:to-zinc-950">
       <div className="w-full max-w-md">
         {top}
         <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-xl shadow-zinc-900/5 dark:border-zinc-800 dark:bg-zinc-900">
+          {banner && (
+            <p className="mb-6 rounded-lg border border-red-200 bg-red-50 px-3 py-2 text-sm text-red-700 dark:border-red-900 dark:bg-red-950/50 dark:text-red-300">
+              {banner}
+            </p>
+          )}
           <Logo className="text-lg" />
           {children}
         </div>

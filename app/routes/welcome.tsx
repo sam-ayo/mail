@@ -32,11 +32,15 @@ export default function Welcome({ loaderData }: Route.ComponentProps) {
   const lastOAuth =
     last?.provider === "google" || last?.provider === "microsoft" ? { ...last, provider: last.provider } : undefined;
   return (
-    <SignInCard>
+    <SignInCard
+      banner={
+        <>
+          Log in with your own email address, not a shared address. After you log in, you can add shared mailboxes,
+          such as support@yourcompany.com.
+        </>
+      }
+    >
       <h1 className="mt-6 text-2xl font-semibold tracking-tight">Log in to mail</h1>
-      <p className="mt-2 text-sm text-zinc-500">
-        Log in with your own account. After you log in, you can add more accounts, such as a team address.
-      </p>
 
       <ErrorNote error={error} />
 
