@@ -71,7 +71,7 @@ import {
 import { waitUntil } from "@vercel/functions";
 import { userContext } from "~/server/context";
 import { listThreads } from "~/server/mail.server";
-import { sortListed, withCategories } from "~/server/triage.server";
+import { isThreadCategory, sortListed, withCategories } from "~/server/triage.server";
 import type { Route } from "./+types/mail.list";
 
 export function loader({ params, request, context }: Route.LoaderArgs) {
@@ -82,19 +82,23 @@ export function loader({ params, request, context }: Route.LoaderArgs) {
   }
   const url = new URL(request.url);
   const query = url.searchParams.get("q")?.trim() ?? "";
+  // A later page of a sorted folder can be for one tab only. Then the tab fills
+  // in a few loads, also when most mail is in the other tab.
+  const tab = url.searchParams.get(TAB_PARAM);
+  const category = isSortedFolder(params.folder) && !query && isThreadCategory(tab) ? tab : undefined;
   // The mail servers can take a few seconds. The loader does not wait for
   // them, so the page streams: its frame shows first, and the rows follow.
   const list = listThreads(
     user.id,
-    { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor") },
+    { scope: params.scope, folder: params.folder, query, cursor: url.searchParams.get("cursor"), category },
     user.accounts,
   ).then(async (result) => {
     // The sorted folders show important mail and promotions in two tabs.
-    if (!isSortedFolder(params.folder) || query) return { ...result, query };
+    if (!isSortedFolder(params.folder) || query) return { ...result, query, category };
     const threads = await withCategories(result.threads);
     // Mail that the mail check did not sort, such as older or read mail, shows in the next load.
     waitUntil(sortListed(user.id, threads).catch((error) => console.error("Cannot sort the list", error)));
-    return { ...result, threads, query };
+    return { ...result, threads, query, category };
   });
   return { list };
 }
@@ -118,6 +122,8 @@ const listCache = new Map<string, ListCacheEntry>();
 const LIST_CACHE_LIMIT = 30;
 /** Cached data newer than this shows with no reload in the background. */
 const LIST_FRESH_MS = 10_000;
+/** The search parameter of a later page that has only the conversations of one tab. */
+const TAB_PARAM = "tab";
 /** A hover prefetch skips cached data newer than this. Each Gmail list load uses quota. */
 const PREFETCH_FRESH_MS = 60_000;
 /** The pause in typing before a search runs. Each search asks the mail servers. */
@@ -344,23 +350,27 @@ function ThreadList({
   const pullIndicator = useRef<HTMLDivElement>(null);
   const [scroller, setScroller] = useState<HTMLElement | null>(null);
 
-  // Extra pages from infinite scroll. A new first page resets them.
+  // AI sorting puts promotions in their own tab of each sorted folder. Mail
+  // with no category shows with the important mail, so that no mail stays hidden.
+  const sorted = isSortedFolder(folder) && !loaderData.query;
+  const [tab, setTab] = useState<ThreadCategory>("important");
+
+  // Extra pages from infinite scroll. In a sorted folder, each extra page has
+  // only the mail of the open tab. A new first page or another tab resets them.
   const [extra, setExtra] = useState<ThreadSummary[]>([]);
   const [cursor, setCursor] = useState(loaderData.nextCursor);
   useEffect(() => {
     setExtra([]);
     setCursor(loaderData.nextCursor);
-  }, [loaderData]);
+  }, [loaderData, tab]);
   useEffect(() => {
-    if (!moreFetcher.data) return;
-    setExtra((current) => [...current, ...moreFetcher.data!.threads]);
-    setCursor(moreFetcher.data.nextCursor);
+    const more = moreFetcher.data;
+    if (!more || (more.category && more.category !== tab)) return;
+    setExtra((current) => [...current, ...more.threads]);
+    setCursor(more.nextCursor);
+    // A change of tab must not add the page again.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [moreFetcher.data]);
-
-  // AI sorting puts promotions in their own tab of each sorted folder. Mail
-  // with no category shows with the important mail, so that no mail stays hidden.
-  const sorted = isSortedFolder(folder) && !loaderData.query;
-  const [tab, setTab] = useState<ThreadCategory>("important");
   const [moved, setMoved] = useState<Record<string, ThreadCategory>>({});
 
   const allThreads = useMemo(() => {
@@ -377,19 +387,25 @@ function ThreadList({
       .filter((thread) => !thread.removed);
   }, [loaderData.threads, extra, patches, loadedAt, scope]);
 
-  const categoryOf = (thread: ThreadSummary): ThreadCategory =>
-    moved[threadKey(thread.accountId, thread.id)] ?? thread.category ?? "important";
-  const threads = useMemo(
-    () => (sorted ? allThreads.filter((thread) => categoryOf(thread) === tab) : allThreads),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allThreads, sorted, tab, moved],
-  );
-
-  const base = `/mail/${scope}/${folder}`;
   const openKey =
     childParams.accountId && childParams.threadId
       ? threadKey(childParams.accountId, childParams.threadId)
       : null;
+  const categoryOf = (thread: ThreadSummary): ThreadCategory =>
+    moved[threadKey(thread.accountId, thread.id)] ?? thread.category ?? "important";
+  const threads = useMemo(
+    () =>
+      allThreads.filter(
+        (thread) =>
+          (!sorted || categoryOf(thread) === tab) &&
+          // Read mail goes out of Unread. The open conversation stays until you close it.
+          (folder !== "unread" || thread.unread || threadKey(thread.accountId, thread.id) === openKey),
+      ),
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [allThreads, sorted, tab, moved, folder, openKey],
+  );
+
+  const base = `/mail/${scope}/${folder}`;
   const openIndex = openKey
     ? threads.findIndex((t) => threadKey(t.accountId, t.id) === openKey)
     : -1;
@@ -486,6 +502,7 @@ function ThreadList({
     if (!cursor || moreFetcher.state !== "idle") return;
     const params = new URLSearchParams({ cursor });
     if (loaderData.query) params.set("q", loaderData.query);
+    if (sorted) params.set(TAB_PARAM, tab);
     moreFetcher.load(`${base}?${params}`);
   }
 
@@ -1312,7 +1329,7 @@ function ThreadRow({
     row: rowRef,
     content: contentRef,
     left: { removes: isRemoval(leftAction, folder), run: () => onAction(leftAction) },
-    right: { removes: false, run: () => onAction(thread.unread ? "read" : "unread") },
+    right: { removes: folder === "unread" && thread.unread, run: () => onAction(thread.unread ? "read" : "unread") },
   });
   const people = thread.participants.slice(0, 3).map(displayName).join(", ") || "(no sender)";
   const prefix = folder === "sent" || folder === "drafts" ? "To: " : "";

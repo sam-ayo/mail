@@ -254,7 +254,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
         quiet: true,
         // The unread counts are for the mail in Important. The server count
         // corrects the count of mail with no category later.
-        counted: list.folder === "inbox" && row?.category === "important",
+        counted: (list.folder === "inbox" || list.folder === "unread") && row?.category === "important",
       });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps

@@ -100,6 +100,9 @@ async function withListLimit<T>(account: Account, list: Promise<T>): Promise<T> 
   }
 }
 
+/** A list of one category lists this many times the usual number of conversations. */
+const CATEGORY_LIST_FACTOR = 5;
+
 export interface ThreadListResult {
   threads: ThreadSummary[];
   nextCursor?: string;
@@ -112,7 +115,17 @@ export interface ThreadListResult {
  */
 export async function listThreads(
   userId: string,
-  options: { scope: string; folder: Folder; query?: string; cursor: string | null },
+  options: {
+    scope: string;
+    folder: Folder;
+    query?: string;
+    cursor: string | null;
+    /**
+     * List only the conversations of this category. Mail with no category is
+     * important. Most mail can be in one category, so each account lists more.
+     */
+    category?: ThreadCategory;
+  },
   /** The user's accounts, if the caller has them. Then no query is necessary. */
   userAccounts?: Account[],
 ): Promise<ThreadListResult> {
@@ -125,7 +138,11 @@ export async function listThreads(
   const cursors = decodeCursor(options.cursor);
   // On a later page, skip accounts that have no more pages.
   const active = cursors ? accounts.filter((a) => cursors[a.id]) : accounts;
-  const limit = accounts.length > 1 ? 20 : 30;
+  const pageSize = accounts.length > 1 ? 20 : 30;
+  const category = options.category;
+  const limit = category ? pageSize * CATEGORY_LIST_FACTOR : pageSize;
+  const inCategory = (categories: Map<string, ThreadCategory>, accountId: string, id: string) =>
+    (categories.get(threadKey(accountId, id)) ?? "important") === category;
 
   const results = await Promise.all(
     active.map(async (account) => {
@@ -138,8 +155,20 @@ export async function listThreads(
             query: options.query || undefined,
             cursor: cursors?.[account.id],
             limit,
+            // Gmail then gets the summaries of the conversations in the category only.
+            skip: category
+              ? async (ids) => {
+                  const categories = await categoriesFor(ids.map((id) => ({ accountId: account.id, id })));
+                  return new Set(ids.filter((id) => !inCategory(categories, account.id, id)));
+                }
+              : undefined,
           }),
         );
+        if (category) {
+          // Other providers ignore the skip option.
+          const categories = await categoriesFor(page.threads);
+          page.threads = page.threads.filter((t) => inCategory(categories, t.accountId, t.id));
+        }
         return { account, page };
       } catch (error) {
         return { account, error: toAccountError(account, error) };
