@@ -410,6 +410,38 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
     if (scroller.current) scroller.current.scrollTop = 0;
   }, [key]);
 
+  // The iOS keyboard covers the page and does not make it smaller. The reply is
+  // at the end of the conversation, thus it stays behind the keyboard. To prevent
+  // this, the conversation gets space for the keyboard below the reply.
+  const replying = Boolean(draft) && singlePane;
+  const [keyboard, setKeyboard] = useState(0);
+  useEffect(() => {
+    const viewport = window.visualViewport;
+    if (!replying || !viewport) {
+      setKeyboard(0);
+      return;
+    }
+    // iOS can also move the page up to show the field. The keyboard height stays the same.
+    const measure = () => setKeyboard(Math.max(0, Math.round(window.innerHeight - viewport.height)));
+    measure();
+    viewport.addEventListener("resize", measure);
+    viewport.addEventListener("scroll", measure);
+    return () => {
+      viewport.removeEventListener("resize", measure);
+      viewport.removeEventListener("scroll", measure);
+      setKeyboard(0);
+    };
+  }, [replying]);
+
+  // When the keyboard opens, and while the reply grows, the reply moves above the keyboard.
+  useLayoutEffect(() => {
+    if (keyboard) revealReply(scroller.current, false);
+  }, [keyboard]);
+  useLayoutEffect(() => {
+    if (keyboard) revealReply(scroller.current, true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [draft?.body]);
+
   // On a phone, the older closed messages fold into one row above the first
   // open message. A fold of one message saves no space.
   const [showEarlier, setShowEarlier] = useState(false);
@@ -608,6 +640,7 @@ export default function ThreadView({ loaderData }: Route.ComponentProps) {
           onArchive={removalActions ? undefined : () => list.actOnOpenThread("archive")}
           onEditDraft={editDraft}
           onDiscardDraft={discardServerDraft}
+          bottomInset={keyboard && keyboard + SAFARI_FORM_BAR}
         >
           <div id="reply-composer" className="mt-6">
             {draft ? (
@@ -697,6 +730,42 @@ function FloatingButton({ label, onClick, children }: { label: string; onClick()
 
 const noop = () => {};
 
+/**
+ * The height of the bar with the arrow and Done buttons above the iOS keyboard,
+ * with a margin. When the Safari toolbar is small, this bar is in the visual
+ * viewport, over the page.
+ */
+const SAFARI_FORM_BAR = 64;
+
+/**
+ * Scrolls the conversation so the reply shows above the keyboard. The reply
+ * moves only when the focus is in it, so a person can scroll up to read while
+ * the keyboard is open. The Safari bars over the keyboard are translucent,
+ * and a tap on them does not go to the page, so the reply must end above them.
+ */
+function revealReply(scroller: HTMLDivElement | null, typing: boolean) {
+  const reply = document.getElementById("reply-composer");
+  const viewport = window.visualViewport;
+  const focused = document.activeElement;
+  if (!scroller || !reply || !viewport || !(focused instanceof HTMLElement) || !reply.contains(focused)) return;
+  const margin = 12;
+  const top = Math.max(scroller.getBoundingClientRect().top, viewport.offsetTop) + margin;
+  const bottom = viewport.offsetTop + viewport.height - SAFARI_FORM_BAR;
+  const box = reply.getBoundingClientRect();
+  const caretAtEnd = focused instanceof HTMLTextAreaElement && focused.selectionEnd === focused.value.length;
+  if (box.height <= bottom - top || caretAtEnd) {
+    // The end of the reply shows, with the Send button and the text that a person types.
+    const distance = box.bottom - bottom;
+    if (distance > 0) scroller.scrollTop += distance;
+    return;
+  }
+  // A long reply: a change in the middle of the text does not move the page.
+  if (typing) return;
+  // Thus the focused field shows, from its top.
+  const field = focused.getBoundingClientRect();
+  if (field.top < top || field.top > bottom - 40) scroller.scrollTop += field.top - top;
+}
+
 /** Unread messages and the newest message show open. The others show closed. */
 function defaultExpanded(messages: RenderedMessage[]) {
   return new Set([...messages.filter((m) => m.unread).map((m) => m.id), messages[messages.length - 1]?.id]);
@@ -732,6 +801,7 @@ function ThreadPage({
   onArchive,
   onEditDraft,
   onDiscardDraft,
+  bottomInset = 0,
   children,
 }: {
   /** The open conversation. The other pages only show during a swipe. */
@@ -752,6 +822,8 @@ function ThreadPage({
   onArchive?(): void;
   onEditDraft(message: RenderedMessage): void;
   onDiscardDraft(message: RenderedMessage): void;
+  /** The height that the keyboard and its bar cover at the bottom of the page, in px. */
+  bottomInset?: number;
   children?: React.ReactNode;
 }) {
   return (
@@ -764,7 +836,10 @@ function ThreadPage({
         active ? "overflow-y-auto" : "overflow-hidden",
       )}
     >
-      <div className="mx-auto max-w-6xl px-6 py-6 max-md:px-0 max-md:pt-4 max-md:pb-28">
+      <div
+        className="mx-auto max-w-6xl px-6 py-6 max-md:px-0 max-md:pt-4 max-md:pb-28"
+        style={bottomInset ? { paddingBottom: bottomInset + 24 } : undefined}
+      >
         {/* The subject gets the full width. A long subject must not wrap into
             a narrow column next to the account badge. */}
         <div className="mb-6 space-y-2 max-md:mb-4 max-md:px-4">
