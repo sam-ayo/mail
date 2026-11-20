@@ -1,4 +1,4 @@
-import type { AccountSummary, Address, RenderedMessage } from "./mail";
+import type { AccountSummary, Address, Attachment, RenderedMessage } from "./mail";
 import { formatAddress, formatFullDate } from "./mail";
 import { markdownToHtml } from "./markdown";
 
@@ -8,6 +8,13 @@ export interface ReplyContext {
   messageId: string;
   messageIdHeader?: string;
   references?: string[];
+}
+
+/** The files of a forwarded message. The server gets them from the mail server when it sends. */
+export interface ForwardedFiles {
+  accountId: string;
+  messageId: string;
+  attachments: Pick<Attachment, "id" | "filename" | "mimeType" | "size">[];
 }
 
 export interface ComposeDraft {
@@ -21,6 +28,8 @@ export interface ComposeDraft {
   reply?: ReplyContext;
   /** The quoted original. The app adds it under the body when it sends. */
   quoted?: { html: string; text: string };
+  /** The files of the original message that a forward sends again. */
+  forwarded?: ForwardedFiles;
   /**
    * The ID of the draft on the mail server when the composer opened it. A save
    * can change the ID, so the mail context keeps the current one.
@@ -120,6 +129,13 @@ export function draftFor(
       subject: withPrefix("Fwd", message.subject),
       body: "",
       reply,
+      ...(message.attachments.length > 0 && {
+        forwarded: {
+          accountId: account.id,
+          messageId: message.id,
+          attachments: message.attachments.map(({ id, filename, mimeType, size }) => ({ id, filename, mimeType, size })),
+        },
+      }),
       quoted: {
         text: `${header.join("\n")}\n\n${message.text ?? message.snippet}`,
         html: `<div class="gmail_quote">${header.map(escapeHtml).join("<br>")}<br><br>${quoteHtmlBody(message)}</div>`,

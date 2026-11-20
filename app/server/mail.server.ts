@@ -17,7 +17,7 @@ import { createGmailProvider } from "./providers/gmail.server";
 import { createHostedProvider } from "./providers/hosted.server";
 import { createImapProvider } from "./providers/imap.server";
 import { createOutlookProvider } from "./providers/outlook.server";
-import type { MailProvider, OutgoingMessage } from "./providers/types";
+import type { MailProvider, OutgoingAttachment, OutgoingMessage } from "./providers/types";
 import { ProviderAuthError, ProviderError } from "./providers/types";
 import { emailDocument, hasQuotedHtml, sanitizeEmailHtml } from "./sanitize.server";
 import { aiSortingOn, categoriesFor } from "./triage.server";
@@ -306,6 +306,27 @@ export async function getAttachment(
 ) {
   const account = await requireAccount(userId, accountId);
   return providerFor(account).getAttachment(messageId, attachmentId);
+}
+
+/**
+ * Gets the files of a forwarded message from the mail server, so a forward
+ * sends them again. The account must be in the workspace.
+ */
+export async function forwardedAttachments(
+  userId: string,
+  forward: { accountId: string; messageId: string; attachmentIds: string[] },
+): Promise<OutgoingAttachment[]> {
+  const provider = providerFor(await requireAccount(userId, forward.accountId));
+  return Promise.all(
+    forward.attachmentIds.map(async (id) => {
+      const file = await provider.getAttachment(forward.messageId, id);
+      return {
+        filename: file.filename,
+        contentType: file.mimeType || "application/octet-stream",
+        content: file.data,
+      };
+    }),
+  );
 }
 
 export type UnsubscribeResult =

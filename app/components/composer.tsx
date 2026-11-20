@@ -133,6 +133,7 @@ export function Composer({
     }
     if (
       files.length === 0 &&
+      !draft.forwarded?.attachments.length &&
       /\b(attached|attachment|enclosed)\b/i.test(draft.body) &&
       !(await confirm({
         title: "Send without an attachment?",
@@ -343,8 +344,30 @@ export function Composer({
         </div>
       )}
 
-      {files.length > 0 && (
+      {(files.length > 0 || !!draft.forwarded?.attachments.length) && (
         <ul className="flex flex-wrap gap-2 px-4 pb-3">
+          {draft.forwarded?.attachments.map((file) => (
+            <li
+              key={`forwarded-${file.id}`}
+              className="flex items-center gap-2 rounded-lg border border-zinc-200 px-2.5 py-1 text-xs dark:border-zinc-700"
+            >
+              <Paperclip className="size-3 text-zinc-400" />
+              <FileName name={file.filename} className="max-w-48 font-medium" />
+              <span className="text-zinc-400">{formatSize(file.size)}</span>
+              <button
+                type="button"
+                aria-label={`Remove ${file.filename}`}
+                onClick={() => {
+                  const forwarded = draft.forwarded!;
+                  const attachments = forwarded.attachments.filter((a) => a.id !== file.id);
+                  set({ forwarded: attachments.length ? { ...forwarded, attachments } : undefined });
+                }}
+                className="text-zinc-400 hover:text-zinc-900 dark:hover:text-zinc-100"
+              >
+                <X className="size-3" />
+              </button>
+            </li>
+          ))}
           {files.map((file, index) => (
             <li
               key={`${file.name}-${index}`}

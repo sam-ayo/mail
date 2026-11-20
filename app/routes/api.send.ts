@@ -1,7 +1,7 @@
 import type { ReplyContext } from "~/lib/compose";
 import { isEmail, parseAddressList } from "~/lib/mail";
 import { requireUserId } from "~/server/auth.server";
-import { sendMessage } from "~/server/mail.server";
+import { forwardedAttachments, sendMessage } from "~/server/mail.server";
 import { rateLimit } from "~/server/rate-limit.server";
 import { cleanReplyContext, errorMessage } from "~/server/util.server";
 import type { Route } from "./+types/api.send";
@@ -51,7 +51,30 @@ export async function action({ request }: Route.ActionArgs) {
     }
   }
 
+  let forward: { accountId: string; messageId: string; attachmentIds: string[] } | undefined;
+  if (form.get("forward")) {
+    try {
+      forward = cleanForward(JSON.parse(text("forward")));
+    } catch {
+      forward = undefined;
+    }
+    if (!forward) return Response.json({ error: "Invalid forward data." }, { status: 400 });
+  }
+
   try {
+    const uploaded = await Promise.all(
+      files.map(async (file) => ({
+        filename: file.name,
+        contentType: file.type || "application/octet-stream",
+        content: Buffer.from(await file.arrayBuffer()),
+      })),
+    );
+    // A forward sends the files of the original message again.
+    const original = forward ? await forwardedAttachments(userId, forward) : [];
+    const attachments = [...original, ...uploaded];
+    if (attachments.reduce((sum, file) => sum + file.content.length, 0) > MAX_ATTACHMENT_BYTES) {
+      return Response.json({ error: "Attachments must be 25 MB or less in total." }, { status: 400 });
+    }
     await sendMessage(
       userId,
       text("accountId"),
@@ -63,13 +86,7 @@ export async function action({ request }: Route.ActionArgs) {
         html: text("html"),
         text: text("text"),
         reply,
-        attachments: await Promise.all(
-          files.map(async (file) => ({
-            filename: file.name,
-            contentType: file.type || "application/octet-stream",
-            content: Buffer.from(await file.arrayBuffer()),
-          })),
-        ),
+        attachments,
       },
       text("draftId") || undefined,
     );
@@ -77,4 +94,14 @@ export async function action({ request }: Route.ActionArgs) {
   } catch (error) {
     return Response.json({ error: `The message did not send: ${errorMessage(error)}` }, { status: 502 });
   }
+}
+
+/** Checks the forward data that the browser sends: the message and the IDs of its files. */
+function cleanForward(value: unknown) {
+  if (!value || typeof value !== "object") return undefined;
+  const forward = value as Record<string, unknown>;
+  const ids = forward.attachmentIds;
+  if (typeof forward.accountId !== "string" || typeof forward.messageId !== "string") return undefined;
+  if (!Array.isArray(ids) || ids.length > 100 || !ids.every((id) => typeof id === "string")) return undefined;
+  return { accountId: forward.accountId, messageId: forward.messageId, attachmentIds: ids as string[] };
 }

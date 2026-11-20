@@ -596,6 +596,10 @@ export function MailProvider({
       if (draft.reply) form.set("reply", JSON.stringify(draft.reply));
       if (remote?.accountId === draft.accountId) form.set("draftId", remote.draftId);
       files.forEach((file) => form.append("attachments", file));
+      if (draft.forwarded?.attachments.length) {
+        const { accountId, messageId, attachments } = draft.forwarded;
+        form.set("forward", JSON.stringify({ accountId, messageId, attachmentIds: attachments.map((a) => a.id) }));
+      }
 
       toast.loading("Sending…", { id: `send-${id}`, action: undefined });
       try {

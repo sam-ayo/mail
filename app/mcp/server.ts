@@ -11,6 +11,7 @@ import { listAccounts, resolveUser, toSummary } from "~/server/accounts.server";
 import { hasConsent, MCP_RESOURCE } from "~/server/agent-connections.server";
 import { env } from "~/server/env.server";
 import {
+  forwardedAttachments,
   getAttachment,
   listThreads,
   loadThread,
@@ -382,7 +383,14 @@ export const sendMessageTool = server.tool(
         bcc,
         subject,
         ...buildOutgoing({ ...draft, body: input.body }),
-        attachments: [],
+        // A forward sends the files of the original message again.
+        attachments: draft.forwarded
+          ? await forwardedAttachments(userId, {
+              accountId: draft.forwarded.accountId,
+              messageId: draft.forwarded.messageId,
+              attachmentIds: draft.forwarded.attachments.map((a) => a.id),
+            })
+          : [],
         reply: draft.reply,
       });
       return text(`Sent "${subject}" from ${account.email} to ${addresses([...to, ...cc, ...bcc])}.`);
