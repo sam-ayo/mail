@@ -393,16 +393,22 @@ function ThreadList({
       : null;
   const categoryOf = (thread: ThreadSummary): ThreadCategory =>
     moved[threadKey(thread.accountId, thread.id)] ?? thread.category ?? "important";
+  // Read mail goes out of Unread. The conversations that you open stay while a
+  // conversation is open, so the rows do not move and k goes back to them.
+  // They go out when you close the conversation.
+  const [keptRead, setKeptRead] = useState<ReadonlySet<string>>(() => new Set(openKey ? [openKey] : []));
+  if (openKey ? !keptRead.has(openKey) : keptRead.size > 0) {
+    setKeptRead(openKey ? new Set([...keptRead, openKey]) : new Set());
+  }
   const threads = useMemo(
     () =>
       allThreads.filter(
         (thread) =>
           (!sorted || categoryOf(thread) === tab) &&
-          // Read mail goes out of Unread. The open conversation stays until you close it.
-          (folder !== "unread" || thread.unread || threadKey(thread.accountId, thread.id) === openKey),
+          (folder !== "unread" || thread.unread || keptRead.has(threadKey(thread.accountId, thread.id))),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
-    [allThreads, sorted, tab, moved, folder, openKey],
+    [allThreads, sorted, tab, moved, folder, keptRead],
   );
 
   const base = `/mail/${scope}/${folder}`;
