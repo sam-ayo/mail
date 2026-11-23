@@ -194,8 +194,9 @@ export function createHostedProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, unread, query: search, cursor, limit }: ListOptions): Promise<ThreadPage> {
-      const filter = unread ? `${FOLDER_FILTER[folder]} AND unread` : FOLDER_FILTER[folder];
+    async listThreads({ folder, unread, query: search, allMail, cursor, limit }: ListOptions): Promise<ThreadPage> {
+      const folderFilter = allMail ? "folder NOT IN ('spam', 'trash')" : FOLDER_FILTER[folder];
+      const filter = unread ? `${folderFilter} AND unread` : folderFilter;
       const offset = Number(cursor) || 0;
       const params: unknown[] = [mailbox, limit + 1, offset];
       let searchFilter = "";

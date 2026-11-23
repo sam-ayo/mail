@@ -253,7 +253,7 @@ export function createOutlookProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, allMail, cursor, limit }: ListOptions): Promise<ThreadPage> {
       // The cursor is a Graph nextLink that came back from the browser. Accept
       // only Graph URLs, so the access token never goes to another host.
       if (cursor && !cursor.startsWith(`${API}/`)) throw new ProviderError("Invalid cursor", 400);
@@ -265,7 +265,10 @@ export function createOutlookProvider(account: Account): MailProvider {
         else params.set("$orderby", "receivedDateTime desc");
         // Graph sorts a filtered list only if the filter starts with the sort property.
         if (unread && !query) params.set("$filter", "receivedDateTime ge 1900-01-01T00:00:00Z and isRead eq false");
-        if (folder === "starred") {
+        if (allMail) {
+          // The messages of all folders.
+          url = `${API}/messages?${params}`;
+        } else if (folder === "starred") {
           params.set("$filter", "flag/flagStatus eq 'flagged'");
           params.delete("$orderby");
           url = `${API}/messages?${params}`;
@@ -276,6 +279,11 @@ export function createOutlookProvider(account: Account): MailProvider {
       const page = await request<{ value: GraphMessage[]; "@odata.nextLink"?: string }>(url);
       // A search cannot have a filter, so remove the read messages here.
       if (unread && query) page.value = page.value.filter((m) => !m.isRead);
+      // A search of all folders also finds junk and deleted mail. Remove it here.
+      if (allMail) {
+        const hidden = await Promise.all((["junkemail", "deleteditems"] as const).map(folderId));
+        page.value = page.value.filter((m) => !hidden.includes(m.parentFolderId));
+      }
 
       // Graph lists messages. Group the messages on this page into conversations.
       const groups = new Map<string, GraphMessage[]>();

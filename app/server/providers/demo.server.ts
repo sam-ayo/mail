@@ -757,10 +757,12 @@ export function createDemoProvider(account: Account): MailProvider {
   }
 
   return {
-    async listThreads({ folder, unread, query, cursor, limit }: ListOptions): Promise<ThreadPage> {
+    async listThreads({ folder, unread, query, allMail, cursor, limit }: ListOptions): Promise<ThreadPage> {
       const needle = query?.toLowerCase();
       const all = [...threads.values()]
-        .filter((thread) => matches(thread, folder, account.email))
+        .filter((thread) =>
+          allMail ? thread.location !== "spam" && thread.location !== "trash" : matches(thread, folder, account.email),
+        )
         .filter((thread) => !unread || thread.messages.some((m) => m.unread))
         .filter(
           (thread) =>

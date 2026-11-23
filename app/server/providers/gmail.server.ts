@@ -343,8 +343,9 @@ export function createGmailProvider(account: Account, pace?: GmailPace): MailPro
     });
 
   return {
-    async listThreads({ folder, unread, query, cursor, limit, skip }: ListOptions): Promise<ThreadPage> {
-      const { labelIds, q } = FOLDER_QUERY[folder];
+    async listThreads({ folder, unread, query, allMail, cursor, limit, skip }: ListOptions): Promise<ThreadPage> {
+      // A Gmail search with no label looks in all mail except spam and trash.
+      const { labelIds, q } = allMail ? {} : FOLDER_QUERY[folder];
       const params = new URLSearchParams({ maxResults: String(limit) });
       labelIds?.forEach((id) => params.append("labelIds", id));
       const search = [q, unread && "is:unread", query].filter(Boolean).join(" ");

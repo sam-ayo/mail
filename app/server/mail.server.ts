@@ -141,6 +141,8 @@ export async function listThreads(
   const pageSize = accounts.length > 1 ? 20 : 30;
   const category = options.category;
   const limit = category ? pageSize * CATEGORY_LIST_FACTOR : pageSize;
+  // A search from Inbox or Unread looks in all mail, as the search box says.
+  const allMail = Boolean(options.query) && (options.folder === "inbox" || options.folder === "unread");
   const inCategory = (categories: Map<string, ThreadCategory>, accountId: string, id: string) =>
     (categories.get(threadKey(accountId, id)) ?? "important") === category;
 
@@ -151,7 +153,11 @@ export async function listThreads(
           account,
           providerFor(account).listThreads({
             // Unread is the inbox with only the unread conversations.
-            ...(options.folder === "unread" ? { folder: "inbox", unread: true } : { folder: options.folder }),
+            ...(allMail
+              ? { folder: "inbox", allMail }
+              : options.folder === "unread"
+                ? { folder: "inbox", unread: true }
+                : { folder: options.folder }),
             query: options.query || undefined,
             cursor: cursors?.[account.id],
             limit,

@@ -405,7 +405,11 @@ function ThreadList({
       allThreads.filter(
         (thread) =>
           (!sorted || categoryOf(thread) === tab) &&
-          (folder !== "unread" || thread.unread || keptRead.has(threadKey(thread.accountId, thread.id))),
+          // A search from Unread looks in all mail, so it shows read mail too.
+          (folder !== "unread" ||
+            Boolean(loaderData.query) ||
+            thread.unread ||
+            keptRead.has(threadKey(thread.accountId, thread.id))),
       ),
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [allThreads, sorted, tab, moved, folder, keptRead],

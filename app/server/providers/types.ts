@@ -5,6 +5,11 @@ export interface ListOptions {
   /** List only the conversations that have unread mail. */
   unread?: boolean;
   query?: string;
+  /**
+   * Search all mail except spam and trash, not only the folder. The caller
+   * sets it with a query only. IMAP folder names differ, so IMAP ignores it.
+   */
+  allMail?: boolean;
   cursor?: string;
   limit: number;
   /**
