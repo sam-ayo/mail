@@ -19,6 +19,7 @@ import { createImapProvider } from "./providers/imap.server";
 import { createOutlookProvider } from "./providers/outlook.server";
 import type { MailProvider, OutgoingAttachment, OutgoingMessage } from "./providers/types";
 import { ProviderAuthError, ProviderError } from "./providers/types";
+import { repairMojibake } from "./mojibake.server";
 import { emailDocument, hasQuotedHtml, sanitizeEmailHtml } from "./sanitize.server";
 import { aiSortingOn, categoriesFor } from "./triage.server";
 import { errorMessage, parseAddresses } from "./util.server";
@@ -190,7 +191,9 @@ export async function listThreads(
       errors.push(result.error);
       continue;
     }
-    threads.push(...result.page!.threads);
+    for (const thread of result.page!.threads) {
+      threads.push({ ...thread, subject: repairMojibake(thread.subject), snippet: repairMojibake(thread.snippet) });
+    }
     if (result.page!.nextCursor) nextCursors[result.account.id] = result.page!.nextCursor;
   }
   threads.sort((a, b) => b.date.localeCompare(a.date));
@@ -230,7 +233,14 @@ function sanitizeCached(html: string, byContentId: Map<string, string>) {
   return clean;
 }
 
-function renderMessage(accountId: string, message: Message): RenderedMessage {
+function renderMessage(accountId: string, raw: Message): RenderedMessage {
+  const message: Message = {
+    ...raw,
+    subject: repairMojibake(raw.subject),
+    snippet: repairMojibake(raw.snippet),
+    html: repairMojibake(raw.html),
+    text: repairMojibake(raw.text),
+  };
   const { html, ...rest } = message;
   if (!html) return { ...rest, hasQuote: false };
   const byContentId = new Map(
@@ -262,7 +272,11 @@ export async function loadThread(
     : await requireAccount(userId, accountId);
   if (!account) throw new ProviderError("Account not found", 404);
   const thread = await providerFor(account).getThread(threadId);
-  return { ...thread, messages: thread.messages.map((m) => renderMessage(account.id, m)) };
+  return {
+    ...thread,
+    subject: repairMojibake(thread.subject),
+    messages: thread.messages.map((m) => renderMessage(account.id, m)),
+  };
 }
 
 export async function modifyThread(

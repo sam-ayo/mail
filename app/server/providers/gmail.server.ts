@@ -16,6 +16,7 @@ import { loadSummaries, saveSummaries } from "../summary-cache.server";
 import { buildMime, decodeEntities, mapLimit, parseAddresses, parseListUnsubscribe } from "../util.server";
 import type { ListOptions, MailProvider, OutgoingMessage, ThreadPage } from "./types";
 import { ProviderAuthError, ProviderError } from "./types";
+import { decodeText } from "../mojibake.server";
 
 const API = "https://gmail.googleapis.com/gmail/v1/users/me";
 
@@ -78,12 +79,7 @@ function header(headers: GmailHeader[] | undefined, name: string) {
 
 function decodeBody(data: string, contentType?: string) {
   const charset = contentType?.match(/charset="?([^";]+)"?/i)?.[1] ?? "utf-8";
-  const bytes = Buffer.from(data, "base64url");
-  try {
-    return new TextDecoder(charset).decode(bytes);
-  } catch {
-    return new TextDecoder("utf-8").decode(bytes);
-  }
+  return decodeText(Buffer.from(data, "base64url"), charset);
 }
 
 function walkParts(part: GmailPart, visit: (part: GmailPart) => void) {
