@@ -90,12 +90,14 @@ function Editor({ output, files }: { output: Output; files: FileInput[] }) {
   const list = (value: string) => (value.trim() ? [value] : []);
   const original = output.attachments.filter((a) => a.source === "original");
   const added = output.attachments.filter((a) => a.source === "added");
-  // Without the file input, Send cannot attach the added files.
-  const filesMissing = files.length !== added.length;
+  // Without the file input, Send cannot attach the added files. The user can remove them and send.
+  const filesMissing = files.length !== added.length && added.some((_, index) => !removed.includes(index));
+  const canSend = !locked && !filesMissing && !!(draft.to.trim() || draft.cc.trim() || draft.bcc.trim());
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
-    if (locked) return;
+    // Cmd+Enter also submits, so check the same conditions as the Send button.
+    if (!canSend) return;
     try {
       await send.callTool({
         account_id: draft.accountId,
@@ -107,7 +109,8 @@ function Editor({ output, files }: { output: Output; files: FileInput[] }) {
         bcc: list(draft.bcc),
         subject: draft.subject,
         body: draft.body,
-        attachments: files.filter((_, index) => !removed.includes(index)),
+        // When the input does not match the list, the user removed all added files.
+        attachments: files.length === added.length ? files.filter((_, index) => !removed.includes(index)) : [],
       });
       setState({ sent: true, to: draft.to, subject: draft.subject });
     } catch {
@@ -209,7 +212,7 @@ function Editor({ output, files }: { output: Output; files: FileInput[] }) {
       )}
 
       <div className="flex items-center gap-3 border-t border-line px-4 py-2">
-        <p className="min-w-0 flex-1 truncate text-xs" role="status">
+        <p className="min-w-0 flex-1 text-xs" role="status">
           {sent ? (
             <span className="text-success">Sent from {from?.email}.</span>
           ) : send.error ? (
@@ -222,7 +225,7 @@ function Editor({ output, files }: { output: Output; files: FileInput[] }) {
         </p>
         <button
           type="submit"
-          disabled={locked || filesMissing || !(draft.to.trim() || draft.cc.trim() || draft.bcc.trim())}
+          disabled={!canSend}
           className="h-8 shrink-0 rounded-lg bg-accent px-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {sent ? "Sent" : send.isPending ? "Sending…" : "Send"}
