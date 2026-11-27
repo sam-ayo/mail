@@ -18,8 +18,11 @@ The tools sync from the server. Each tool has a title and all three hints.
 | `compose_message` | Write email | yes | no | no |
 | `modify_threads` | Change threads | no | yes | no |
 | `send_message` | Send email | no | yes | yes |
+| `send_feedback` | Send feedback | no | no | yes |
 
 `compose_message` sends nothing. Its view sends only when the user presses Send, through `send_message`, which Claude asks the user to allow.
+
+`send_feedback` opens a public GitHub issue in the repository of the app when a tool blocks the agent. The server removes email addresses and long tokens from the text, and a workspace can send 10 reports each day. The tool shows only when the server has `FEEDBACK_GITHUB_TOKEN`.
 
 ## 3. Listing
 

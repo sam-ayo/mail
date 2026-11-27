@@ -60,6 +60,15 @@ export const env = {
   openaiAppsChallenge: process.env.OPENAI_APPS_CHALLENGE || "",
   /** The API key of TypeSafe. Its model Jev does the AI sorting of the inbox. Empty turns AI sorting off. */
   typesafeApiKey: process.env.TYPESAFE_API_KEY || "",
+  /**
+   * AI agents send feedback with the send_feedback MCP tool. Each report is a
+   * GitHub issue. The token needs the "Issues: write" permission on the repository.
+   * Empty turns the tool off.
+   */
+  feedback: {
+    githubToken: process.env.FEEDBACK_GITHUB_TOKEN || "",
+    githubRepo: process.env.FEEDBACK_GITHUB_REPO || "sam-ayo/mail",
+  },
   /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
   push: {
     publicKey: process.env.VAPID_PUBLIC_KEY || "",

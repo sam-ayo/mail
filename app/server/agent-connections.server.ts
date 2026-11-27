@@ -78,3 +78,10 @@ function hostOf(uri: string | null | undefined) {
     return undefined;
   }
 }
+
+/** The name that an OAuth client gave itself at registration, for example "Claude". */
+export async function agentName(clientId: string | undefined) {
+  if (!clientId) return null;
+  const row = await queryOne<{ name: string | null }>(`SELECT name FROM "oauthClient" WHERE "clientId" = $1`, [clientId]);
+  return row?.name || null;
+}

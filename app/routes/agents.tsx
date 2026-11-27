@@ -26,6 +26,11 @@ const TOOLS: [name: string, permission: string, description: string][] = [
   ],
   ["modify_threads", "Organize", "Archives, deletes, stars, or marks conversations as read or spam."],
   ["send_message", "Send", "Sends a new email, a reply, a reply to all, or a forward."],
+  [
+    "send_feedback",
+    "Read",
+    "Reports a problem with the tools to the developers as a public GitHub issue, without personal data.",
+  ],
 ];
 
 export default function Agents() {
