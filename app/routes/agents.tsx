@@ -29,7 +29,7 @@ const TOOLS: [name: string, permission: string, description: string][] = [
   [
     "send_feedback",
     "Read",
-    "Reports a problem with the tools to the developers as a public GitHub issue, without personal data.",
+    "Reports a problem with the tools privately to the developers, without personal data.",
   ],
 ];
 

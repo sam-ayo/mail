@@ -62,12 +62,12 @@ export const env = {
   typesafeApiKey: process.env.TYPESAFE_API_KEY || "",
   /**
    * AI agents send feedback with the send_feedback MCP tool. Each report is a
-   * GitHub issue. The token needs the "Issues: write" permission on the repository.
-   * Empty turns the tool off.
+   * GitHub issue in a private repository. The token needs the "Issues: write"
+   * permission on that repository. Empty turns the tool off.
    */
   feedback: {
     githubToken: process.env.FEEDBACK_GITHUB_TOKEN || "",
-    githubRepo: process.env.FEEDBACK_GITHUB_REPO || "sam-ayo/mail",
+    githubRepo: process.env.FEEDBACK_GITHUB_REPO || "sam-ayo/mail-feedback",
   },
   /** VAPID keys for push notifications. Generate them with: npx web-push generate-vapid-keys */
   push: {

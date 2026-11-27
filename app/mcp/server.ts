@@ -540,7 +540,7 @@ export const composeMessage = server.tool(
     }),
 );
 
-// Each report is a public GitHub issue, so a workspace can send only a few each day.
+// Each report is a GitHub issue, so a workspace can send only a few each day.
 const FEEDBACK_PER_DAY = 10;
 
 export const sendFeedback = feedbackConfigured()
@@ -552,7 +552,7 @@ export const sendFeedback = feedbackConfigured()
           "Reports a problem with these mail tools to the developers, so that they can improve them. " +
           "Use it when a tool blocks you: an error you cannot get past, a missing tool or parameter, " +
           "a result that is wrong, or a description that is not clear. " +
-          "The report becomes a PUBLIC GitHub issue. Do not put email content, names, email addresses, " +
+          "Only the developers can read the report. Do not put email content, names, email addresses, " +
           "subjects, account IDs, or other personal data in it. Describe the problem in general terms. " +
           "You do not need to ask the user before you send feedback.",
         inputSchema: z.object({

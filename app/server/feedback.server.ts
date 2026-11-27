@@ -3,8 +3,8 @@ import { redact } from "./redact.server";
 
 /**
  * Feedback from AI agents about the MCP server. Each report becomes an issue
- * in the GitHub repository. The repository is public, so the text of a report
- * loses all email addresses before it goes to GitHub.
+ * in a private GitHub repository. The report still loses email addresses and
+ * tokens before it goes to GitHub, because the developers do not need them.
  */
 
 export const FEEDBACK_KINDS = ["blocked", "bug", "missing_feature", "confusing", "other"] as const;

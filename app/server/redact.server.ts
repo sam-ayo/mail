@@ -1,4 +1,4 @@
-// The repository of the feedback issues is public. This module does not import
+// Removes personal data from feedback reports. This module does not import
 // env.server.ts, so that the tests run without a database.
 
 const EMAIL = /[A-Z0-9._%+-]+@[A-Z0-9.-]+\.[A-Z]{2,}/gi;
