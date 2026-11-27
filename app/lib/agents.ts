@@ -2,8 +2,8 @@
 
 export const MAIL_SCOPES = {
   "mail:read": "Read and search your email in all accounts",
-  "mail:write": "Archive, delete, star, and mark your email as read",
-  "mail:send": "Send email from your accounts",
+  "mail:write": "Archive, delete, star, sort, and mark your email as read, and save drafts",
+  "mail:send": "Send email from your accounts and unsubscribe from mailing lists",
 } as const;
 
 export type MailScope = keyof typeof MAIL_SCOPES;

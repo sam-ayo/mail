@@ -315,7 +315,8 @@ export async function saveDraft(
 
 export async function deleteDraft(userId: string, accountId: string, draftId: string) {
   const provider = providerFor(await requireAccount(userId, accountId));
-  await provider.deleteDraft?.(draftId);
+  if (!provider.deleteDraft) throw new ProviderError("This account does not save drafts", 400);
+  await provider.deleteDraft(draftId);
 }
 
 export async function getAttachment(

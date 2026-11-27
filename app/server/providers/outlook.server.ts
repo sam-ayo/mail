@@ -217,8 +217,18 @@ export function createOutlookProvider(account: Account): MailProvider {
     return (await request<{ id: string }>("/messages", { method: "POST", body: "{}" })).id;
   }
 
+  /**
+   * Stops a change to a message that is not a draft. Graph uses the same IDs
+   * for all messages, and PATCH and DELETE accept any of them.
+   */
+  async function requireDraft(id: string) {
+    const message = await request<{ isDraft?: boolean }>(`/messages/${encodeURIComponent(id)}?$select=isDraft`);
+    if (!message.isDraft) throw new ProviderError("The message is not a draft", 400);
+  }
+
   async function deleteDraft(draftId: string) {
     try {
+      await requireDraft(draftId);
       await request(`/messages/${encodeURIComponent(draftId)}`, { method: "DELETE" });
     } catch (error) {
       if (!notFound(error)) throw error;
@@ -460,6 +470,7 @@ export function createOutlookProvider(account: Account): MailProvider {
         });
       if (draftId) {
         try {
+          await requireDraft(draftId);
           await save(draftId);
           return { draftId };
         } catch (error) {

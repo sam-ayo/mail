@@ -16,16 +16,31 @@ export const meta: Route.MetaFunction = () => [
 
 const TOOLS: [name: string, permission: string, description: string][] = [
   ["list_accounts", "Read", "Lists the accounts of the workspace, with the unread count of each inbox."],
-  ["search_threads", "Read", "Lists or searches the conversations of a folder, in one account or in all accounts."],
+  [
+    "search_threads",
+    "Read",
+    "Lists or searches the conversations of a folder, in one account or in all accounts, also by category.",
+  ],
   ["get_thread", "Read", "Reads all messages of a conversation as text, with the list of attachments."],
+  ["get_threads", "Read", "Reads up to 20 conversations in one call, with shorter message bodies."],
   ["get_attachment", "Read", "Gets one attachment of a message, up to 10 MB."],
+  ["find_contacts", "Read", "Finds the email address of a person from the people in your mail."],
+  ["create_upload", "Read", "Gives a single-use URL to upload one file from the agent's computer and attach it."],
   [
     "compose_message",
     "Read",
     "Writes an email and shows it in the chat, where you edit it and press Send. It sends nothing itself.",
   ],
   ["modify_threads", "Organize", "Archives, deletes, stars, or marks conversations as read or spam."],
-  ["send_message", "Send", "Sends a new email, a reply, a reply to all, or a forward."],
+  ["set_category", "Organize", "Moves conversations to Important or Promotions."],
+  ["save_draft", "Organize", "Saves an email as a draft in the Drafts folder of a Gmail, Outlook, or IMAP account."],
+  ["delete_draft", "Organize", "Deletes one draft. It cannot delete other mail."],
+  [
+    "send_message",
+    "Send",
+    "Sends a new email, a reply, a reply to all, or a forward, with files from the chat, the web, or other email.",
+  ],
+  ["unsubscribe", "Send", "Unsubscribes from the mailing list of a conversation."],
   [
     "send_feedback",
     "Read",

@@ -305,7 +305,8 @@ export function createImapProvider(account: Account): MailProvider {
         const criteria: Record<string, unknown> = {};
         if (folder === "starred" && !flaggedFolder) criteria.flagged = true;
         if (unread) criteria.seen = false;
-        if (query) criteria.or = [{ subject: query }, { from: query }, { body: query }];
+        // To and Cc too, so a search for a person also finds the mail that the person got.
+        if (query) criteria.or = [{ subject: query }, { from: query }, { to: query }, { cc: query }, { body: query }];
         const uids =
           Object.keys(criteria).length > 0
             ? (await imap.search(criteria, { uid: true })) || []

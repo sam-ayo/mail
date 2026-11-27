@@ -49,6 +49,6 @@ describe("inlineAttachment", () => {
 
   it("needs a filename and content", () => {
     expect(() => inlineAttachment({ text: "x" })).toThrow("needs a filename");
-    expect(() => inlineAttachment({ filename: "a.txt" })).toThrow("Give content_base64");
+    expect(() => inlineAttachment({ filename: "a.txt" })).toThrow("Give content_base64, text, upload_id, url");
   });
 });

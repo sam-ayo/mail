@@ -1,3 +1,4 @@
+import { deleteExpiredUploads } from "./agent-uploads.server";
 import { deleteExpiredRateLimits } from "./rate-limit.server";
 import { deleteExpiredDemoUsers } from "./accounts.server";
 import { randomToken } from "./crypto.server";
@@ -8,12 +9,14 @@ import { deleteExpiredSummaries } from "./summary-cache.server";
 const jobs = {
   /** Sends push notifications for new mail in Gmail, Outlook, and IMAP accounts. */
   "check-mail": { seconds: 60, leaseSeconds: 2 * 60, run: checkNewMail },
-  /** Deletes old thread summaries and the old workspaces of the public demo. */
+  /** Deletes old thread summaries, the old workspaces of the public demo, and expired agent uploads. */
   "expire-cache": {
     seconds: 24 * 60 * 60,
     leaseSeconds: 5 * 60,
     run: async () => {
       await deleteExpiredRateLimits();
+      // A failure here must not stop the other cleanups.
+      await deleteExpiredUploads().catch((error) => console.error("Cannot delete expired agent uploads", error));
       return { deleted: await deleteExpiredSummaries(), demoWorkspaces: await deleteExpiredDemoUsers() };
     },
   },
