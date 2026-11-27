@@ -32,7 +32,7 @@ export default [
   route("api/send", "routes/api.send.ts"),
   route("api/drafts", "routes/api.drafts.ts"),
   route("api/attachments/:accountId", "routes/api.attachments.ts"),
-  route("api/agent-uploads/:id", "routes/api.agent-uploads.ts"),
+  route("api/agent-send", "routes/api.agent-send.ts"),
   route("api/counts", "routes/api.counts.ts"),
   route("api/avatar", "routes/api.avatar.ts"),
   route("api/image", "routes/api.image.ts"),

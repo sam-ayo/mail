@@ -17,6 +17,11 @@ export async function rateLimit(key: string, limit: number, windowSeconds: numbe
   return (row?.count ?? 0) <= limit;
 }
 
+/** Deletes the counter of one key, so the attempt does not count. */
+export async function resetRateLimit(key: string) {
+  await query("DELETE FROM rate_limits WHERE key = $1", [key]);
+}
+
 /** Deletes the counters whose window ended. The cache cron job calls it. */
 export async function deleteExpiredRateLimits() {
   await query("DELETE FROM rate_limits WHERE reset_at <= now()");

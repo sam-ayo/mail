@@ -3,7 +3,9 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 // The test calls the tools through the HTTP handler of the MCP server. The mail
 // functions and the token check are mocks.
 
-vi.mock("~/server/env.server", () => ({ env: { appUrl: "http://localhost:5180", isProduction: true } }));
+vi.mock("~/server/env.server", () => ({
+  env: { appUrl: "http://localhost:5180", isProduction: true, encryptionKey: "test-key" },
+}));
 vi.mock("~/server/image-proxy.server", () => ({ proxiedImageUrl: (url: string) => url }));
 vi.mock("~/server/rate-limit.server", () => ({ rateLimit: vi.fn(async () => true) }));
 vi.mock("~/server/feedback.server", () => ({
@@ -29,15 +31,7 @@ vi.mock("~/server/contacts.server", () => ({
   findContacts: vi.fn(async () => []),
 }));
 vi.mock("~/server/remote-file.server", () => ({ downloadFile: vi.fn() }));
-vi.mock("~/server/agent-uploads.server", () => ({
-  createUpload: vi.fn(async () => ({
-    id: "up-1",
-    url: "http://localhost:5180/api/agent-uploads/up-1?token=secret",
-    expiresAt: new Date("2026-11-27T13:00:00Z"),
-  })),
-  getUpload: vi.fn(async () => ({ filename: "signed.pdf", contentType: "", content: Buffer.from("%PDF-signed") })),
-  storeFile: vi.fn(async () => "up-stored"),
-}));
+
 vi.mock("~/server/mail.server", () => ({
   deleteDraft: vi.fn(async () => {}),
   saveDraft: vi.fn(async () => ({ draftId: "draft-2" })),
@@ -77,7 +71,7 @@ const mail = vi.mocked(await import("~/server/mail.server"));
 const triage = vi.mocked(await import("~/server/triage.server"));
 const contacts = vi.mocked(await import("~/server/contacts.server"));
 const remote = vi.mocked(await import("~/server/remote-file.server"));
-const uploads = vi.mocked(await import("~/server/agent-uploads.server"));
+const sendLink = await import("~/server/send-link.server");
 const { default: server } = await import("./server");
 // The build primes the real view bundle. The test needs only a placeholder.
 server.__primeViews({ "compose-message": { kind: "inline", js: "", css: "" } });
@@ -349,22 +343,38 @@ describe("get_threads", () => {
   });
 });
 
-describe("uploads", () => {
-  it("create_upload gives the URL, the ID, and the curl command, and keeps only the base name", async () => {
-    const result = await callTool("create_upload", { filename: "../../Documents/signed.pdf" });
+describe("send_with_files", () => {
+  it("checks the email, sends nothing, and gives a URL that carries the email", async () => {
+    const result = await callTool("send_with_files", { ...base, mode: "new" });
+    expect(result.isError).toBeFalsy();
     const out = JSON.parse(result.content[0].text);
-    expect(uploads.createUpload).toHaveBeenCalledWith("user-1", "signed.pdf", undefined);
-    expect(out).toMatchObject({ upload_id: "up-1", upload_url: expect.stringContaining("token=secret") });
-    expect(out.command).toBe('curl -sS -T <path to signed.pdf> "http://localhost:5180/api/agent-uploads/up-1?token=secret"');
+    expect(out.command).toBe(`curl -sS -F "file=@<path>" "${out.upload_url}"`);
+    expect(out.email).toEqual({ from: "me@example.com", to: "ada@example.com", subject: "Files" });
+    expect(mail.sendMessage).not.toHaveBeenCalled();
+    const link = sendLink.openSendLink(new URL(out.upload_url).searchParams.get("t")!);
+    expect(link).toMatchObject({ u: "user-1", c: "client-1", m: { ...base, mode: "new" } });
+    expect(link.e - Date.now()).toBeGreaterThan(59 * 60 * 1000);
   });
 
-  it("attaches an upload by its ID, with the type from the extension", async () => {
-    const result = await callTool("send_message", { ...base, attachments: [{ upload_id: "up-1" }] });
-    expect(result.isError).toBeFalsy();
-    expect(uploads.getUpload).toHaveBeenCalledWith("user-1", "up-1");
-    expect(mail.sendMessage.mock.calls[0][2].attachments).toEqual([
-      { filename: "signed.pdf", contentType: "application/pdf", content: Buffer.from("%PDF-signed") },
-    ]);
+  it("refuses a bad recipient before it gives a URL", async () => {
+    const result = await callTool("send_with_files", { ...base, to: ["Ada"] });
+    expect(result.isError).toBe(true);
+    expect(result.content[0].text).toContain("find_contacts");
+  });
+
+  it("checks the attachments input before it gives a URL", async () => {
+    for (const attachment of [{ text: "x" }, { filename: "a.txt", text: "x", url: "https://x.com/a" }, { url: "http://x.com/a.pdf" }]) {
+      const result = await callTool("send_with_files", { ...base, attachments: [attachment] });
+      expect(result.isError).toBe(true);
+    }
+    expect(remote.downloadFile).not.toHaveBeenCalled();
+  });
+
+  it("refuses a URL that was changed", async () => {
+    const out = JSON.parse((await callTool("send_with_files", base)).content[0].text);
+    const token = new URL(out.upload_url).searchParams.get("t")!;
+    const changed = token.slice(0, -2) + (token.endsWith("A") ? "BB" : "AA");
+    expect(() => sendLink.openSendLink(changed)).toThrow("not valid");
   });
 });
 
@@ -387,19 +397,11 @@ describe("review fixes", () => {
     expect(sent.cc.map((a) => a.email)).toEqual(["bob@acme.com"]);
   });
 
-  it("compose_message gives the view an upload for a URL file, so Send does not download it again", async () => {
+  it("compose_message gives the view the file input as it came, and the server stores nothing", async () => {
     remote.downloadFile.mockResolvedValue({ filename: "q3.pdf", contentType: "application/pdf", content: Buffer.from("%PDF") });
-    const inline = { filename: "a.txt", text: "x" };
-    const result = await callTool("compose_message", {
-      ...base,
-      attachments: [inline, { url: "https://files.example.com/q3.pdf" }],
-    });
-    expect(uploads.storeFile).toHaveBeenCalledWith("user-1", {
-      filename: "q3.pdf",
-      contentType: "application/pdf",
-      content: Buffer.from("%PDF"),
-    });
-    expect(result._meta?.attachments).toEqual([inline, { upload_id: "up-stored", filename: "q3.pdf" }]);
+    const attachments = [{ filename: "a.txt", text: "x" }, { url: "https://files.example.com/q3.pdf" }];
+    const result = await callTool("compose_message", { ...base, attachments });
+    expect(result._meta?.attachments).toEqual(attachments);
   });
 
   it("refuses a mime_type that is not a MIME type", async () => {

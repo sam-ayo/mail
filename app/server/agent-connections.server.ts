@@ -71,6 +71,14 @@ export async function hasConsent(userId: string, clientId: string) {
   ]));
 }
 
+/** True if the user still allows the agent this scope. The user can connect the agent again with fewer scopes. */
+export async function consentAllows(userId: string, clientId: string, scope: string) {
+  return !!(await queryOne(
+    `SELECT 1 FROM "oauthConsent" WHERE "userId" = $1 AND "clientId" = $2 AND scopes ? $3`,
+    [userId, clientId, scope],
+  ));
+}
+
 function hostOf(uri: string | null | undefined) {
   try {
     return uri ? new URL(uri).host : undefined;

@@ -5,7 +5,7 @@ import { env } from "./env.server";
  * endpoints of the AI agents, the file uploads of the agents, the Resend
  * webhook, and the cron jobs. They do not use the session cookie.
  */
-const CROSS_SITE_PATHS = ["/api/auth/", "/mcp", "/api/agent-uploads/", "/api/inbound/", "/api/cron/", "/.well-known/"];
+const CROSS_SITE_PATHS = ["/api/auth/", "/mcp", "/api/agent-send", "/api/inbound/", "/api/cron/", "/.well-known/"];
 
 /**
  * Stops cross-site request forgery. The session cookie is SameSite=Lax, and

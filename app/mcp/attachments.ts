@@ -2,8 +2,8 @@ import * as z from "zod";
 
 /**
  * The files that an agent attaches to an email. The agent gives each file as
- * base64 content, as text, as an HTTPS URL, as an upload (create_upload), or
- * as a file of another email in the workspace.
+ * base64 content, as text, as an HTTPS URL, or as a file of another email in
+ * the workspace. A file on the local disk goes with send_with_files instead.
  */
 
 /** The limit of all files of one email, the same as in the mail app. */
@@ -21,19 +21,12 @@ export const attachmentInput = z.object({
     .optional()
     .describe(
       "The file name with its extension, for example report.pdf. Required with content_base64 or text. " +
-        "With url, upload_id, or message_id, the default is the name of the file.",
+        "With url or message_id, the default is the name of the file.",
     ),
   mime_type: mimeType
     .optional()
     .describe("For example application/pdf. The default comes from the extension of the file name."),
   content_base64: z.string().optional().describe("The content of the file, base64-encoded."),
-  upload_id: z
-    .string()
-    .optional()
-    .describe(
-      "The upload_id from create_upload, after you sent the file to its upload_url. " +
-        "Use it for a file on the local disk.",
-    ),
   url: z
     .string()
     .optional()
@@ -96,6 +89,14 @@ const MIME_TYPES: Record<string, string> = {
   numbers: "application/vnd.apple.numbers",
 };
 
+/** The base name of a file, with no control characters, and 200 characters at most with its extension. */
+export function cleanFilename(name: string) {
+  const base = name.replace(/[\u0000-\u001f\u007f]/g, "").split(/[\\/]/).pop()!.trim() || "file";
+  if (base.length <= 200) return base;
+  const extension = base.match(/\.[A-Za-z0-9]{1,10}$/)?.[0] ?? "";
+  return base.slice(0, 200 - extension.length) + extension;
+}
+
 /** The MIME type of a file name, from its extension. */
 export function mimeTypeOf(filename: string, fallback = "application/octet-stream") {
   const extension = filename.toLowerCase().match(/\.([a-z0-9]+)$/)?.[1];
@@ -131,5 +132,5 @@ export function inlineAttachment(input: AttachmentInput) {
       content: Buffer.from(input.text, "utf8"),
     };
   }
-  throw new Error(`Give content_base64, text, upload_id, url, or message_id and attachment_id for ${filename}.`);
+  throw new Error(`Give content_base64, text, url, or message_id and attachment_id for ${filename}.`);
 }

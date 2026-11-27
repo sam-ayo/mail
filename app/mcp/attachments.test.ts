@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { decodeBase64, inlineAttachment, mimeTypeOf } from "./attachments";
+import { cleanFilename, decodeBase64, inlineAttachment, mimeTypeOf } from "./attachments";
 
 describe("mimeTypeOf", () => {
   it("finds the type from the extension", () => {
@@ -49,6 +49,24 @@ describe("inlineAttachment", () => {
 
   it("needs a filename and content", () => {
     expect(() => inlineAttachment({ text: "x" })).toThrow("needs a filename");
-    expect(() => inlineAttachment({ filename: "a.txt" })).toThrow("Give content_base64, text, upload_id, url");
+    expect(() => inlineAttachment({ filename: "a.txt" })).toThrow("Give content_base64, text, url");
+  });
+});
+
+describe("cleanFilename", () => {
+  it("keeps a normal name", () => {
+    expect(cleanFilename("Signed NDA (final).pdf")).toBe("Signed NDA (final).pdf");
+  });
+  it("removes a path and control characters", () => {
+    expect(cleanFilename("../../etc/pass\u0000wd")).toBe("passwd");
+    expect(cleanFilename("C:\\Users\\me\\report.pdf")).toBe("report.pdf");
+  });
+  it("cuts a long name to 200 characters and keeps the extension", () => {
+    const name = cleanFilename(`${"n".repeat(300)}.txt`);
+    expect(name).toHaveLength(200);
+    expect(name.endsWith("n.txt")).toBe(true);
+  });
+  it("has a default", () => {
+    expect(cleanFilename("  ")).toBe("file");
   });
 });

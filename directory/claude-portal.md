@@ -17,13 +17,13 @@ The tools sync from the server. Each tool has a title and all three hints.
 | `get_threads` | Read threads | yes | no | no |
 | `get_attachment` | Get attachment | yes | no | no |
 | `find_contacts` | Find contacts | yes | no | no |
-| `create_upload` | Upload a file | no | no | no |
 | `compose_message` | Write email | yes | no | no |
 | `modify_threads` | Change threads | no | yes | no |
 | `set_category` | Set category | no | no | no |
 | `save_draft` | Save draft | no | no | no |
 | `delete_draft` | Delete draft | no | yes | no |
 | `send_message` | Send email | no | yes | yes |
+| `send_with_files` | Send email with local files | no | yes | yes |
 | `unsubscribe` | Unsubscribe | no | no | yes |
 | `send_feedback` | Send feedback | no | no | yes |
 

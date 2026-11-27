@@ -25,7 +25,6 @@ const TOOLS: [name: string, permission: string, description: string][] = [
   ["get_threads", "Read", "Reads up to 20 conversations in one call, with shorter message bodies."],
   ["get_attachment", "Read", "Gets one attachment of a message, up to 10 MB."],
   ["find_contacts", "Read", "Finds the email address of a person from the people in your mail."],
-  ["create_upload", "Read", "Gives a single-use URL to upload one file from the agent's computer and attach it."],
   [
     "compose_message",
     "Read",
@@ -39,6 +38,11 @@ const TOOLS: [name: string, permission: string, description: string][] = [
     "send_message",
     "Send",
     "Sends a new email, a reply, a reply to all, or a forward, with files from the chat, the web, or other email.",
+  ],
+  [
+    "send_with_files",
+    "Send",
+    "Sends an email with files from the agent's computer. The server sends them and does not keep them.",
   ],
   ["unsubscribe", "Send", "Unsubscribes from the mailing list of a conversation."],
   [
