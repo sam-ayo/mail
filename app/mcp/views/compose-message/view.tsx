@@ -32,7 +32,11 @@ function Composer() {
     <div data-theme={theme} className="p-px">
       <div className="overflow-hidden rounded-box border border-line bg-surface">
         {tool.status === "ready" ? (
-          <Editor output={tool.toolOutput} />
+          <Editor
+            output={tool.toolOutput}
+            // The server puts the file input in the view-only _meta. Some hosts give only the tool input.
+            files={(tool.meta?.attachments as FileInput[] | undefined) ?? tool.toolInput?.attachments ?? []}
+          />
         ) : tool.status === "error" ? (
           <p className="px-4 py-3 text-danger">{tool.error.message}</p>
         ) : (
@@ -53,9 +57,17 @@ function Pending({ subject, body }: { subject?: string; body?: string }) {
   );
 }
 
-type Output = Extract<ReturnType<typeof useToolContext<"compose_message">>, { status: "ready" }>["toolOutput"];
+type Ready = Extract<ReturnType<typeof useToolContext<"compose_message">>, { status: "ready" }>;
+type Output = Ready["toolOutput"];
+type FileInput = NonNullable<NonNullable<Ready["toolInput"]>["attachments"]>[number];
 
-function Editor({ output }: { output: Output }) {
+function formatSize(bytes: number) {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${Math.round(bytes / 1024)} KB`;
+  return `${(bytes / 1024 / 1024).toFixed(1)} MB`;
+}
+
+function Editor({ output, files }: { output: Output; files: FileInput[] }) {
   const [draft, setDraft] = useState<Draft>(() => ({
     accountId: output.account_id,
     to: output.to.join(", "),
@@ -66,6 +78,8 @@ function Editor({ output }: { output: Output }) {
   }));
   const [showCopies, setShowCopies] = useState(output.cc.length + output.bcc.length > 0);
   const [showQuoted, setShowQuoted] = useState(false);
+  // The indexes of the added files that the user removed.
+  const [removed, setRemoved] = useState<number[]>([]);
   // The model sees this state, so it knows that the user sent the email and does not send it again.
   const [state, setState] = useViewState<{ sent: boolean; to?: string; subject?: string }>({ sent: false });
   const send = useCallTool("send_message");
@@ -74,6 +88,10 @@ function Editor({ output }: { output: Output }) {
   const locked = sent || send.isPending;
   const set = (field: keyof Draft) => (value: string) => setDraft((d) => ({ ...d, [field]: value }));
   const list = (value: string) => (value.trim() ? [value] : []);
+  const original = output.attachments.filter((a) => a.source === "original");
+  const added = output.attachments.filter((a) => a.source === "added");
+  // Without the file input, Send cannot attach the added files.
+  const filesMissing = files.length !== added.length;
 
   async function submit(event: React.FormEvent) {
     event.preventDefault();
@@ -89,6 +107,7 @@ function Editor({ output }: { output: Output }) {
         bcc: list(draft.bcc),
         subject: draft.subject,
         body: draft.body,
+        attachments: files.filter((_, index) => !removed.includes(index)),
       });
       setState({ sent: true, to: draft.to, subject: draft.subject });
     } catch {
@@ -163,19 +182,47 @@ function Editor({ output }: { output: Output }) {
         </div>
       )}
 
+      {output.attachments.length > 0 && (
+        <ul className="flex flex-wrap gap-2 px-4 pb-3" aria-label="Attachments">
+          {[...original.map((file) => ({ file, index: -1 })), ...added.map((file, index) => ({ file, index }))]
+            .filter(({ index }) => !removed.includes(index))
+            .map(({ file, index }) => (
+              <li
+                key={`${index}-${file.filename}`}
+                className="flex max-w-full items-center gap-2 rounded-md bg-field py-1 pr-1 pl-2 text-xs"
+              >
+                <span className="min-w-0 truncate">{file.filename}</span>
+                <span className="shrink-0 text-muted">{formatSize(file.size)}</span>
+                {index >= 0 && !locked && (
+                  <button
+                    type="button"
+                    onClick={() => setRemoved((r) => [...r, index])}
+                    aria-label={`Remove ${file.filename}`}
+                    className="shrink-0 rounded px-1 text-muted hover:text-ink"
+                  >
+                    ×
+                  </button>
+                )}
+              </li>
+            ))}
+        </ul>
+      )}
+
       <div className="flex items-center gap-3 border-t border-line px-4 py-2">
         <p className="min-w-0 flex-1 truncate text-xs" role="status">
           {sent ? (
             <span className="text-success">Sent from {from?.email}.</span>
           ) : send.error ? (
             <span className="text-danger">{send.error.message}</span>
+          ) : filesMissing ? (
+            <span className="text-danger">This chat did not give the files to the view. Ask the agent to send it.</span>
           ) : (
             <span className="text-muted">The body is Markdown.</span>
           )}
         </p>
         <button
           type="submit"
-          disabled={locked || !(draft.to.trim() || draft.cc.trim() || draft.bcc.trim())}
+          disabled={locked || filesMissing || !(draft.to.trim() || draft.cc.trim() || draft.bcc.trim())}
           className="h-8 shrink-0 rounded-lg bg-accent px-3 text-sm font-medium text-white hover:opacity-90 disabled:opacity-50"
         >
           {sent ? "Sent" : send.isPending ? "Sending…" : "Send"}

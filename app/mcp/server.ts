@@ -4,6 +4,7 @@ import { OAuthError, OAuthErrorCode, oauthCustomProvider } from "mcp-use/oauth";
 import { oauthBetterAuthProvider } from "mcp-use/oauth/better-auth";
 import * as z from "zod";
 import { MAIL_SCOPES, type MailScope } from "~/lib/agents";
+import { attachmentInput, inlineAttachment, MAX_ATTACHMENTS_BYTES, type AttachmentInput } from "~/mcp/attachments";
 import { buildOutgoing, draftFor, type ComposeDraft } from "~/lib/compose";
 import type { Message, ThreadSummary } from "~/lib/mail";
 import { FOLDERS, formatAddress, parseAddressList, THREAD_ACTIONS } from "~/lib/mail";
@@ -22,6 +23,7 @@ import {
   sendMessage,
   unreadCounts,
 } from "~/server/mail.server";
+import type { OutgoingAttachment } from "~/server/providers/types";
 import { rateLimit } from "~/server/rate-limit.server";
 import { htmlToText } from "~/server/sanitize.server";
 import { errorMessage } from "~/server/util.server";
@@ -153,6 +155,15 @@ const messageInput = z.object({
   bcc: z.array(z.string()).optional(),
   subject: z.string().optional(),
   body: z.string().describe("The message, in Markdown."),
+  attachments: z
+    .array(attachmentInput)
+    .max(20)
+    .optional()
+    .describe(
+      "Files to attach. Give each file as content_base64, as text, or as a file of another email " +
+        "(message_id and attachment_id from get_thread). A forward already keeps the files of the original. " +
+        "The limit is 25 MB in total.",
+    ),
 });
 
 /** Finds the account, the quoted original, the recipients, and the subject of an email that an agent writes. */
@@ -173,15 +184,51 @@ async function resolveDraft(userId: string, input: z.infer<typeof messageInput>)
     draft = draftFor(input.mode === "reply_all" ? "replyAll" : input.mode, message, toSummary(account));
   }
 
+  // A forward sends the files of the original message again.
+  const original = draft.forwarded
+    ? await forwardedAttachments(userId, {
+        accountId: draft.forwarded.accountId,
+        messageId: draft.forwarded.messageId,
+        attachmentIds: draft.forwarded.attachments.map((a) => a.id),
+      })
+    : [];
+  const added = await addedAttachments(userId, account.id, input.attachments ?? []);
+  const size = [...original, ...added].reduce((sum, file) => sum + file.content.length, 0);
+  if (size > MAX_ATTACHMENTS_BYTES) throw new Error("The attachments must be 25 MB or less in total.");
+
   return {
     account,
     draft,
+    original,
+    added,
     to: list(input.to) ?? parseAddressList(draft.to),
     cc: list(input.cc) ?? parseAddressList(draft.cc),
     bcc: list(input.bcc) ?? [],
     subject: input.subject ?? draft.subject,
   };
 }
+
+/** Gets the files that the agent attaches: its own content, or files of other emails in the workspace. */
+function addedAttachments(userId: string, sendingAccountId: string, inputs: AttachmentInput[]) {
+  return Promise.all(
+    inputs.map(async (input): Promise<OutgoingAttachment> => {
+      if (!input.message_id && !input.attachment_id) return inlineAttachment(input);
+      if (!input.message_id || !input.attachment_id) {
+        throw new Error("An attachment from another email needs both message_id and attachment_id.");
+      }
+      const accountId = input.account_id ? await accountIdOf(userId, input.account_id) : sendingAccountId;
+      const file = await getAttachment(userId, accountId, input.message_id, input.attachment_id);
+      return {
+        filename: input.filename?.trim() || file.filename,
+        contentType: input.mime_type || file.mimeType || "application/octet-stream",
+        content: file.data,
+      };
+    }),
+  );
+}
+
+const fileLine = (file: OutgoingAttachment) =>
+  `Attachment: ${file.filename} (${file.contentType}, ${file.content.length} bytes)`;
 
 export const listAccountsTool = server.tool(
   {
@@ -380,25 +427,20 @@ export const sendMessageTool = server.tool(
   (input, ctx) =>
     run(async () => {
       const userId = await workspaceOf(ctx.auth);
-      const { account, draft, to, cc, bcc, subject } = await resolveDraft(userId, input);
+      const { account, draft, original, added, to, cc, bcc, subject } = await resolveDraft(userId, input);
       if (to.length + cc.length + bcc.length === 0) return failure("Add at least one recipient.");
+      const attachments = [...original, ...added];
       await sendMessage(userId, account.id, {
         to,
         cc,
         bcc,
         subject,
         ...buildOutgoing({ ...draft, body: input.body }),
-        // A forward sends the files of the original message again.
-        attachments: draft.forwarded
-          ? await forwardedAttachments(userId, {
-              accountId: draft.forwarded.accountId,
-              messageId: draft.forwarded.messageId,
-              attachmentIds: draft.forwarded.attachments.map((a) => a.id),
-            })
-          : [],
+        attachments,
         reply: draft.reply,
       });
-      return text(`Sent "${subject}" from ${account.email} to ${addresses([...to, ...cc, ...bcc])}.`);
+      const files = attachments.length ? ` with ${attachments.length} attachment${attachments.length > 1 ? "s" : ""}` : "";
+      return text(`Sent "${subject}" from ${account.email} to ${addresses([...to, ...cc, ...bcc])}${files}.`);
     }),
 );
 
@@ -422,6 +464,16 @@ export const composeMessage = server.tool(
       subject: z.string(),
       body: z.string(),
       quoted: z.string().nullable().describe("The quoted original that goes under the body."),
+      attachments: z
+        .array(
+          z.object({
+            filename: z.string(),
+            mime_type: z.string(),
+            size: z.number(),
+            source: z.enum(["original", "added"]).describe("original: a file of the forwarded message."),
+          }),
+        )
+        .describe("The files that go with the email."),
       accounts: z
         .array(z.object({ account_id: z.string(), email: z.string() }))
         .describe("The accounts that can send this email."),
@@ -437,7 +489,7 @@ export const composeMessage = server.tool(
   (input, ctx) =>
     run(async () => {
       const userId = await workspaceOf(ctx.auth);
-      const [{ account, draft, to, cc, bcc, subject }, accounts] = await Promise.all([
+      const [{ account, draft, original, added, to, cc, bcc, subject }, accounts] = await Promise.all([
         resolveDraft(userId, input),
         listAccounts(userId),
       ]);
@@ -452,6 +504,15 @@ export const composeMessage = server.tool(
         subject,
         body: input.body,
         quoted: draft.quoted?.text ?? null,
+        attachments: [
+          ...original.map((file) => ({ file, source: "original" as const })),
+          ...added.map((file) => ({ file, source: "added" as const })),
+        ].map(({ file, source }) => ({
+          filename: file.filename,
+          mime_type: file.contentType,
+          size: file.content.length,
+          source,
+        })),
         // A reply stays in the account of its thread, so only a new email can change the sender.
         accounts: (input.mode === "new" ? accounts : [account]).map((a) => ({ account_id: a.id, email: a.email })),
       };
@@ -465,10 +526,17 @@ export const composeMessage = server.tool(
         output.cc.length ? `Cc: ${output.cc.join(", ")}` : null,
         output.bcc.length ? `Bcc: ${output.bcc.join(", ")}` : null,
         `Subject: ${subject}`,
+        ...[...original, ...added].map(fileLine),
         "",
         input.body,
       ].filter((line) => line !== null);
-      return { ...text(summary.join("\n")), structuredContent: output };
+      return {
+        ...text(summary.join("\n")),
+        structuredContent: output,
+        // Only the view gets the file input, so that the content does not fill the model's context.
+        // Send gives it to send_message again.
+        _meta: { attachments: input.attachments ?? [] },
+      };
     }),
 );
 
