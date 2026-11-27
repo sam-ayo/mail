@@ -474,3 +474,45 @@ html.sheet-open body {
     @apply inline-flex min-w-5 items-center justify-center rounded border border-zinc-200 bg-zinc-50 px-1 font-sans text-[11px] font-medium text-zinc-500 dark:border-zinc-700 dark:bg-zinc-800 dark:text-zinc-400;
   }
 }
+
+/* Attachment print. printFile() in app/lib/attachment-actions.ts puts the file in
+   #print-root. While the html element has the "printing" class, the printer sees
+   only that element. */
+#print-root {
+  display: none;
+}
+@media print {
+  html.printing body > :not(#print-root) {
+    display: none !important;
+  }
+  html.printing,
+  html.printing body {
+    background: #fff !important;
+    height: auto !important;
+    overflow: visible !important;
+  }
+  html.printing #print-root {
+    display: block;
+  }
+  #print-root .print-page {
+    display: block;
+    width: 100%;
+    break-after: page;
+  }
+  #print-root .print-page:last-child {
+    break-after: auto;
+  }
+  #print-root .print-image {
+    display: block;
+    max-width: 100%;
+    max-height: 95vh;
+    margin: 0 auto;
+    object-fit: contain;
+  }
+  #print-root .print-text {
+    font: 10pt/1.4 ui-monospace, Menlo, monospace;
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+    color: #000;
+  }
+}

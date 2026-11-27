@@ -25,7 +25,8 @@ import { Collapsible } from "@base-ui/react/collapsible";
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, useSyncExternalStore } from "react";
 import { data, isRouteErrorResponse, useOutletContext, useParams, useRevalidator, useRouteError } from "react-router";
 import { toast } from "sonner";
-import { AttachmentViewer, type ViewedAttachment } from "~/components/attachment-viewer";
+import { AttachmentViewer, canPreview, type ViewedAttachment } from "~/components/attachment-viewer";
+import { canShareFiles } from "~/lib/attachment-actions";
 import { Composer, formatSize } from "~/components/composer";
 import { useConfirm } from "~/components/confirm-dialog";
 import { EmailFrame } from "~/components/email-frame";
@@ -1276,7 +1277,7 @@ function MessageCard({
                 const preview = attachmentUrl(accountId, message.id, attachment.id);
                 const download = attachmentUrl(accountId, message.id, attachment.id, true);
                 const isImage = IMAGE_TYPES.test(attachment.mimeType);
-                const canView = isImage || /^(application\/pdf|text\/plain)$/.test(attachment.mimeType);
+                const canView = canPreview(attachment.mimeType);
                 return (
                   <li key={attachment.id}>
                     <a
@@ -1285,7 +1286,11 @@ function MessageCard({
                       target="_blank"
                       rel="noreferrer"
                       onClick={(event) => {
-                        if (!canView || event.metaKey || event.ctrlKey || event.shiftKey) return;
+                        if (event.metaKey || event.ctrlKey || event.shiftKey) return;
+                        // On a phone, a file that the app cannot show opens in the viewer, so the user can share it.
+                        // On a computer, the click downloads the file as before.
+                        const touch = window.matchMedia("(pointer: coarse)").matches;
+                        if (!canView && !(touch && canShareFiles())) return;
                         event.preventDefault();
                         setViewed({ filename: attachment.filename, mimeType: attachment.mimeType, preview, download });
                       }}

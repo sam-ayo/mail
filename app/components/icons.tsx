@@ -42,9 +42,11 @@ import {
   NotificationOff01Icon,
   PencilEdit01Icon,
   PencilEdit02Icon,
+  PrinterIcon,
   Refresh01Icon,
   Search01Icon,
   SentIcon,
+  Share08Icon,
   Settings01Icon,
   SidebarLeftIcon,
   SparklesIcon,
@@ -117,7 +119,9 @@ export const NotePencil = icon(PencilEdit02Icon);
 export const PaperPlaneTilt = icon(SentIcon);
 export const Paperclip = icon(Attachment01Icon);
 export const PencilSimple = icon(PencilEdit01Icon);
+export const Printer = icon(PrinterIcon);
 export const Plus = icon(Add01Icon);
+export const Share = icon(Share08Icon);
 export const ShieldWarning = icon(SpamIcon);
 export const SidebarSimple = icon(SidebarLeftIcon);
 export const SignIn = icon(Login03Icon);
